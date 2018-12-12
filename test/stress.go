@@ -21,24 +21,37 @@ func Stress(ca io.Writer, cb io.Reader, opt Options) error {
 	// Write
 	go func() {
 		err := write(ca, bufs, opt)
-		close(bufs)
 		errCh <- err
+		close(bufs)
 	}()
 
 	// Read
-	result := make([]byte, opt.MsgSize)
+	go func() {
+		result := make([]byte, opt.MsgSize)
 
-	for original := range bufs {
-		n, err := cb.Read(result)
-		if err != nil {
-			return err
+		for original := range bufs {
+			err := read(cb, original, result)
+			if err != nil {
+				errCh <- err
+			}
 		}
-		if !bytes.Equal(original, result[:n]) {
-			return fmt.Errorf("byte sequence changed %s != %s", original, result)
-		}
+
+		close(errCh)
+	}()
+
+	return FlattenErrs(GatherErrs(errCh))
+}
+
+func read(r io.Reader, original, result []byte) error {
+	n, err := r.Read(result)
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(original, result[:n]) {
+		return fmt.Errorf("byte sequence changed %#v != %#v", original, result)
 	}
 
-	return <-errCh
+	return nil
 }
 
 // StressDuplex enables duplex stress testing of a io.ReadWriter.

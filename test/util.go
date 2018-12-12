@@ -3,8 +3,10 @@ package test
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"runtime/pprof"
 	"strings"
+	"testing"
 	"time"
 )
 
@@ -18,6 +20,24 @@ func TimeOut(t time.Duration) *time.Timer {
 		}
 		panic("timeout")
 	})
+}
+
+// CheckRoutines is used to check for leaked go-routines
+func CheckRoutines(t *testing.T) (report func()) {
+	expectedGoRoutineCount := runtime.NumGoroutine()
+	return func() {
+		// Wait a little for routines to die
+		// TODO: is there a better way?
+		time.Sleep(time.Millisecond * 100)
+
+		goRoutineCount := runtime.NumGoroutine()
+		if goRoutineCount != expectedGoRoutineCount {
+			if err := pprof.Lookup("goroutine").WriteTo(os.Stderr, 1); err != nil {
+				t.Fatal(err)
+			}
+			t.Fatalf("goRoutineCount != expectedGoRoutineCount, possible leak: %d %d", goRoutineCount, expectedGoRoutineCount)
+		}
+	}
 }
 
 // GatherErrs gathers all errors returned by a channel.
