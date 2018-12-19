@@ -23,26 +23,33 @@ func TimeOut(t time.Duration) *time.Timer {
 }
 
 // CheckRoutines is used to check for leaked go-routines
-func CheckRoutines(t *testing.T) (report func()) {
-	expectedGoRoutineCount := runtime.NumGoroutine()
+func CheckRoutines(t *testing.T) func() {
 	return func() {
-		// Wait a little for routines to die
-		// TODO: is there a better way?
-		time.Sleep(time.Millisecond * 100)
-
-		// Lookup the routines before NumGoroutine to avoid
-		// goroutines not showing up in the report
-		var b strings.Builder
-		if err := pprof.Lookup("goroutine").WriteTo(&b, 1); err != nil {
-			t.Fatal(err)
-		}
-
-		goRoutineCount := runtime.NumGoroutine()
-		if goRoutineCount != expectedGoRoutineCount {
-			fmt.Println(b.String())
-			t.Fatalf("goRoutineCount != expectedGoRoutineCount, possible leak: %d %d", goRoutineCount, expectedGoRoutineCount)
+		routines := getRoutines()
+		if len(routines) > 0 {
+			t.Fatalf("Unexpected routines: \n%s", strings.Join(routines, "\n\n"))
 		}
 	}
+}
+
+func getRoutines() []string {
+	buf := make([]byte, 2<<20)
+	buf = buf[:runtime.Stack(buf, true)]
+	return filterRoutines(strings.Split(string(buf), "\n\n"))
+}
+
+func filterRoutines(routines []string) []string {
+	result := []string{}
+	for _, stack := range routines {
+		if stack == "" || // Empty
+			strings.Contains(stack, "testing.Main(") || // Tests
+			strings.Contains(stack, "testing.(*T).Run(") || // Test run
+			strings.Contains(stack, "test.getRoutines(") { // This routine
+			continue
+		}
+		result = append(result, stack)
+	}
+	return result
 }
 
 // GatherErrs gathers all errors returned by a channel.
