@@ -28,13 +28,18 @@ func CheckRoutines(t *testing.T) (report func()) {
 	return func() {
 		// Wait a little for routines to die
 		// TODO: is there a better way?
-		time.Sleep(time.Millisecond * 400)
+		time.Sleep(time.Millisecond * 100)
+
+		// Lookup the routines before NumGoroutine to avoid
+		// goroutines not showing up in the report
+		var b strings.Builder
+		if err := pprof.Lookup("goroutine").WriteTo(&b, 1); err != nil {
+			t.Fatal(err)
+		}
 
 		goRoutineCount := runtime.NumGoroutine()
 		if goRoutineCount != expectedGoRoutineCount {
-			if err := pprof.Lookup("goroutine").WriteTo(os.Stderr, 1); err != nil {
-				t.Fatal(err)
-			}
+			fmt.Println(b.String())
 			t.Fatalf("goRoutineCount != expectedGoRoutineCount, possible leak: %d %d", goRoutineCount, expectedGoRoutineCount)
 		}
 	}
