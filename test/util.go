@@ -28,7 +28,7 @@ func CheckRoutines(t *testing.T) (report func()) {
 	return func() {
 		// Wait a little for routines to die
 		// TODO: is there a better way?
-		time.Sleep(time.Millisecond * 100)
+		time.Sleep(time.Millisecond * 400)
 
 		goRoutineCount := runtime.NumGoroutine()
 		if goRoutineCount != expectedGoRoutineCount {
