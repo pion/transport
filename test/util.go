@@ -24,9 +24,10 @@ func TimeOut(t time.Duration) *time.Timer {
 
 // CheckRoutines is used to check for leaked go-routines
 func CheckRoutines(t *testing.T) func() {
+	initial := getRoutines()
 	return func() {
 		routines := getRoutines()
-		if len(routines) > 0 {
+		if len(routines) > len(initial) {
 			t.Fatalf("Unexpected routines: \n%s", strings.Join(routines, "\n\n"))
 		}
 	}
