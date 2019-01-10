@@ -26,6 +26,7 @@ func TimeOut(t time.Duration) *time.Timer {
 func CheckRoutines(t *testing.T) func() {
 	initial := getRoutines()
 	return func() {
+		time.Sleep(500 * time.Millisecond)
 		routines := getRoutines()
 		if len(routines) > len(initial) {
 			t.Fatalf("Unexpected routines: \n%s", strings.Join(routines, "\n\n"))
