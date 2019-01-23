@@ -26,10 +26,18 @@ func TimeOut(t time.Duration) *time.Timer {
 func CheckRoutines(t *testing.T) func() {
 	initial := getRoutines()
 	return func() {
-		time.Sleep(500 * time.Millisecond)
-		routines := getRoutines()
-		if len(routines) > len(initial) {
-			t.Fatalf("Unexpected routines: \n%s", strings.Join(routines, "\n\n"))
+		try := 0
+		ticker := time.NewTicker(200 * time.Millisecond)
+		defer ticker.Stop()
+		for range ticker.C {
+			routines := getRoutines()
+			if len(routines) <= len(initial) {
+				return
+			}
+			if try >= 50 {
+				t.Fatalf("Unexpected routines: \n%s", strings.Join(routines, "\n\n"))
+			}
+			try++
 		}
 	}
 }
