@@ -80,7 +80,7 @@ func drop(s [][]byte, offset, n int) [][]byte {
 	return append(s[:offset], s[offset+n:]...)
 }
 
-func NewBridge() (*Bridge, net.Conn, net.Conn) {
+func NewBridge() *Bridge {
 	br := &Bridge{
 		queue0to1: make([][]byte, 0),
 		queue1to0: make([][]byte, 0),
@@ -97,7 +97,15 @@ func NewBridge() (*Bridge, net.Conn, net.Conn) {
 		readCh: make(chan []byte),
 	}
 
-	return br, br.conn0, br.conn1
+	return br
+}
+
+func (br *Bridge) GetConn0() net.Conn {
+	return br.conn0
+}
+
+func (br *Bridge) GetConn1() net.Conn {
+	return br.conn1
 }
 
 func (br *Bridge) Push(d []byte, fromID int) {

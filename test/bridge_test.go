@@ -17,7 +17,10 @@ func TestBridge(t *testing.T) {
 
 	t.Run("normal", func(t *testing.T) {
 		msg := "ABC"
-		br, conn0, conn1 := NewBridge()
+		br := NewBridge()
+		conn0 := br.GetConn0()
+		conn1 := br.GetConn1()
+
 		n, err = conn0.Write([]byte(msg))
 		if err != nil {
 			t.Error(err.Error())
@@ -44,7 +47,10 @@ func TestBridge(t *testing.T) {
 	t.Run("drop 1st packet from conn0", func(t *testing.T) {
 		msg1 := "ABC"
 		msg2 := "DEFG"
-		br, conn0, conn1 := NewBridge()
+		br := NewBridge()
+		conn0 := br.GetConn0()
+		conn1 := br.GetConn1()
+
 		n, err = conn0.Write([]byte(msg1))
 		if err != nil {
 			t.Error(err.Error())
@@ -79,7 +85,10 @@ func TestBridge(t *testing.T) {
 	t.Run("drop 2nd packet from conn0", func(t *testing.T) {
 		msg1 := "ABC"
 		msg2 := "DEFG"
-		br, conn0, conn1 := NewBridge()
+		br := NewBridge()
+		conn0 := br.GetConn0()
+		conn1 := br.GetConn1()
+
 		n, err = conn0.Write([]byte(msg1))
 		if err != nil {
 			t.Error(err.Error())
@@ -114,7 +123,10 @@ func TestBridge(t *testing.T) {
 	t.Run("drop 1st packet from conn1", func(t *testing.T) {
 		msg1 := "ABC"
 		msg2 := "DEFG"
-		br, conn0, conn1 := NewBridge()
+		br := NewBridge()
+		conn0 := br.GetConn0()
+		conn1 := br.GetConn1()
+
 		n, err = conn1.Write([]byte(msg1))
 		if err != nil {
 			t.Error(err.Error())
@@ -149,7 +161,10 @@ func TestBridge(t *testing.T) {
 	t.Run("drop 2nd packet from conn1", func(t *testing.T) {
 		msg1 := "ABC"
 		msg2 := "DEFG"
-		br, conn0, conn1 := NewBridge()
+		br := NewBridge()
+		conn0 := br.GetConn0()
+		conn1 := br.GetConn1()
+
 		n, err = conn1.Write([]byte(msg1))
 		if err != nil {
 			t.Error(err.Error())
@@ -184,7 +199,10 @@ func TestBridge(t *testing.T) {
 	t.Run("reorder packets from conn0", func(t *testing.T) {
 		msg1 := "ABC"
 		msg2 := "DEFG"
-		br, conn0, conn1 := NewBridge()
+		br := NewBridge()
+		conn0 := br.GetConn0()
+		conn1 := br.GetConn1()
+
 		n, err = conn0.Write([]byte(msg1))
 		if err != nil {
 			t.Error(err.Error())
@@ -232,7 +250,10 @@ func TestBridge(t *testing.T) {
 	t.Run("reorder packets from conn1", func(t *testing.T) {
 		msg1 := "ABC"
 		msg2 := "DEFG"
-		br, conn0, conn1 := NewBridge()
+		br := NewBridge()
+		conn0 := br.GetConn0()
+		conn1 := br.GetConn1()
+
 		n, err = conn1.Write([]byte(msg1))
 		if err != nil {
 			t.Error(err.Error())
@@ -287,7 +308,10 @@ func TestBridge(t *testing.T) {
 	})
 
 	t.Run("read closed conn", func(t *testing.T) {
-		_, conn0, conn1 := NewBridge()
+		br := NewBridge()
+		conn0 := br.GetConn0()
+		conn1 := br.GetConn1()
+
 		conn0.Close()
 		conn1.Close()
 
