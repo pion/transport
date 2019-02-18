@@ -80,6 +80,7 @@ func drop(s [][]byte, offset, n int) [][]byte {
 	return append(s[:offset], s[offset+n:]...)
 }
 
+// NewBridge creates a new bridge with two endpoints.
 func NewBridge() *Bridge {
 	br := &Bridge{
 		queue0to1: make([][]byte, 0),
@@ -100,14 +101,17 @@ func NewBridge() *Bridge {
 	return br
 }
 
+// GetConn0 returns an endpoint of the bridge, conn0.
 func (br *Bridge) GetConn0() net.Conn {
 	return br.conn0
 }
 
+// GetConn1 returns an endpoint of the bridge, conn1.
 func (br *Bridge) GetConn1() net.Conn {
 	return br.conn1
 }
 
+// Push pushes a packet into the specified queue.
 func (br *Bridge) Push(d []byte, fromID int) {
 	br.mutex.Lock()
 	defer br.mutex.Unlock()
@@ -119,6 +123,7 @@ func (br *Bridge) Push(d []byte, fromID int) {
 	}
 }
 
+// Reorder inverses the order of packets currently in the specified queue.
 func (br *Bridge) Reorder(fromID int) error {
 	br.mutex.Lock()
 	defer br.mutex.Unlock()
@@ -134,6 +139,8 @@ func (br *Bridge) Reorder(fromID int) error {
 	return err
 }
 
+// Drop drops the specified number of packets from the given offset index
+// of the specified queue.
 func (br *Bridge) Drop(fromID, offset, n int) {
 	br.mutex.Lock()
 	defer br.mutex.Unlock()
@@ -145,6 +152,9 @@ func (br *Bridge) Drop(fromID, offset, n int) {
 	}
 }
 
+// Tick attempts to hand a packet from the queue for each directions, to readers,
+// if there are waiting on the queue. If there's no reader, it will return
+// immediately.
 func (br *Bridge) Tick() int {
 	br.mutex.Lock()
 	defer br.mutex.Unlock()
@@ -174,7 +184,7 @@ func (br *Bridge) Tick() int {
 	return n
 }
 
-// Repeat tick() call until no more outstanding inflight packet
+// Process repeats tick() calls until no more outstanding packet in the queues.
 func (br *Bridge) Process() {
 	for {
 		time.Sleep(10 * time.Millisecond)
