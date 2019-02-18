@@ -9,9 +9,11 @@ import (
 
 // bridgeConn is a net.Conn that represents an endpoint of the bridge.
 type bridgeConn struct {
-	br     *Bridge
-	id     int
-	readCh chan []byte
+	br       *Bridge
+	id       int
+	isClosed bool
+	mutex    sync.RWMutex
+	readCh   chan []byte
 }
 
 // Read reads data, block until the data becomes available.
@@ -25,13 +27,20 @@ func (conn *bridgeConn) Read(b []byte) (int, error) {
 
 // Write writes data to the bridge.
 func (conn *bridgeConn) Write(b []byte) (int, error) {
-	n := len(b)
 	conn.br.Push(b, conn.id)
-	return n, nil
+	return len(b), nil
 }
 
 // Close closes the bridge (releases resources used).
 func (conn *bridgeConn) Close() error {
+	conn.mutex.Lock()
+	defer conn.mutex.Unlock()
+
+	if conn.isClosed {
+		return fmt.Errorf("bridge has already been closed")
+	}
+
+	conn.isClosed = true
 	close(conn.readCh)
 	return nil
 }
@@ -128,15 +137,10 @@ func (br *Bridge) Reorder(fromID int) error {
 	br.mutex.Lock()
 	defer br.mutex.Unlock()
 
-	var err error
-
 	if fromID == 0 {
-		err = inverse(br.queue0to1)
-	} else {
-		err = inverse(br.queue1to0)
+		return inverse(br.queue0to1)
 	}
-
-	return err
+	return inverse(br.queue1to0)
 }
 
 // Drop drops the specified number of packets from the given offset index
