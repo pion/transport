@@ -65,7 +65,7 @@ func filterRoutines(routines []string) []string {
 // GatherErrs gathers all errors returned by a channel.
 // It blocks until the channel is closed.
 func GatherErrs(c chan error) []error {
-	var errs []error
+	errs := make([]error, 0)
 
 	for err := range c {
 		errs = append(errs, err)
