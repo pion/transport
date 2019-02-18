@@ -5,9 +5,13 @@ import (
 )
 
 // helper to close both conns
-func closeBridge(br *Bridge) {
-	br.conn0.Close()
-	br.conn1.Close()
+func closeBridge(br *Bridge) error {
+	if err := br.conn0.Close(); err != nil {
+		return err
+
+	}
+
+	return br.conn1.Close()
 }
 
 type AsyncResult struct {
@@ -16,9 +20,6 @@ type AsyncResult struct {
 }
 
 func TestBridge(t *testing.T) {
-	var n int
-	var err error
-
 	buf := make([]byte, 256)
 
 	t.Run("normal", func(t *testing.T) {
@@ -28,7 +29,7 @@ func TestBridge(t *testing.T) {
 		conn0 := br.GetConn0()
 		conn1 := br.GetConn1()
 
-		n, err = conn0.Write([]byte(msg))
+		n, err := conn0.Write([]byte(msg))
 		if err != nil {
 			t.Error(err.Error())
 		}
@@ -37,8 +38,8 @@ func TestBridge(t *testing.T) {
 		}
 
 		go func() {
-			n, err := conn1.Read(buf)
-			readRes <- AsyncResult{n: n, err: err}
+			nInner, errInner := conn1.Read(buf)
+			readRes <- AsyncResult{n: nInner, err: errInner}
 		}()
 
 		br.Process()
@@ -50,7 +51,9 @@ func TestBridge(t *testing.T) {
 		if ar.n != len(msg) {
 			t.Error("unexpected length")
 		}
-		closeBridge(br)
+		if err = closeBridge(br); err != nil {
+			t.Error(err)
+		}
 	})
 
 	t.Run("drop 1st packet from conn0", func(t *testing.T) {
@@ -61,7 +64,7 @@ func TestBridge(t *testing.T) {
 		conn0 := br.GetConn0()
 		conn1 := br.GetConn1()
 
-		n, err = conn0.Write([]byte(msg1))
+		n, err := conn0.Write([]byte(msg1))
 		if err != nil {
 			t.Error(err.Error())
 		}
@@ -77,8 +80,8 @@ func TestBridge(t *testing.T) {
 		}
 
 		go func() {
-			n, err := conn1.Read(buf)
-			readRes <- AsyncResult{n: n, err: err}
+			nInner, errInner := conn1.Read(buf)
+			readRes <- AsyncResult{n: nInner, err: errInner}
 		}()
 
 		br.Drop(0, 0, 1)
@@ -91,7 +94,9 @@ func TestBridge(t *testing.T) {
 		if ar.n != len(msg2) {
 			t.Error("unexpected length")
 		}
-		closeBridge(br)
+		if err = closeBridge(br); err != nil {
+			t.Error(err)
+		}
 	})
 
 	t.Run("drop 2nd packet from conn0", func(t *testing.T) {
@@ -102,7 +107,7 @@ func TestBridge(t *testing.T) {
 		conn0 := br.GetConn0()
 		conn1 := br.GetConn1()
 
-		n, err = conn0.Write([]byte(msg1))
+		n, err := conn0.Write([]byte(msg1))
 		if err != nil {
 			t.Error(err.Error())
 		}
@@ -118,8 +123,8 @@ func TestBridge(t *testing.T) {
 		}
 
 		go func() {
-			n, err := conn1.Read(buf)
-			readRes <- AsyncResult{n: n, err: err}
+			nInner, errInner := conn1.Read(buf)
+			readRes <- AsyncResult{n: nInner, err: errInner}
 		}()
 
 		br.Drop(0, 1, 1)
@@ -132,7 +137,9 @@ func TestBridge(t *testing.T) {
 		if ar.n != len(msg1) {
 			t.Error("unexpected length")
 		}
-		closeBridge(br)
+		if err = closeBridge(br); err != nil {
+			t.Error(err)
+		}
 	})
 
 	t.Run("drop 1st packet from conn1", func(t *testing.T) {
@@ -143,7 +150,7 @@ func TestBridge(t *testing.T) {
 		conn0 := br.GetConn0()
 		conn1 := br.GetConn1()
 
-		n, err = conn1.Write([]byte(msg1))
+		n, err := conn1.Write([]byte(msg1))
 		if err != nil {
 			t.Error(err.Error())
 		}
@@ -159,8 +166,8 @@ func TestBridge(t *testing.T) {
 		}
 
 		go func() {
-			n, err := conn0.Read(buf)
-			readRes <- AsyncResult{n: n, err: err}
+			nInner, errInner := conn0.Read(buf)
+			readRes <- AsyncResult{n: nInner, err: errInner}
 		}()
 
 		br.Drop(1, 0, 1)
@@ -173,7 +180,9 @@ func TestBridge(t *testing.T) {
 		if ar.n != len(msg2) {
 			t.Error("unexpected length")
 		}
-		closeBridge(br)
+		if err = closeBridge(br); err != nil {
+			t.Error(err)
+		}
 	})
 
 	t.Run("drop 2nd packet from conn1", func(t *testing.T) {
@@ -184,7 +193,7 @@ func TestBridge(t *testing.T) {
 		conn0 := br.GetConn0()
 		conn1 := br.GetConn1()
 
-		n, err = conn1.Write([]byte(msg1))
+		n, err := conn1.Write([]byte(msg1))
 		if err != nil {
 			t.Error(err.Error())
 		}
@@ -200,8 +209,8 @@ func TestBridge(t *testing.T) {
 		}
 
 		go func() {
-			n, err := conn0.Read(buf)
-			readRes <- AsyncResult{n: n, err: err}
+			nInner, errInner := conn0.Read(buf)
+			readRes <- AsyncResult{n: nInner, err: errInner}
 		}()
 
 		br.Drop(1, 1, 1)
@@ -214,7 +223,9 @@ func TestBridge(t *testing.T) {
 		if ar.n != len(msg1) {
 			t.Error("unexpected length")
 		}
-		closeBridge(br)
+		if err = closeBridge(br); err != nil {
+			t.Error(err)
+		}
 	})
 
 	t.Run("reorder packets from conn0", func(t *testing.T) {
@@ -224,7 +235,7 @@ func TestBridge(t *testing.T) {
 		conn0 := br.GetConn0()
 		conn1 := br.GetConn1()
 
-		n, err = conn0.Write([]byte(msg1))
+		n, err := conn0.Write([]byte(msg1))
 		if err != nil {
 			t.Error(err.Error())
 		}
@@ -242,18 +253,18 @@ func TestBridge(t *testing.T) {
 		done := make(chan bool)
 
 		go func() {
-			n, err := conn1.Read(buf)
-			if err != nil {
-				t.Error(err.Error())
+			nInner, errInner := conn1.Read(buf)
+			if errInner != nil {
+				t.Error(errInner.Error())
 			}
-			if n != len(msg2) {
+			if nInner != len(msg2) {
 				t.Error("unexpected length")
 			}
-			n, err = conn1.Read(buf)
-			if err != nil {
-				t.Error(err.Error())
+			nInner, errInner = conn1.Read(buf)
+			if errInner != nil {
+				t.Error(errInner.Error())
 			}
-			if n != len(msg1) {
+			if nInner != len(msg1) {
 				t.Error("unexpected length")
 			}
 			done <- true
@@ -265,7 +276,9 @@ func TestBridge(t *testing.T) {
 		}
 		br.Process()
 		<-done
-		closeBridge(br)
+		if err = closeBridge(br); err != nil {
+			t.Error(err)
+		}
 	})
 
 	t.Run("reorder packets from conn1", func(t *testing.T) {
@@ -275,7 +288,7 @@ func TestBridge(t *testing.T) {
 		conn0 := br.GetConn0()
 		conn1 := br.GetConn1()
 
-		n, err = conn1.Write([]byte(msg1))
+		n, err := conn1.Write([]byte(msg1))
 		if err != nil {
 			t.Error(err.Error())
 		}
@@ -293,18 +306,18 @@ func TestBridge(t *testing.T) {
 		done := make(chan bool)
 
 		go func() {
-			n, err := conn0.Read(buf)
-			if err != nil {
-				t.Error(err.Error())
+			nInner, errInner := conn0.Read(buf)
+			if errInner != nil {
+				t.Error(errInner.Error())
 			}
-			if n != len(msg2) {
+			if nInner != len(msg2) {
 				t.Error("unexpected length")
 			}
-			n, err = conn0.Read(buf)
-			if err != nil {
-				t.Error(err.Error())
+			nInner, errInner = conn0.Read(buf)
+			if errInner != nil {
+				t.Error(errInner.Error())
 			}
-			if n != len(msg1) {
+			if nInner != len(msg1) {
 				t.Error("unexpected length")
 			}
 			done <- true
@@ -316,14 +329,15 @@ func TestBridge(t *testing.T) {
 		}
 		br.Process()
 		<-done
-		closeBridge(br)
+		if err = closeBridge(br); err != nil {
+			t.Error(err)
+		}
 	})
 
 	t.Run("inverse error", func(t *testing.T) {
 		q := [][]byte{}
 		q = append(q, []byte("ABC"))
-		err := inverse(q)
-		if err == nil {
+		if err := inverse(q); err == nil {
 			t.Error("inverse should fail if less than 2 pkts")
 		}
 	})
@@ -333,10 +347,14 @@ func TestBridge(t *testing.T) {
 		conn0 := br.GetConn0()
 		conn1 := br.GetConn1()
 
-		conn0.Close()
-		conn1.Close()
+		if err := conn0.Close(); err != nil {
+			t.Error(err)
+		}
+		if err := conn1.Close(); err != nil {
+			t.Error(err)
+		}
 
-		_, err = conn0.Read(buf)
+		_, err := conn0.Read(buf)
 		if err == nil {
 			t.Error("read should fail as conn is closed")
 		}

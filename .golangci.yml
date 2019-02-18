@@ -9,6 +9,9 @@ linters:
   disable:
     - gochecknoinits
     - gochecknoglobals
+    - goconst
+    - gocyclo
+    - dupl
 
 issues:
   exclude-use-default: false
