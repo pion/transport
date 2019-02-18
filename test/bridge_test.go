@@ -10,12 +10,19 @@ func closeBridge(br *Bridge) {
 	br.conn1.Close()
 }
 
+type AsyncResult struct {
+	n   int
+	err error
+}
+
 func TestBridge(t *testing.T) {
 	var n int
 	var err error
+
 	buf := make([]byte, 256)
 
 	t.Run("normal", func(t *testing.T) {
+		readRes := make(chan AsyncResult)
 		msg := "ABC"
 		br := NewBridge()
 		conn0 := br.GetConn0()
@@ -30,21 +37,24 @@ func TestBridge(t *testing.T) {
 		}
 
 		go func() {
-			n, err = conn1.Read(buf)
+			n, err := conn1.Read(buf)
+			readRes <- AsyncResult{n: n, err: err}
 		}()
 
 		br.Process()
 
-		if err != nil {
+		ar := <-readRes
+		if ar.err != nil {
 			t.Error(err.Error())
 		}
-		if n != len(msg) {
+		if ar.n != len(msg) {
 			t.Error("unexpected length")
 		}
 		closeBridge(br)
 	})
 
 	t.Run("drop 1st packet from conn0", func(t *testing.T) {
+		readRes := make(chan AsyncResult)
 		msg1 := "ABC"
 		msg2 := "DEFG"
 		br := NewBridge()
@@ -67,22 +77,25 @@ func TestBridge(t *testing.T) {
 		}
 
 		go func() {
-			n, err = conn1.Read(buf)
+			n, err := conn1.Read(buf)
+			readRes <- AsyncResult{n: n, err: err}
 		}()
 
 		br.Drop(0, 0, 1)
 		br.Process()
 
-		if err != nil {
+		ar := <-readRes
+		if ar.err != nil {
 			t.Error(err.Error())
 		}
-		if n != len(msg2) {
+		if ar.n != len(msg2) {
 			t.Error("unexpected length")
 		}
 		closeBridge(br)
 	})
 
 	t.Run("drop 2nd packet from conn0", func(t *testing.T) {
+		readRes := make(chan AsyncResult)
 		msg1 := "ABC"
 		msg2 := "DEFG"
 		br := NewBridge()
@@ -105,22 +118,25 @@ func TestBridge(t *testing.T) {
 		}
 
 		go func() {
-			n, err = conn1.Read(buf)
+			n, err := conn1.Read(buf)
+			readRes <- AsyncResult{n: n, err: err}
 		}()
 
 		br.Drop(0, 1, 1)
 		br.Process()
 
-		if err != nil {
+		ar := <-readRes
+		if ar.err != nil {
 			t.Error(err.Error())
 		}
-		if n != len(msg1) {
+		if ar.n != len(msg1) {
 			t.Error("unexpected length")
 		}
 		closeBridge(br)
 	})
 
 	t.Run("drop 1st packet from conn1", func(t *testing.T) {
+		readRes := make(chan AsyncResult)
 		msg1 := "ABC"
 		msg2 := "DEFG"
 		br := NewBridge()
@@ -143,22 +159,25 @@ func TestBridge(t *testing.T) {
 		}
 
 		go func() {
-			n, err = conn0.Read(buf)
+			n, err := conn0.Read(buf)
+			readRes <- AsyncResult{n: n, err: err}
 		}()
 
 		br.Drop(1, 0, 1)
 		br.Process()
 
-		if err != nil {
+		ar := <-readRes
+		if ar.err != nil {
 			t.Error(err.Error())
 		}
-		if n != len(msg2) {
+		if ar.n != len(msg2) {
 			t.Error("unexpected length")
 		}
 		closeBridge(br)
 	})
 
 	t.Run("drop 2nd packet from conn1", func(t *testing.T) {
+		readRes := make(chan AsyncResult)
 		msg1 := "ABC"
 		msg2 := "DEFG"
 		br := NewBridge()
@@ -181,16 +200,18 @@ func TestBridge(t *testing.T) {
 		}
 
 		go func() {
-			n, err = conn0.Read(buf)
+			n, err := conn0.Read(buf)
+			readRes <- AsyncResult{n: n, err: err}
 		}()
 
 		br.Drop(1, 1, 1)
 		br.Process()
 
-		if err != nil {
+		ar := <-readRes
+		if ar.err != nil {
 			t.Error(err.Error())
 		}
-		if n != len(msg1) {
+		if ar.n != len(msg1) {
 			t.Error("unexpected length")
 		}
 		closeBridge(br)
@@ -221,7 +242,7 @@ func TestBridge(t *testing.T) {
 		done := make(chan bool)
 
 		go func() {
-			n, err = conn1.Read(buf)
+			n, err := conn1.Read(buf)
 			if err != nil {
 				t.Error(err.Error())
 			}
@@ -272,7 +293,7 @@ func TestBridge(t *testing.T) {
 		done := make(chan bool)
 
 		go func() {
-			n, err = conn0.Read(buf)
+			n, err := conn0.Read(buf)
 			if err != nil {
 				t.Error(err.Error())
 			}
