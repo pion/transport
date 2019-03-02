@@ -36,6 +36,7 @@ Check out the **[contributing wiki](https://github.com/pions/webrtc/wiki/Contrib
 * [Yutaka Takeda](https://github.com/enobufs) *Bridge, simulates loss and out of order packets*
 * [Sean DuBois](https://github.com/Sean-Der) - *Testing Infra*
 * [Woodrow Douglass](https://github.com/wdouglass) *Fix test flakiness*
+* [Luke Curley](https://github.com/kixelated) *Batched packet support*
 
 ### License
 MIT License - see [LICENSE](LICENSE) for full text
