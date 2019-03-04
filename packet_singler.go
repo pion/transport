@@ -17,6 +17,10 @@ func (psr *packetSingler) ReadBatch(ps []Packet) (n int, err error) {
 		return 0, nil
 	}
 
+	// We can only read a single packet with blocking IO.
+	// It may be worth implementing non-blocking IO to slightly improve performance.
+
+	// The pointer is required to modify the slice value.
 	p := &ps[0]
 
 	size, addr, err := psr.ReadFrom(p.Buffer)
@@ -31,16 +35,19 @@ func (psr *packetSingler) ReadBatch(ps []Packet) (n int, err error) {
 }
 
 func (psr *packetSingler) WriteBatch(ps []Packet) (n int, err error) {
-	if len(ps) == 0 {
-		return 0, nil
+	// We could just write a single packet, but loop for better performance.
+	// This will avoid function overhead and having the caller potentially reconstruct the Packet slice.
+
+	for i := range ps {
+		// The pointer is required to modify the slice value.
+		p := &ps[i]
+
+		p.Size, err = psr.WriteTo(p.Buffer, p.Addr)
+		if err != nil {
+			// Return the number of successful packets on error.
+			return i, err
+		}
 	}
 
-	p := &ps[0]
-
-	p.Size, err = psr.WriteTo(p.Buffer, p.Addr)
-	if err != nil {
-		return 0, err
-	}
-
-	return 1, nil
+	return len(ps), nil
 }
