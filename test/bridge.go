@@ -8,6 +8,15 @@ import (
 	"time"
 )
 
+type bridgeConnAddr int
+
+func (a bridgeConnAddr) Network() string {
+	return "udp"
+}
+func (a bridgeConnAddr) String() string {
+	return fmt.Sprintf("a%d", a)
+}
+
 // bridgeConn is a net.Conn that represents an endpoint of the bridge.
 type bridgeConn struct {
 	br         *Bridge
@@ -52,7 +61,9 @@ func (conn *bridgeConn) Close() error {
 }
 
 // LocalAddr is not used
-func (conn *bridgeConn) LocalAddr() net.Addr { return nil }
+func (conn *bridgeConn) LocalAddr() net.Addr {
+	return bridgeConnAddr(conn.id)
+}
 
 // RemoteAddr is not used
 func (conn *bridgeConn) RemoteAddr() net.Addr { return nil }
@@ -74,6 +85,9 @@ type Bridge struct {
 
 	queue0to1 [][]byte
 	queue1to0 [][]byte
+
+	dropNWrites0 int
+	dropNWrites1 int
 }
 
 func inverse(s [][]byte) error {
@@ -132,9 +146,19 @@ func (br *Bridge) Push(d []byte, fromID int) {
 	defer br.mutex.Unlock()
 
 	if fromID == 0 {
-		br.queue0to1 = append(br.queue0to1, d)
+		if br.dropNWrites0 > 0 {
+			br.dropNWrites0--
+			//fmt.Printf("br: dropped a packet (rem: %d for q0)\n", br.dropNWrites0)
+		} else {
+			br.queue0to1 = append(br.queue0to1, d)
+		}
 	} else {
-		br.queue1to0 = append(br.queue1to0, d)
+		if br.dropNWrites1 > 0 {
+			br.dropNWrites1--
+			//fmt.Printf("br: dropped a packet (rem: %d for q1)\n", br.dropNWrites1)
+		} else {
+			br.queue1to0 = append(br.queue1to0, d)
+		}
 	}
 }
 
@@ -159,6 +183,19 @@ func (br *Bridge) Drop(fromID, offset, n int) {
 		br.queue0to1 = drop(br.queue0to1, offset, n)
 	} else {
 		br.queue1to0 = drop(br.queue1to0, offset, n)
+	}
+}
+
+// DropNextNWrites drops the next n packets that will be written
+// to the specified queue.
+func (br *Bridge) DropNextNWrites(fromID, n int) {
+	br.mutex.Lock()
+	defer br.mutex.Unlock()
+
+	if fromID == 0 {
+		br.dropNWrites0 = n
+	} else {
+		br.dropNWrites1 = n
 	}
 }
 
