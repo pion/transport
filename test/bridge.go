@@ -2,6 +2,7 @@ package test
 
 import (
 	"fmt"
+	"math/rand"
 	"net"
 	"sync"
 	"time"
@@ -9,11 +10,12 @@ import (
 
 // bridgeConn is a net.Conn that represents an endpoint of the bridge.
 type bridgeConn struct {
-	br       *Bridge
-	id       int
-	isClosed bool
-	mutex    sync.RWMutex
-	readCh   chan []byte
+	br         *Bridge
+	id         int
+	isClosed   bool
+	mutex      sync.RWMutex
+	readCh     chan []byte
+	lossChance int
 }
 
 // Read reads data, block until the data becomes available.
@@ -27,6 +29,10 @@ func (conn *bridgeConn) Read(b []byte) (int, error) {
 
 // Write writes data to the bridge.
 func (conn *bridgeConn) Write(b []byte) (int, error) {
+	if rand.Intn(100) < conn.lossChance {
+		return len(b), nil
+	}
+
 	conn.br.Push(b, conn.id)
 	return len(b), nil
 }
@@ -197,4 +203,16 @@ func (br *Bridge) Process() {
 			break
 		}
 	}
+}
+
+// SetLossChance sets the probability of writes being discard (to introduce artificial loss)
+func (br *Bridge) SetLossChance(chance int) error {
+	if chance > 100 || chance < 0 {
+		return fmt.Errorf("loss must be < 100 && > 0")
+	}
+
+	rand.Seed(time.Now().UTC().UnixNano())
+	br.conn0.lossChance = chance
+	br.conn1.lossChance = chance
+	return nil
 }
