@@ -1,6 +1,8 @@
 package test
 
 import (
+	"fmt"
+	"net"
 	"testing"
 )
 
@@ -17,6 +19,7 @@ func closeBridge(br *Bridge) error {
 type AsyncResult struct {
 	n   int
 	err error
+	msg string
 }
 
 func TestBridge(t *testing.T) {
@@ -28,6 +31,22 @@ func TestBridge(t *testing.T) {
 		br := NewBridge()
 		conn0 := br.GetConn0()
 		conn1 := br.GetConn1()
+
+		if conn0.LocalAddr().String() != "a0" {
+			t.Error("conn0 local addr name should be a0")
+		}
+
+		if conn1.LocalAddr().String() != "a1" {
+			t.Error("conn0 local addr name should be a1")
+		}
+
+		if conn0.LocalAddr().Network() != "udp" {
+			t.Error("conn0 local addr name should be a0")
+		}
+
+		if conn1.LocalAddr().Network() != "udp" {
+			t.Error("conn0 local addr name should be a1")
+		}
 
 		n, err := conn0.Write([]byte(msg))
 		if err != nil {
@@ -358,5 +377,75 @@ func TestBridge(t *testing.T) {
 		if err == nil {
 			t.Error("read should fail as conn is closed")
 		}
+	})
+
+	t.Run("drop next N packets", func(t *testing.T) {
+		testFrom := func(t *testing.T, fromID int) {
+			readRes := make(chan AsyncResult, 5)
+			br := NewBridge()
+			conn0 := br.GetConn0()
+			conn1 := br.GetConn1()
+			var srcConn, dstConn net.Conn
+
+			if fromID == 0 {
+				br.DropNextNWrites(0, 3)
+				srcConn = conn0
+				dstConn = conn1
+			} else {
+				br.DropNextNWrites(1, 3)
+				srcConn = conn1
+				dstConn = conn0
+			}
+
+			go func() {
+				for {
+					nInner, errInner := dstConn.Read(buf)
+					if errInner != nil {
+						break
+					}
+					readRes <- AsyncResult{
+						n:   nInner,
+						err: nil,
+						msg: string(buf)}
+				}
+			}()
+			msgs := make([]string, 0)
+
+			for i := 0; i < 5; i++ {
+				msg := fmt.Sprintf("msg%d", i)
+				msgs = append(msgs, msg)
+				n, err := srcConn.Write([]byte(msg))
+				if err != nil {
+					t.Errorf("[%d] %s", fromID, err.Error())
+				}
+				if n != len(msg) {
+					t.Errorf("[%d] unexpected length", fromID)
+				}
+
+				br.Process()
+			}
+
+			nResults := len(readRes)
+			if nResults != 2 {
+				t.Errorf("[%d] unexpected number of packets", fromID)
+			}
+
+			for i := 0; i < 2; i++ {
+				ar := <-readRes
+				if ar.err != nil {
+					t.Errorf("[%d] %s", fromID, ar.err.Error())
+				}
+				if ar.n != len(msgs[i+3]) {
+					t.Errorf("[%d] unexpected length", fromID)
+				}
+			}
+
+			if err := closeBridge(br); err != nil {
+				t.Errorf("[%d] %s", fromID, err.Error())
+			}
+		}
+
+		testFrom(t, 0)
+		testFrom(t, 1)
 	})
 }
