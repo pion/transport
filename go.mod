@@ -1,4 +1,4 @@
-module github.com/pions/transport
+module github.com/pion/transport
 
 go 1.12
 
