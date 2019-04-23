@@ -86,8 +86,15 @@ type Bridge struct {
 	queue0to1 [][]byte
 	queue1to0 [][]byte
 
-	dropNWrites0 int
-	dropNWrites1 int
+	dropNWrites0    int
+	dropNWrites1    int
+	reorderNWrites0 int
+	reorderNWrites1 int
+	stack0          [][]byte
+	stack1          [][]byte
+	filterCB0       func([]byte) bool
+	filterCB1       func([]byte) bool
+	err             error // last error
 }
 
 func inverse(s [][]byte) error {
@@ -148,15 +155,42 @@ func (br *Bridge) Push(d []byte, fromID int) {
 	if fromID == 0 {
 		if br.dropNWrites0 > 0 {
 			br.dropNWrites0--
-			//fmt.Printf("br: dropped a packet (rem: %d for q0)\n", br.dropNWrites0)
+			//fmt.Printf("br: dropped a packet of size %d (rem: %d for q0)\n", len(d), br.dropNWrites0)
+		} else if br.reorderNWrites0 > 0 {
+			br.reorderNWrites0--
+			br.stack0 = append(br.stack0, d)
+			//fmt.Printf("stack0 size: %d\n", len(br.stack0))
+			if br.reorderNWrites0 == 0 {
+				if err := inverse(br.stack0); err == nil {
+					//fmt.Printf("stack0 reordered!\n")
+					br.queue0to1 = append(br.queue0to1, br.stack0...)
+				} else {
+					br.err = err
+				}
+			}
+		} else if br.filterCB0 != nil && !br.filterCB0(d) {
+			//fmt.Printf("br: filtered out a packet of size %d (q0)\n", len(d))
 		} else {
+			//fmt.Printf("br: routed a packet of size %d (q0)\n", len(d))
 			br.queue0to1 = append(br.queue0to1, d)
 		}
 	} else {
 		if br.dropNWrites1 > 0 {
 			br.dropNWrites1--
-			//fmt.Printf("br: dropped a packet (rem: %d for q1)\n", br.dropNWrites1)
+			//fmt.Printf("br: dropped a packet of size %d (rem: %d for q1)\n", len(d), br.dropNWrites0)
+		} else if br.reorderNWrites1 > 0 {
+			br.reorderNWrites1--
+			br.stack1 = append(br.stack1, d)
+			if br.reorderNWrites1 == 0 {
+				if err := inverse(br.stack1); err != nil {
+					br.err = err
+				}
+				br.queue1to0 = append(br.queue1to0, br.stack1...)
+			}
+		} else if br.filterCB1 != nil && !br.filterCB1(d) {
+			//fmt.Printf("br: filtered out a packet of size %d (q1)\n", len(d))
 		} else {
+			//fmt.Printf("br: routed a packet of size %d (q1)\n", len(d))
 			br.queue1to0 = append(br.queue1to0, d)
 		}
 	}
@@ -196,6 +230,19 @@ func (br *Bridge) DropNextNWrites(fromID, n int) {
 		br.dropNWrites0 = n
 	} else {
 		br.dropNWrites1 = n
+	}
+}
+
+// ReorderNextNWrites drops the next n packets that will be written
+// to the specified queue.
+func (br *Bridge) ReorderNextNWrites(fromID, n int) {
+	br.mutex.Lock()
+	defer br.mutex.Unlock()
+
+	if fromID == 0 {
+		br.reorderNWrites0 = n
+	} else {
+		br.reorderNWrites1 = n
 	}
 }
 
@@ -252,4 +299,16 @@ func (br *Bridge) SetLossChance(chance int) error {
 	br.conn0.lossChance = chance
 	br.conn1.lossChance = chance
 	return nil
+}
+
+// Filter filters (drops) packets based on return value of the given callback.
+func (br *Bridge) Filter(fromID int, cb func([]byte) bool) {
+	br.mutex.Lock()
+	defer br.mutex.Unlock()
+
+	if fromID == 0 {
+		br.filterCB0 = cb
+	} else {
+		br.filterCB1 = cb
+	}
 }
