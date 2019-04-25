@@ -21,7 +21,7 @@ func (a bridgeConnAddr) String() string {
 type bridgeConn struct {
 	br         *Bridge
 	id         int
-	isClosed   bool
+	closed     bool
 	mutex      sync.RWMutex
 	readCh     chan []byte
 	lossChance int
@@ -51,11 +51,11 @@ func (conn *bridgeConn) Close() error {
 	conn.mutex.Lock()
 	defer conn.mutex.Unlock()
 
-	if conn.isClosed {
+	if conn.closed {
 		return fmt.Errorf("bridge has already been closed")
 	}
 
-	conn.isClosed = true
+	conn.closed = true
 	close(conn.readCh)
 	return nil
 }
@@ -76,6 +76,13 @@ func (conn *bridgeConn) SetReadDeadline(t time.Time) error { return nil }
 
 // SetWriteDeadline is not used
 func (conn *bridgeConn) SetWriteDeadline(t time.Time) error { return nil }
+
+func (conn *bridgeConn) isClosed() bool {
+	conn.mutex.RLock()
+	defer conn.mutex.RUnlock()
+
+	return conn.closed
+}
 
 // Bridge represents a network between the two endpoints.
 type Bridge struct {
@@ -153,10 +160,11 @@ func (br *Bridge) Push(d []byte, fromID int) {
 	defer br.mutex.Unlock()
 
 	if fromID == 0 {
-		if br.dropNWrites0 > 0 {
+		switch {
+		case br.dropNWrites0 > 0:
 			br.dropNWrites0--
 			//fmt.Printf("br: dropped a packet of size %d (rem: %d for q0)\n", len(d), br.dropNWrites0)
-		} else if br.reorderNWrites0 > 0 {
+		case br.reorderNWrites0 > 0:
 			br.reorderNWrites0--
 			br.stack0 = append(br.stack0, d)
 			//fmt.Printf("stack0 size: %d\n", len(br.stack0))
@@ -168,17 +176,18 @@ func (br *Bridge) Push(d []byte, fromID int) {
 					br.err = err
 				}
 			}
-		} else if br.filterCB0 != nil && !br.filterCB0(d) {
+		case br.filterCB0 != nil && !br.filterCB0(d):
 			//fmt.Printf("br: filtered out a packet of size %d (q0)\n", len(d))
-		} else {
+		default:
 			//fmt.Printf("br: routed a packet of size %d (q0)\n", len(d))
 			br.queue0to1 = append(br.queue0to1, d)
 		}
 	} else {
-		if br.dropNWrites1 > 0 {
+		switch {
+		case br.dropNWrites1 > 0:
 			br.dropNWrites1--
 			//fmt.Printf("br: dropped a packet of size %d (rem: %d for q1)\n", len(d), br.dropNWrites0)
-		} else if br.reorderNWrites1 > 0 {
+		case br.reorderNWrites1 > 0:
 			br.reorderNWrites1--
 			br.stack1 = append(br.stack1, d)
 			if br.reorderNWrites1 == 0 {
@@ -187,9 +196,9 @@ func (br *Bridge) Push(d []byte, fromID int) {
 				}
 				br.queue1to0 = append(br.queue1to0, br.stack1...)
 			}
-		} else if br.filterCB1 != nil && !br.filterCB1(d) {
+		case br.filterCB1 != nil && !br.filterCB1(d):
 			//fmt.Printf("br: filtered out a packet of size %d (q1)\n", len(d))
-		} else {
+		default:
 			//fmt.Printf("br: routed a packet of size %d (q1)\n", len(d))
 			br.queue1to0 = append(br.queue1to0, d)
 		}
@@ -255,7 +264,7 @@ func (br *Bridge) Tick() int {
 
 	var n int
 
-	if len(br.queue0to1) > 0 {
+	if len(br.queue0to1) > 0 && !br.conn1.isClosed() {
 		select {
 		case br.conn1.readCh <- br.queue0to1[0]:
 			n++
@@ -265,7 +274,7 @@ func (br *Bridge) Tick() int {
 		}
 	}
 
-	if len(br.queue1to0) > 0 {
+	if len(br.queue1to0) > 0 && !br.conn0.isClosed() {
 		select {
 		case br.conn0.readCh <- br.queue1to0[0]:
 			n++
