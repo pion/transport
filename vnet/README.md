@@ -17,8 +17,8 @@ A virtual network layer for pion.
 #### Top View
 ```
                            ......................................
-                           .         Virtual Network (vnet)     .
-                           : [1]                                :
+                           :         Virtual Network (vnet)     :
+                           :                                    :
    +-------+ *         1 +----+         +--------+              :
    | :App  |------------>|:Net|--o<-----|:Router |              :
    +-------+             +----+         |        |              :
@@ -27,7 +27,7 @@ A virtual network layer for pion.
    +-----------+         +----+         |        |              :
    +-----------+ *     1 +----+         |        |              :
    |:TURNServer|-------->|:Net|--o<-----|        |              :
-   +-----------+     [3] +----+         |        |              :
+   +-----------+         +----+ [1]     |        |              :
                            :          1 |        | 1  <<has>>   :
                            :      +---<>|        |<>----+ [2]   :
                            :      |     +--------+      |       :
@@ -40,7 +40,7 @@ A virtual network layer for pion.
     Note:
         o: NIC (Netork Interface Controller)
       [1]: Net implments NIC interface.
-      [2]: Root router has no NAT. All child routers have a NAT.
+      [2]: Root router has no NAT. All child routers have a NAT always.
       [3]: Router implements NIC interface for accesses from the
            parent router.
 ```
@@ -61,12 +61,12 @@ Net provides 3 interfaces:
    +---------+ 1           * +-----------+ 1    * +-----------+ 1    * +------+
  ..| :Router |----+------>o--|   :Net    |<>------|:Interface |<>------|:Addr |
    +---------+    |      NIC +-----------+        +-----------+        +------+
-                  | <<interface>>                (net.Interface)      (net.Addr)
+                  | <<interface>>               (vnet.Interface)      (net.Addr)
                   |
                   |        * +-----------+ 1    * +-----------+ 1    * +------+
                   +------>o--|  :Router  |<>------|:Interface |<>------|:Addr |
                          NIC +-----------+        +-----------+        +------+
-                    <<interface>>                (net.Interface)      (net.Addr)
+                    <<interface>>               (vnet.Interface)      (net.Addr)
 ```
 
 > The instance of `Net` will be the one passed around the project.
@@ -76,7 +76,7 @@ Net provides 3 interfaces:
 ## Implementation
 
 ### Design Policy
-* Each pion package should have config object which has `Net` (of type vent.Vet) property. (just like how
+* Each pion package should have config object which has `Net` (of type vnet.Net) property. (just like how
         we distribute `LoggerFactory` throughout the pion project.
 * DNS => a simple dictionary (global)?
 * Each Net has routing capability (a goroutine)
@@ -151,7 +151,7 @@ if err = wan.Stop(); err != nil {
 The instance of vnet.Net wraps a subset of net package to enable operations
 on the virtual network. Your project must be able to pass the instance to
 all your routines that do network operation with net package. A typical way
-is to use a config param to create your instanceses with the virtual network
+is to use a config param to create your instances with the virtual network
 instance (`nw` in the above example) like this:
 
 ```go
@@ -203,9 +203,9 @@ func (a *Agent) listenUDP(...) error {
 |net.DialUDP()|(not supported)|Use Dial()|
 |net.DialTCP()|(not supported)||
 |net.Interface|vnet.Interface||
-|net.PacketConn|vnet.PacketConn||
-|net.UDPConn|vnet.UDPConn||
-|net.TCPConn|vnet.TCPConn|(TODO)||
+|net.PacketConn|(use it as-is)||
+|net.UDPConn|vnet.UDPConn|Use vnet.UDPPacketConn in your code|
+|net.TCPConn|vnet.TCPPConn|(TODO)||
 |net.UDPConn|vnet.Dialer|Use a.net.CreateDialer() to create it.<br>The use of vnet.Dialer is currently experimental.|
 
 > `a.net` is an instance of Net class, and types are defined under the package name `vnet`

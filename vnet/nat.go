@@ -75,18 +75,18 @@ func (n *networkAddressTranslator) translateOutbound(c Chunk) (Chunk, error) {
 
 	c = c.Clone()
 
-	if udp, ok := c.(*chunkUDP); ok {
+	if c.Network() == "udp" {
 		var filter string
 		switch n.natType.FilteringBehavior {
 		case EndpointIndependent:
 			filter = ""
 		case EndpointAddrDependent:
-			filter = fmt.Sprintf(":%s", udp.getDestinationIP().String())
+			filter = fmt.Sprintf(":%s", c.getDestinationIP().String())
 		case EndpointAddrPortDependent:
-			filter = fmt.Sprintf(":%s", udp.DestinationAddr().String())
+			filter = fmt.Sprintf(":%s", c.DestinationAddr().String())
 		}
 
-		oKey := fmt.Sprintf("udp:%s%s", udp.SourceAddr().String(), filter)
+		oKey := fmt.Sprintf("udp:%s%s", c.SourceAddr().String(), filter)
 
 		n.log.Debugf("oKey: %s\n", oKey)
 		m := n.findOutboundMapping(oKey)
@@ -96,8 +96,8 @@ func (n *networkAddressTranslator) translateOutbound(c Chunk) (Chunk, error) {
 			n.udpPortCounter++
 
 			m = &mapping{
-				proto:   udp.SourceAddr().Network(),
-				local:   udp.SourceAddr().String(),
+				proto:   c.SourceAddr().Network(),
+				local:   c.SourceAddr().String(),
 				mapped:  fmt.Sprintf("%s:%d", n.mappedIP, mappedPort),
 				filter:  filter,
 				expires: time.Now().Add(n.natType.MappingLifeTime),
@@ -111,12 +111,16 @@ func (n *networkAddressTranslator) translateOutbound(c Chunk) (Chunk, error) {
 			n.inboundMap[iKey] = m
 		}
 
-		if err := udp.setSourceAddr(m.mapped); err != nil {
+		if err := c.setSourceAddr(m.mapped); err != nil {
 			return nil, err
 		}
 
 		return c, nil
 	}
+
+	// TODO
+	//if c.Network() == "tcp" {
+	//}
 
 	return nil, fmt.Errorf("non-udp translation is not supported yet")
 }
@@ -127,23 +131,23 @@ func (n *networkAddressTranslator) translateInbound(c Chunk) (Chunk, error) {
 
 	c = c.Clone()
 
-	if udp, ok := c.(*chunkUDP); ok {
+	if c.Network() == "udp" {
 		var iKey string
 
 		switch n.natType.FilteringBehavior {
 		case EndpointIndependent:
 			iKey = fmt.Sprintf("udp:%s",
-				udp.DestinationAddr().String(),
+				c.DestinationAddr().String(),
 			)
 		case EndpointAddrDependent:
 			iKey = fmt.Sprintf("udp:%s:%s",
-				udp.DestinationAddr().String(),
-				udp.getSourceIP().String(),
+				c.DestinationAddr().String(),
+				c.getSourceIP().String(),
 			)
 		case EndpointAddrPortDependent:
 			iKey = fmt.Sprintf("udp:%s:%s",
-				udp.DestinationAddr().String(),
-				udp.SourceAddr().String(),
+				c.DestinationAddr().String(),
+				c.SourceAddr().String(),
 			)
 		}
 
@@ -152,12 +156,16 @@ func (n *networkAddressTranslator) translateInbound(c Chunk) (Chunk, error) {
 			return nil, fmt.Errorf("no inbound mapping found")
 		}
 
-		if err := udp.setDestinationAddr(m.local); err != nil {
+		if err := c.setDestinationAddr(m.local); err != nil {
 			return nil, err
 		}
 
 		return c, nil
 	}
+
+	// TODO
+	//if c.Network() == "tcp" {
+	//}
 
 	return nil, fmt.Errorf("non-udp translation is not supported yet")
 }
