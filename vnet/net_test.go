@@ -745,18 +745,31 @@ func TestUDPDialer(t *testing.T) {
 
 func TestExceptions(t *testing.T) {
 	t.Run("Unexpected operations in native mode", func(t *testing.T) {
+		// For portability of test, find a name of loopack interface name first
+		var loName string
+		ifs, err := net.Interfaces()
+		assert.NoError(t, err, "should succeed")
+		for _, ifc := range ifs {
+			if ifc.Flags&net.FlagLoopback != 0 {
+				loName = ifc.Name
+				break
+			}
+		}
+
 		nw := NewNet(nil)
 
-		// InterfaceByName
-		ifc, err := nw.InterfaceByName("lo0")
-		assert.NoError(t, err, "should succeed")
-		assert.Equal(t, "lo0", ifc.Name, "should match")
+		if len(loName) > 0 {
+			// InterfaceByName
+			ifc, err2 := nw.InterfaceByName(loName)
+			assert.NoError(t, err2, "should succeed")
+			assert.Equal(t, loName, ifc.Name, "should match")
+
+			// getInterface
+			_, err2 = nw.getInterface(loName)
+			assert.Error(t, err2, "should fail")
+		}
 
 		_, err = nw.InterfaceByName("foo0")
-		assert.Error(t, err, "should fail")
-
-		// getInterface
-		_, err = nw.getInterface("lo0")
 		assert.Error(t, err, "should fail")
 
 		// setRouter
