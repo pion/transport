@@ -40,12 +40,18 @@ func (f tcpFlag) String() string {
 
 // Chunk represents a packet passed around in the vnet
 type Chunk interface {
-	setTimestamp() time.Time  // used by router
-	getTimestamp() time.Time  // used by router
-	getSourceIP() net.IP      // used by router
-	getDestinationIP() net.IP // used by router
+	setTimestamp() time.Time                 // used by router
+	getTimestamp() time.Time                 // used by router
+	getSourceIP() net.IP                     // used by router
+	getDestinationIP() net.IP                // used by router
+	setSourceAddr(address string) error      // used by nat
+	setDestinationAddr(address string) error // used by nat
+
+	SourceAddr() net.Addr
+	DestinationAddr() net.Addr
+	UserData() []byte
 	Clone() Chunk
-	Network() string
+	Network() string // returns "udp" or "tcp"
 	String() string
 }
 
@@ -102,6 +108,10 @@ func (c *chunkUDP) DestinationAddr() net.Addr {
 		IP:   c.destinationIP,
 		Port: c.destinationPort,
 	}
+}
+
+func (c *chunkUDP) UserData() []byte {
+	return c.userData
 }
 
 func (c *chunkUDP) Clone() Chunk {
@@ -191,6 +201,10 @@ func (c *chunkTCP) DestinationAddr() net.Addr {
 		IP:   c.destinationIP,
 		Port: c.destinationPort,
 	}
+}
+
+func (c *chunkTCP) UserData() []byte {
+	return c.userData
 }
 
 func (c *chunkTCP) Clone() Chunk {

@@ -35,7 +35,7 @@ type UDPConn struct {
 	locAddr   *net.UDPAddr
 	remAddr   *net.UDPAddr
 	obs       connObserver
-	readCh    chan *chunkUDP
+	readCh    chan Chunk
 	closeCh   chan struct{}
 	readTimer *time.Timer
 }
@@ -48,7 +48,7 @@ func newUDPConn(addr *net.UDPAddr, obs connObserver) (*UDPConn, error) {
 	return &UDPConn{
 		locAddr:   addr,
 		obs:       obs,
-		readCh:    make(chan *chunkUDP, maxReadQueueSize),
+		readCh:    make(chan Chunk, maxReadQueueSize),
 		closeCh:   make(chan struct{}),
 		readTimer: time.NewTimer(time.Duration(math.MaxInt64)),
 	}, nil
@@ -70,9 +70,9 @@ loop:
 		select {
 		case chunk := <-c.readCh:
 			var err error
-			n := copy(p, chunk.userData)
+			n := copy(p, chunk.UserData())
 			addr := chunk.SourceAddr()
-			if n < len(chunk.userData) {
+			if n < len(chunk.UserData()) {
 				err = io.ErrShortBuffer
 			}
 

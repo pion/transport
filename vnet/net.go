@@ -118,11 +118,10 @@ func (v *vNet) onInboundChunk(c Chunk) {
 	defer v.mutex.Unlock()
 
 	if c.Network() == "udp" {
-		udp := c.(*chunkUDP)
-		addr := udp.DestinationAddr().String()
+		addr := c.DestinationAddr().String()
 		if conn, ok := v.udpConns[addr]; ok {
 			select {
-			case conn.readCh <- udp:
+			case conn.readCh <- c:
 			default:
 			}
 		}
