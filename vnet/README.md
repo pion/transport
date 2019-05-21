@@ -111,15 +111,16 @@ import (
 
 // Create WAN (a root router).
 wan, err := vnet.NewRouter(&RouterConfig{
-    CIDR:          "1.2.3.0/24",
+    CIDR:          "0.0.0.0/0",
     LoggerFactory: logging.NewDefaultLoggerFactory(),
 })
 
 // Create a network.
-nw := vnet.NewNet(&vnet.NetworkConfig{})
-if err = wan.AddNet(nw); err != nil {
-    // handle error
-}
+// You can specify a static IP for the instance of Net to use. If not specified,
+// router will assign an IP address that is contained in the router's CIDR.
+nw := vnet.NewNet(&vnet.NetworkConfig{
+    StaticIP: "27.1.2.3",
+})
 
 // Add the network to the router.
 // The router will assign an IP address to `nw`.
@@ -138,7 +139,6 @@ if err = wan.Start(); err != nil {
 //
 // Your application runs here using `nw`.
 //
-
 
 // Stop the router.
 // This will start internal goroutine to route packets.
