@@ -129,6 +129,7 @@ func (v *vNet) onInboundChunk(c Chunk) {
 	}
 }
 
+// caller must hold the mutex
 func (v *vNet) _listenUDP(network string, locAddr *net.UDPAddr) (UDPPacketConn, error) {
 	var address string
 
@@ -196,6 +197,9 @@ func (v *vNet) listenPacket(network string, address string) (UDPPacketConn, erro
 }
 
 func (v *vNet) listenUDP(network string, locAddr *net.UDPAddr) (UDPPacketConn, error) {
+	v.mutex.Lock()
+	defer v.mutex.Unlock()
+
 	return v._listenUDP(network, locAddr)
 }
 
@@ -282,9 +286,27 @@ func (v *vNet) dial(network string, address string) (net.Conn, error) {
 }
 
 func (v *vNet) write(c Chunk) error {
+	if c.Network() == "udp" {
+		if udp, ok := c.(*chunkUDP); ok {
+			dstAddr := udp.DestinationAddr().String()
+			if c.getDestinationIP().IsLoopback() {
+				if conn, ok := v.udpConns[dstAddr]; ok {
+					select {
+					case conn.readCh <- udp:
+					default:
+					}
+				}
+				return nil
+			}
+		} else {
+			return fmt.Errorf("unexpected type-switch failure")
+		}
+	}
+
 	if v.router == nil {
 		return fmt.Errorf("no router linked")
 	}
+
 	v.router.push(c)
 	return nil
 }

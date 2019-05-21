@@ -15,12 +15,12 @@ func TestInterfaces(t *testing.T) {
 	t.Run("Native", func(t *testing.T) {
 		nw := NewNet(nil)
 		interfaces, err := nw.Interfaces()
-		assert.Nil(t, err, "should succeed")
+		assert.NoError(t, err, "should succeed")
 		log.Debugf("interfaces: %+v\n", interfaces)
 		for _, ifc := range interfaces {
 			if ifc.Name == "lo0" {
 				_, err := ifc.Addrs()
-				assert.Nil(t, err, "should succeed")
+				assert.NoError(t, err, "should succeed")
 			}
 
 			if addrs, err := ifc.Addrs(); err == nil {
@@ -39,7 +39,7 @@ func TestInterfaces(t *testing.T) {
 
 		interfaces, err := nw.Interfaces()
 		assert.Equal(t, 2, len(interfaces), "should be one interface")
-		assert.Nil(t, err, "should succeed")
+		assert.NoError(t, err, "should succeed")
 
 		for _, ifc := range interfaces {
 			switch ifc.Name {
@@ -56,7 +56,7 @@ func TestInterfaces(t *testing.T) {
 					"Flags mismatch")
 
 				addrs, err := ifc.Addrs()
-				assert.Nil(t, err, "should succeed")
+				assert.NoError(t, err, "should succeed")
 				assert.Equal(t, 1, len(addrs), "should be one address")
 			case "eth0":
 				assert.Equal(t, 2, ifc.Index, "Index mismatch")
@@ -89,12 +89,12 @@ func TestInterfaces(t *testing.T) {
 
 		interfaces, err := nw.Interfaces()
 		assert.Equal(t, 2, len(interfaces), "should be one interface")
-		assert.Nil(t, err, "should succeed")
+		assert.NoError(t, err, "should succeed")
 
 		var ifc *Interface
 
 		ifc, err = nw.InterfaceByName("lo0")
-		assert.Nil(t, err, "should succeed")
+		assert.NoError(t, err, "should succeed")
 		if ifc.Name == "lo0" {
 			assert.Equal(t, 1, ifc.Index, "Index mismatch")
 			assert.Equal(t, 16384, ifc.MTU, "MTU mismatch")
@@ -108,12 +108,12 @@ func TestInterfaces(t *testing.T) {
 				"Flags mismatch")
 
 			addrs, err2 := ifc.Addrs()
-			assert.Nil(t, err2, "should succeed")
+			assert.NoError(t, err2, "should succeed")
 			assert.Equal(t, 1, len(addrs), "should be one address")
 		}
 
 		ifc, err = nw.InterfaceByName("eth0")
-		assert.Nil(t, err, "should succeed")
+		assert.NoError(t, err, "should succeed")
 		assert.Equal(t, 2, ifc.Index, "Index mismatch")
 		assert.Equal(t, 1500, ifc.MTU, "MTU mismatch")
 		assert.Equal(t, 6, len(ifc.HardwareAddr), "HardwareAddr length mismatch")
@@ -134,19 +134,19 @@ func TestInterfaces(t *testing.T) {
 
 		interfaces, err := nw.Interfaces()
 		assert.Equal(t, 2, len(interfaces), "should be one interface")
-		assert.Nil(t, err, "should succeed")
+		assert.NoError(t, err, "should succeed")
 
 		var ifc *Interface
 
 		ifc, err = nw.InterfaceByName("eth0")
-		assert.Nil(t, err, "should succeed")
+		assert.NoError(t, err, "should succeed")
 		ifc.AddAddr(&net.IPNet{
 			IP:   net.ParseIP("10.1.2.3"),
 			Mask: net.CIDRMask(24, 32),
 		})
 
 		_, err = ifc.Addrs()
-		assert.Nil(t, err, "should succeed")
+		assert.NoError(t, err, "should succeed")
 
 		assert.True(t, nw.v.hasIPAddr(net.ParseIP("127.0.0.1")),
 			"the IP addr should exist")
@@ -161,12 +161,12 @@ func TestInterfaces(t *testing.T) {
 
 		interfaces, err := nw.Interfaces()
 		assert.Equal(t, 2, len(interfaces), "should be one interface")
-		assert.Nil(t, err, "should succeed")
+		assert.NoError(t, err, "should succeed")
 
 		var ifc *Interface
 
 		ifc, err = nw.InterfaceByName("eth0")
-		assert.Nil(t, err, "should succeed")
+		assert.NoError(t, err, "should succeed")
 		ifc.AddAddr(&net.IPNet{
 			IP:   net.ParseIP("10.1.2.3"),
 			Mask: net.CIDRMask(24, 32),
@@ -190,12 +190,12 @@ func TestInterfaces(t *testing.T) {
 
 		interfaces, err := nw.Interfaces()
 		assert.Equal(t, 2, len(interfaces), "should be one interface")
-		assert.Nil(t, err, "should succeed")
+		assert.NoError(t, err, "should succeed")
 
 		var ifc *Interface
 
 		ifc, err = nw.InterfaceByName("eth0")
-		assert.Nil(t, err, "should succeed")
+		assert.NoError(t, err, "should succeed")
 		ifc.AddAddr(&net.IPNet{
 			IP:   net.ParseIP(addr),
 			Mask: net.CIDRMask(24, 32),
@@ -207,7 +207,7 @@ func TestInterfaces(t *testing.T) {
 
 		for i := 0; i < space; i++ {
 			port, err2 := nw.v.assignPort(net.ParseIP(addr), start, end)
-			assert.Nil(t, err2, "should succeed")
+			assert.NoError(t, err2, "should succeed")
 			log.Debugf("[%d] got port: %d", i, port)
 
 			udpAddr := net.UDPAddr{
@@ -229,12 +229,12 @@ func TestInterfaces(t *testing.T) {
 
 		interfaces, err := nw.Interfaces()
 		assert.Equal(t, 2, len(interfaces), "should be one interface")
-		assert.Nil(t, err, "should succeed")
+		assert.NoError(t, err, "should succeed")
 
 		var ifc *Interface
 
 		ifc, err = nw.InterfaceByName("eth0")
-		assert.Nil(t, err, "should succeed")
+		assert.NoError(t, err, "should succeed")
 		ifc.AddAddr(&net.IPNet{
 			IP:   net.ParseIP("1.2.3.4"),
 			Mask: net.CIDRMask(24, 32),
@@ -273,7 +273,7 @@ func TestNativeUDP(t *testing.T) {
 		nw := NewNet(nil)
 
 		conn, err := nw.ListenPacket("udp", "127.0.0.1:0")
-		if !assert.Nil(t, err, "should succeed") {
+		if !assert.NoError(t, err, "should succeed") {
 			return
 		}
 
@@ -283,6 +283,84 @@ func TestNativeUDP(t *testing.T) {
 
 		laddr := conn.LocalAddr().String()
 		log.Debugf("laddr: %s", laddr)
+	})
+
+	t.Run("ListenUDP random port", func(t *testing.T) {
+		nw := NewNet(nil)
+
+		srcAddr := &net.UDPAddr{
+			IP: net.ParseIP("127.0.0.1"),
+		}
+		conn, err := nw.ListenUDP("udp", srcAddr)
+		assert.NoError(t, err, "should succeed")
+
+		laddr := conn.LocalAddr().String()
+		log.Debugf("laddr: %s", laddr)
+
+		assert.NoError(t, conn.Close(), "should succeed")
+	})
+
+	t.Run("Dial UDP", func(t *testing.T) {
+		nw := NewNet(nil)
+
+		conn, err := nw.Dial("udp", "127.0.0.1:1234")
+		assert.NoError(t, err, "should succeed")
+
+		laddr := conn.LocalAddr()
+		log.Debugf("laddr: %s", laddr.String())
+
+		raddr := conn.RemoteAddr()
+		log.Debugf("raddr: %s", raddr.String())
+
+		assert.Equal(t, "127.0.0.1", laddr.(*net.UDPAddr).IP.String(), "should match")
+		assert.True(t, laddr.(*net.UDPAddr).Port != 0, "should match")
+		assert.Equal(t, "127.0.0.1:1234", raddr.String(), "should match")
+		assert.NoError(t, conn.Close(), "should succeed")
+	})
+}
+
+func TestUDPLoopback(t *testing.T) {
+	t.Run("Native", func(t *testing.T) {
+		nw := NewNet(nil)
+
+		conn, err := nw.ListenPacket("udp", "127.0.0.1:0")
+		assert.NoError(t, err, "should succeed")
+		laddr := conn.LocalAddr()
+		msg := "PING!"
+		n, err := conn.WriteTo([]byte(msg), laddr)
+		assert.NoError(t, err, "should succeed")
+		assert.Equal(t, len(msg), n, "should match")
+
+		buf := make([]byte, 1000)
+		n, addr, err := conn.ReadFrom(buf)
+		assert.NoError(t, err, "should succeed")
+		assert.Equal(t, len(msg), n, "should match")
+		assert.Equal(t, msg, string(buf[:n]), "should match")
+		assert.Equal(t, laddr.(*net.UDPAddr).String(), addr.(*net.UDPAddr).String(), "should match")
+		assert.NoError(t, conn.Close(), "should succeed")
+	})
+
+	t.Run("Virtual", func(t *testing.T) {
+		nw := NewNet(&NetConfig{})
+
+		conn, err := nw.ListenPacket("udp", "127.0.0.1:0")
+		assert.NoError(t, err, "should succeed")
+		laddr := conn.LocalAddr()
+		msg := "PING!"
+		n, err := conn.WriteTo([]byte(msg), laddr)
+		assert.NoError(t, err, "should succeed")
+		assert.Equal(t, len(msg), n, "should match")
+
+		buf := make([]byte, 1000)
+		n, addr, err := conn.ReadFrom(buf)
+		assert.NoError(t, err, "should succeed")
+		assert.Equal(t, len(msg), n, "should match")
+		assert.Equal(t, msg, string(buf[:n]), "should match")
+		assert.Equal(t, laddr.(*net.UDPAddr).String(), addr.(*net.UDPAddr).String(), "should match")
+
+		assert.Equal(t, 1, len(nw.v.udpConns), "should match")
+		assert.NoError(t, conn.Close(), "should succeed")
+		assert.Equal(t, 0, len(nw.v.udpConns), "should match")
 	})
 }
 
@@ -294,13 +372,13 @@ func TestVirtualUDPListen(t *testing.T) {
 		nw := NewNet(&NetConfig{})
 
 		conn, err := nw.ListenPacket("udp", "127.0.0.1:0")
-		assert.Nil(t, err, "should succeed")
+		assert.NoError(t, err, "should succeed")
 
 		laddr := conn.LocalAddr().String()
 		log.Debugf("laddr: %s", laddr)
 
 		assert.Equal(t, 1, len(nw.v.udpConns), "should match")
-		assert.Nil(t, conn.Close(), "should succeed")
+		assert.NoError(t, conn.Close(), "should succeed")
 		assert.Equal(t, 0, len(nw.v.udpConns), "should match")
 	})
 
@@ -308,13 +386,13 @@ func TestVirtualUDPListen(t *testing.T) {
 		nw := NewNet(&NetConfig{})
 
 		conn, err := nw.ListenPacket("udp", "127.0.0.1:50916")
-		assert.Nil(t, err, "should succeed")
+		assert.NoError(t, err, "should succeed")
 
 		laddr := conn.LocalAddr().String()
 		assert.Equal(t, "127.0.0.1:50916", laddr, "should match")
 
 		assert.Equal(t, 1, len(nw.v.udpConns), "should match")
-		assert.Nil(t, conn.Close(), "should succeed")
+		assert.NoError(t, conn.Close(), "should succeed")
 		assert.Equal(t, 0, len(nw.v.udpConns), "should match")
 	})
 
@@ -325,13 +403,13 @@ func TestVirtualUDPListen(t *testing.T) {
 			IP: net.ParseIP("127.0.0.1"),
 		}
 		conn, err := nw.ListenUDP("udp", srcAddr)
-		assert.Nil(t, err, "should succeed")
+		assert.NoError(t, err, "should succeed")
 
 		laddr := conn.LocalAddr().String()
 		log.Debugf("laddr: %s", laddr)
 
 		assert.Equal(t, 1, len(nw.v.udpConns), "should match")
-		assert.Nil(t, conn.Close(), "should succeed")
+		assert.NoError(t, conn.Close(), "should succeed")
 		assert.Equal(t, 0, len(nw.v.udpConns), "should match")
 	})
 
@@ -343,13 +421,13 @@ func TestVirtualUDPListen(t *testing.T) {
 			Port: 60916,
 		}
 		conn, err := nw.ListenUDP("udp", srcAddr)
-		assert.Nil(t, err, "should succeed")
+		assert.NoError(t, err, "should succeed")
 
 		laddr := conn.LocalAddr().String()
 		assert.Equal(t, "127.0.0.1:60916", laddr, "should match")
 
 		assert.Equal(t, 1, len(nw.v.udpConns), "should match")
-		assert.Nil(t, conn.Close(), "should succeed")
+		assert.NoError(t, conn.Close(), "should succeed")
 		assert.Equal(t, 0, len(nw.v.udpConns), "should match")
 	})
 }
@@ -362,7 +440,7 @@ func TestVirtualUDPDial(t *testing.T) {
 		nw := NewNet(&NetConfig{})
 
 		conn, err := nw.Dial("udp", "127.0.0.1:1234")
-		assert.Nil(t, err, "should succeed")
+		assert.NoError(t, err, "should succeed")
 
 		laddr := conn.LocalAddr()
 		log.Debugf("laddr: %s", laddr.String())
@@ -374,7 +452,7 @@ func TestVirtualUDPDial(t *testing.T) {
 		assert.True(t, laddr.(*net.UDPAddr).Port != 0, "should match")
 		assert.Equal(t, "127.0.0.1:1234", raddr.String(), "should match")
 		assert.Equal(t, 1, len(nw.v.udpConns), "should match")
-		assert.Nil(t, conn.Close(), "should succeed")
+		assert.NoError(t, conn.Close(), "should succeed")
 		assert.Equal(t, 0, len(nw.v.udpConns), "should match")
 	})
 
@@ -383,7 +461,7 @@ func TestVirtualUDPDial(t *testing.T) {
 			CIDR:          "1.2.3.0/24",
 			LoggerFactory: loggerFactory,
 		})
-		assert.Nil(t, err, "should succeed")
+		assert.NoError(t, err, "should succeed")
 		assert.NotNil(t, wan, "should succeed")
 
 		nw := NewNet(&NetConfig{})
@@ -391,7 +469,7 @@ func TestVirtualUDPDial(t *testing.T) {
 		assert.NoError(t, wan.AddNet(nw), "should succeed")
 
 		conn, err := nw.Dial("udp", "27.3.4.5:1234")
-		assert.Nil(t, err, "should succeed")
+		assert.NoError(t, err, "should succeed")
 
 		laddr := conn.LocalAddr()
 		log.Debugf("laddr: %s", laddr.String())
@@ -403,7 +481,7 @@ func TestVirtualUDPDial(t *testing.T) {
 		assert.True(t, laddr.(*net.UDPAddr).Port != 0, "should match")
 		assert.Equal(t, "27.3.4.5:1234", raddr.String(), "should match")
 		assert.Equal(t, 1, len(nw.v.udpConns), "should match")
-		assert.Nil(t, conn.Close(), "should succeed")
+		assert.NoError(t, conn.Close(), "should succeed")
 		assert.Equal(t, 0, len(nw.v.udpConns), "should match")
 	})
 
@@ -412,17 +490,18 @@ func TestVirtualUDPDial(t *testing.T) {
 			CIDR:          "1.2.3.0/24",
 			LoggerFactory: loggerFactory,
 		})
-		assert.Nil(t, err, "should succeed")
+		assert.NoError(t, err, "should succeed")
 		assert.NotNil(t, wan, "should succeed")
 
-		wan.AddHost("test.pion.ly", net.ParseIP("30.31.32.33"))
+		err = wan.AddHost("test.pion.ly", "30.31.32.33")
+		assert.NoError(t, err, "should succeed")
 
 		nw := NewNet(&NetConfig{})
 
 		assert.NoError(t, wan.AddNet(nw), "should succeed")
 
 		conn, err := nw.Dial("udp", "test.pion.ly:1234")
-		assert.Nil(t, err, "should succeed")
+		assert.NoError(t, err, "should succeed")
 
 		laddr := conn.LocalAddr()
 		log.Debugf("laddr: %s", laddr.String())
@@ -434,7 +513,7 @@ func TestVirtualUDPDial(t *testing.T) {
 		assert.True(t, laddr.(*net.UDPAddr).Port != 0, "should match")
 		assert.Equal(t, "30.31.32.33:1234", raddr.String(), "should match")
 		assert.Equal(t, 1, len(nw.v.udpConns), "should match")
-		assert.Nil(t, conn.Close(), "should succeed")
+		assert.NoError(t, conn.Close(), "should succeed")
 		assert.Equal(t, 0, len(nw.v.udpConns), "should match")
 	})
 }
@@ -447,7 +526,7 @@ func TestVirtualUDP(t *testing.T) {
 		nw := NewNet(&NetConfig{})
 
 		conn, err := nw.ListenPacket("udp", "127.0.0.1:50916")
-		assert.Nil(t, err, "should succeed")
+		assert.NoError(t, err, "should succeed")
 
 		laddr := conn.LocalAddr()
 		assert.Equal(t, "127.0.0.1:50916", laddr.String(), "should match")
@@ -494,7 +573,7 @@ func TestVirtualUDP(t *testing.T) {
 			select {
 			case <-recvdCh:
 				hasReceived = true
-				assert.Nil(t, conn.Close(), "should succeed")
+				assert.NoError(t, conn.Close(), "should succeed")
 			case <-doneCh:
 				break loop
 			}
@@ -512,38 +591,38 @@ func TestVirtualUDP(t *testing.T) {
 			CIDR:          "1.2.3.0/24",
 			LoggerFactory: loggerFactory,
 		})
-		assert.Nil(t, err, "should succeed")
+		assert.NoError(t, err, "should succeed")
 		assert.NotNil(t, wan, "should succeed")
 
 		net1 := NewNet(&NetConfig{})
 
 		err = wan.AddNet(net1)
-		assert.Nil(t, err, "should succeed")
+		assert.NoError(t, err, "should succeed")
 		ip1, err := getIPAddr(net1)
-		assert.Nil(t, err, "should succeed")
+		assert.NoError(t, err, "should succeed")
 
 		net2 := NewNet(&NetConfig{})
 
 		err = wan.AddNet(net2)
-		assert.Nil(t, err, "should succeed")
+		assert.NoError(t, err, "should succeed")
 		ip2, err := getIPAddr(net2)
-		assert.Nil(t, err, "should succeed")
+		assert.NoError(t, err, "should succeed")
 
 		conn1, err := net1.ListenPacket(
 			"udp",
 			fmt.Sprintf("%s:%d", ip1, 1234),
 		)
-		assert.Nil(t, err, "should succeed")
+		assert.NoError(t, err, "should succeed")
 
 		conn2, err := net2.ListenPacket(
 			"udp",
 			fmt.Sprintf("%s:%d", ip2, 5678),
 		)
-		assert.Nil(t, err, "should succeed")
+		assert.NoError(t, err, "should succeed")
 
 		// start the router
 		err = wan.Start()
-		assert.Nil(t, err, "should succeed")
+		assert.NoError(t, err, "should succeed")
 
 		conn1RcvdCh := make(chan bool)
 
@@ -579,7 +658,7 @@ func TestVirtualUDP(t *testing.T) {
 
 				// echo back to conn1
 				nSent, err2 := conn2.WriteTo([]byte("Good-bye!"), addr)
-				assert.Nil(t, err2, "should succeed")
+				assert.NoError(t, err2, "should succeed")
 				assert.Equal(t, 9, nSent, "should match")
 			}
 		}()
@@ -589,7 +668,7 @@ func TestVirtualUDP(t *testing.T) {
 			[]byte("Hello!"),
 			conn2.LocalAddr(),
 		)
-		assert.Nil(t, err, "should succeed")
+		assert.NoError(t, err, "should succeed")
 		assert.Equal(t, 6, nSent, "should match")
 
 	loop:
@@ -604,5 +683,91 @@ func TestVirtualUDP(t *testing.T) {
 		}
 
 		assert.NoError(t, wan.Stop(), "should succeed")
+	})
+}
+
+func TestUDPDialer(t *testing.T) {
+	loggerFactory := logging.NewDefaultLoggerFactory()
+	log := loggerFactory.NewLogger("test")
+
+	t.Run("Virtual lo0", func(t *testing.T) {
+		nw := NewNet(&NetConfig{})
+
+		dialer := nw.CreateDialer(&net.Dialer{
+			LocalAddr: &net.UDPAddr{
+				IP:   net.ParseIP("127.0.0.1"),
+				Port: 0,
+			},
+		})
+
+		conn, err := dialer.Dial("udp", "127.0.0.1:1234")
+		assert.NoError(t, err, "should succeed")
+
+		laddr := conn.LocalAddr()
+		log.Debugf("laddr: %s", laddr.String())
+
+		raddr := conn.RemoteAddr()
+		log.Debugf("raddr: %s", raddr.String())
+
+		assert.Equal(t, "127.0.0.1", laddr.(*net.UDPAddr).IP.String(), "should match")
+		assert.True(t, laddr.(*net.UDPAddr).Port != 0, "should match")
+		assert.Equal(t, "127.0.0.1:1234", raddr.String(), "should match")
+		assert.Equal(t, 1, len(nw.v.udpConns), "should match")
+		assert.NoError(t, conn.Close(), "should succeed")
+		assert.Equal(t, 0, len(nw.v.udpConns), "should match")
+	})
+
+	t.Run("Native lo0", func(t *testing.T) {
+		nw := NewNet(nil)
+
+		dialer := nw.CreateDialer(&net.Dialer{
+			LocalAddr: &net.UDPAddr{
+				IP:   net.ParseIP("127.0.0.1"),
+				Port: 0,
+			},
+		})
+
+		conn, err := dialer.Dial("udp", "127.0.0.1:1234")
+		assert.NoError(t, err, "should succeed")
+
+		laddr := conn.LocalAddr()
+		log.Debugf("laddr: %s", laddr.String())
+
+		raddr := conn.RemoteAddr()
+		log.Debugf("raddr: %s", raddr.String())
+
+		assert.Equal(t, "127.0.0.1", laddr.(*net.UDPAddr).IP.String(), "should match")
+		assert.True(t, laddr.(*net.UDPAddr).Port != 0, "should match")
+		assert.Equal(t, "127.0.0.1:1234", raddr.String(), "should match")
+		assert.NoError(t, conn.Close(), "should succeed")
+	})
+}
+
+func TestExceptions(t *testing.T) {
+	t.Run("Unexpected operations in native mode", func(t *testing.T) {
+		nw := NewNet(nil)
+
+		// InterfaceByName
+		ifc, err := nw.InterfaceByName("lo0")
+		assert.NoError(t, err, "should succeed")
+		assert.Equal(t, "lo0", ifc.Name, "should match")
+
+		_, err = nw.InterfaceByName("foo0")
+		assert.Error(t, err, "should fail")
+
+		// getInterface
+		_, err = nw.getInterface("lo0")
+		assert.Error(t, err, "should fail")
+
+		// setRouter
+		err = nw.setRouter(nil)
+		assert.Error(t, err, "should fail")
+
+		// onInboundChunk (shouldn't crash)
+		nw.onInboundChunk(nil)
+
+		// getStaticIP
+		ip := nw.getStaticIP()
+		assert.Nil(t, ip, "should be nil")
 	})
 }
