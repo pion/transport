@@ -253,8 +253,8 @@ func (r *Router) AddNet(nic NIC) error {
 }
 
 // AddHost adds a mapping of hostname and an IP address to the local resolver.
-func (r *Router) AddHost(hostName string, ip net.IP) {
-	r.resolver.addHost(hostName, ip)
+func (r *Router) AddHost(hostName string, ipAddr string) error {
+	return r.resolver.addHost(hostName, ipAddr)
 }
 
 // caller should hold the mutex
@@ -373,7 +373,7 @@ func (r *Router) setRouter(parent *Router) error {
 	switch addr := ifc.addrs[0].(type) {
 	case *net.IPNet:
 		ip = addr.IP
-	case *net.IPAddr:
+	case *net.IPAddr: // Do we really need this case?
 		ip = addr.IP
 	default:
 		return fmt.Errorf("unexpected address type for eth0")

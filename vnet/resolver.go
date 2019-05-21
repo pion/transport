@@ -1,6 +1,7 @@
 package vnet
 
 import (
+	"fmt"
 	"net"
 
 	"github.com/pion/logging"
@@ -22,7 +23,9 @@ func newResolver(config *resolverConfig) *resolver {
 		log:   config.LoggerFactory.NewLogger("vnet"),
 	}
 
-	r.addHost("localhost", net.ParseIP("127.0.0.1"))
+	if err := r.addHost("localhost", "127.0.0.1"); err != nil {
+		r.log.Warn("failed to add localhost to resolver")
+	}
 	return r
 }
 
@@ -30,8 +33,16 @@ func (r *resolver) setParent(parent *resolver) {
 	r.parent = parent
 }
 
-func (r *resolver) addHost(name string, ip net.IP) {
+func (r *resolver) addHost(name string, ipAddr string) error {
+	if len(name) == 0 {
+		return fmt.Errorf("host name must not be empty")
+	}
+	ip := net.ParseIP(ipAddr)
+	if ip == nil {
+		return fmt.Errorf("failed to parse IP address \"%s\"", ipAddr)
+	}
 	r.hosts[name] = ip
+	return nil
 }
 
 func (r *resolver) lookUp(hostName string) (net.IP, error) {
