@@ -205,7 +205,7 @@ func (a *Agent) listenUDP(...) error {
 |net.Interface|vnet.Interface||
 |net.PacketConn|(use it as-is)||
 |net.UDPConn|vnet.UDPConn|Use vnet.UDPPacketConn in your code|
-|net.TCPConn|vnet.TCPPConn|(TODO)||
+|net.TCPConn|vnet.TCPConn|(TODO)||
 |net.UDPConn|vnet.Dialer|Use a.net.CreateDialer() to create it.<br>The use of vnet.Dialer is currently experimental.|
 
 > `a.net` is an instance of Net class, and types are defined under the package name `vnet`
