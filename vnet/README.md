@@ -141,7 +141,8 @@ if err = wan.Start(); err != nil {
 //
 
 // Stop the router.
-// This will start internal goroutine to route packets.
+// This will stop all internal goroutines in the router tree.
+// (No need to call Stop() on child routers)
 if err = wan.Stop(); err != nil {
     // handle error
 }
@@ -180,7 +181,7 @@ func NetAgent(config *AgentConfig) *Agent {
 ```go
 // a.net is the instance of vnet.Net class
 func (a *Agent) listenUDP(...) error {
-    conn, err := a.net.ListenUDP("udp", ...)
+    conn, err := a.net.ListenPacket("udp", ...)
     if err != nil {
         return nil, err
     }
@@ -196,17 +197,17 @@ func (a *Agent) listenUDP(...) error {
 |net.Interfaces()|a.net.Interfaces()||
 |net.InterfaceByName()|a.net.InterfaceByName()||
 |net.ListenPacket()|a.net.ListenPacket()||
-|net.ListenUDP()|a.net.ListenUDP()||
+|net.ListenUDP()|a.net.ListenUDP()|(ListenPacket() is recommended)|
 |net.Listen()|a.net.Listen()|(TODO)|
-|net.ListenTCP()|a.net.ListenTCP()||
+|net.ListenTCP()|(not supported)|(Listen() would be recommended)|
 |net.Dial()|a.net.Dial()||
 |net.DialUDP()|(not supported)|Use Dial()|
 |net.DialTCP()|(not supported)||
 |net.Interface|vnet.Interface||
 |net.PacketConn|(use it as-is)||
 |net.UDPConn|vnet.UDPConn|Use vnet.UDPPacketConn in your code|
-|net.TCPConn|vnet.TCPConn|(TODO)||
-|net.UDPConn|vnet.Dialer|Use a.net.CreateDialer() to create it.<br>The use of vnet.Dialer is currently experimental.|
+|net.TCPConn|vnet.TCPConn|(TODO)|Use net.Conn in your code|
+|net.Dialer|vnet.Dialer|Use a.net.CreateDialer() to create it.<br>The use of vnet.Dialer is currently experimental.|
 
 > `a.net` is an instance of Net class, and types are defined under the package name `vnet`
 
@@ -215,7 +216,8 @@ func (a *Agent) listenUDP(...) error {
 > Please post a github issue when other types/methods need to be added to vnet/vnet.Net.
 
 ## TODO / Next Step
-* Implement all methods marked as TODO in the above table.
+* Implement TCP (TCPConn, Listen)
+* Support of IPv6
 * Convert pion/stun to use vnet (we will need to implement STUN server also)
 * Convert pion/ice to use vnet
 * Convert all other pion packages that use net package to vnet
@@ -223,7 +225,14 @@ func (a *Agent) listenUDP(...) error {
   - WAN only
   - WAN + n x LAN(w/ NAT)
   - Two Nets (NICs) under the same LAN(NAT)
-  - Set up various types of NAT (*-cone NAT, symmetric NAT, etc)
+  - Set up various types of NAT (various cone NAT, symmetric NAT, etc)
+* Add network impairment features (on Router)
+  - Introduce lantecy / jitter
+  - Packet filtering handler (allow selectively drop packets, etc.)
+* Add statistics data retrieval
+  - Total number of packets forward by each router
+  - Total number of packet loss
+  - Total number of connection failure (TCP)
 
 ## References
 ### Code experiments
