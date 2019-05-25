@@ -456,7 +456,7 @@ func (v *vNet) assignPort(ip net.IP, start, end int) (int, error) {
 	return -1, fmt.Errorf("port space exhausted")
 }
 
-// NetConfig ...
+// NetConfig is a bag of configuration parameters passed to NewNet().
 type NetConfig struct {
 	// StaticIP is a static IP address to be assigned for this Net. If nil,
 	// the router will automatically assign an IP address.
