@@ -118,7 +118,7 @@ wan, err := vnet.NewRouter(&RouterConfig{
 // Create a network.
 // You can specify a static IP for the instance of Net to use. If not specified,
 // router will assign an IP address that is contained in the router's CIDR.
-nw := vnet.NewNet(&vnet.NetworkConfig{
+nw := vnet.NewNet(&vnet.NetConfig{
     StaticIP: "27.1.2.3",
 })
 
@@ -235,6 +235,8 @@ func (a *Agent) listenUDP(...) error {
   - Total number of connection failure (TCP)
 
 ## References
+* [Comparing Simulated Packet Loss and RealWorld Network Congestion](https://www.riverbed.com/document/fpo/WhitePaper-Riverbed-SimulatedPacketLoss.pdf)
+
 ### Code experiments
 * [CIDR and IPMask](https://play.golang.org/p/B7OBhkZqjmj)
 * [Test with net.IP](https://play.golang.org/p/AgXd23wKY4W)
