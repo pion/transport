@@ -33,7 +33,7 @@ type vNet struct {
 	interfaces []*Interface
 	staticIP   net.IP
 	router     *Router
-	udpConns   map[string]*UDPConn
+	udpConns   *udpConnMap
 	mutex      sync.RWMutex
 }
 
@@ -118,8 +118,7 @@ func (v *vNet) onInboundChunk(c Chunk) {
 	defer v.mutex.Unlock()
 
 	if c.Network() == "udp" {
-		addr := c.DestinationAddr().String()
-		if conn, ok := v.udpConns[addr]; ok {
+		if conn, ok := v.udpConns.find(c.DestinationAddr()); ok {
 			select {
 			case conn.readCh <- c:
 			default:
@@ -130,8 +129,6 @@ func (v *vNet) onInboundChunk(c Chunk) {
 
 // caller must hold the mutex
 func (v *vNet) _listenUDP(network string, locAddr *net.UDPAddr) (UDPPacketConn, error) {
-	var address string
-
 	// validate network
 	if network != "udp" && network != "udp4" {
 		return nil, fmt.Errorf("unexpected network: %s", network)
@@ -160,8 +157,7 @@ func (v *vNet) _listenUDP(network string, locAddr *net.UDPAddr) (UDPPacketConn, 
 		}
 		locAddr.Port = port
 	} else {
-		address = fmt.Sprintf("%s:%d", locAddr.IP.String(), locAddr.Port)
-		if _, ok := v.udpConns[address]; ok {
+		if _, ok := v.udpConns.find(locAddr); ok {
 			return nil, &net.OpError{
 				Op:   "listen",
 				Net:  network,
@@ -176,9 +172,10 @@ func (v *vNet) _listenUDP(network string, locAddr *net.UDPAddr) (UDPPacketConn, 
 		return nil, err
 	}
 
-	address = conn.LocalAddr().String()
-
-	v.udpConns[address] = conn
+	err = v.udpConns.insert(conn)
+	if err != nil {
+		return nil, err
+	}
 
 	return conn, nil
 }
@@ -279,7 +276,10 @@ func (v *vNet) dial(network string, address string) (net.Conn, error) {
 
 	conn.remAddr = remAddr
 
-	v.udpConns[locAddr.String()] = conn
+	err = v.udpConns.insert(conn)
+	if err != nil {
+		return nil, err
+	}
 
 	return conn, nil
 }
@@ -287,9 +287,8 @@ func (v *vNet) dial(network string, address string) (net.Conn, error) {
 func (v *vNet) write(c Chunk) error {
 	if c.Network() == "udp" {
 		if udp, ok := c.(*chunkUDP); ok {
-			dstAddr := udp.DestinationAddr().String()
 			if c.getDestinationIP().IsLoopback() {
-				if conn, ok := v.udpConns[dstAddr]; ok {
+				if conn, ok := v.udpConns.find(udp.DestinationAddr()); ok {
 					select {
 					case conn.readCh <- udp:
 					default:
@@ -312,8 +311,7 @@ func (v *vNet) write(c Chunk) error {
 
 func (v *vNet) onClosed(addr net.Addr) {
 	if addr.Network() == "udp" {
-		address := addr.String()
-		delete(v.udpConns, address)
+		v.udpConns.delete(addr)
 	}
 }
 
@@ -419,16 +417,16 @@ func (v *vNet) allocateLocalAddr(ip net.IP, port int) error {
 	}
 
 	for _, ip2 := range ips {
-		address := fmt.Sprintf("%s:%d", ip2.String(), port)
-		if _, ok := v.udpConns[address]; ok {
+		addr := &net.UDPAddr{
+			IP:   ip2,
+			Port: port,
+		}
+		if _, ok := v.udpConns.find(addr); ok {
 			return &net.OpError{
-				Op:  "bind",
-				Net: "udp",
-				Addr: &net.UDPAddr{
-					IP:   ip2,
-					Port: port,
-				},
-				Err: fmt.Errorf("bind: address already in use"),
+				Op:   "bind",
+				Net:  "udp",
+				Addr: addr,
+				Err:  fmt.Errorf("bind: address already in use"),
 			}
 		}
 	}
@@ -437,7 +435,7 @@ func (v *vNet) allocateLocalAddr(ip net.IP, port int) error {
 }
 
 func (v *vNet) assignPort(ip net.IP, start, end int) (int, error) {
-	// choose randomly from the range between 5000 and 5999
+	// choose randomly from the range between start and end (inclusive)
 	if end < start {
 		return -1, fmt.Errorf("end port is less than the start")
 	}
@@ -518,7 +516,7 @@ func NewNet(config *NetConfig) *Net {
 	v := &vNet{
 		interfaces: []*Interface{lo0, eth0},
 		staticIP:   net.ParseIP(config.StaticIP),
-		udpConns:   map[string]*UDPConn{},
+		udpConns:   newUDPConnMap(),
 	}
 
 	return &Net{

@@ -210,14 +210,16 @@ func TestInterfaces(t *testing.T) {
 			assert.NoError(t, err2, "should succeed")
 			log.Debugf("[%d] got port: %d", i, port)
 
-			udpAddr := net.UDPAddr{
+			conn, err := newUDPConn(&net.UDPAddr{
 				IP:   net.ParseIP(addr),
 				Port: port,
-			}
-			nw.v.udpConns[udpAddr.String()] = nil
+			}, &myConnObserver{})
+			assert.NoError(t, err, "should succeed")
+			err = nw.v.udpConns.insert(conn)
+			assert.NoError(t, err, "should succeed")
 		}
 
-		assert.Equal(t, space, len(nw.v.udpConns), "should match")
+		assert.Equal(t, space, nw.v.udpConns.size(), "should match")
 
 		// attempt to assign again should fail
 		_, err = nw.v.assignPort(net.ParseIP(addr), start, end)
@@ -358,9 +360,9 @@ func TestUDPLoopback(t *testing.T) {
 		assert.Equal(t, msg, string(buf[:n]), "should match")
 		assert.Equal(t, laddr.(*net.UDPAddr).String(), addr.(*net.UDPAddr).String(), "should match")
 
-		assert.Equal(t, 1, len(nw.v.udpConns), "should match")
+		assert.Equal(t, 1, nw.v.udpConns.size(), "should match")
 		assert.NoError(t, conn.Close(), "should succeed")
-		assert.Equal(t, 0, len(nw.v.udpConns), "should match")
+		assert.Equal(t, 0, nw.v.udpConns.size(), "should match")
 	})
 }
 
@@ -377,9 +379,9 @@ func TestVirtualUDPListen(t *testing.T) {
 		laddr := conn.LocalAddr().String()
 		log.Debugf("laddr: %s", laddr)
 
-		assert.Equal(t, 1, len(nw.v.udpConns), "should match")
+		assert.Equal(t, 1, nw.v.udpConns.size(), "should match")
 		assert.NoError(t, conn.Close(), "should succeed")
-		assert.Equal(t, 0, len(nw.v.udpConns), "should match")
+		assert.Equal(t, 0, nw.v.udpConns.size(), "should match")
 	})
 
 	t.Run("ListenPacket specific port", func(t *testing.T) {
@@ -391,9 +393,9 @@ func TestVirtualUDPListen(t *testing.T) {
 		laddr := conn.LocalAddr().String()
 		assert.Equal(t, "127.0.0.1:50916", laddr, "should match")
 
-		assert.Equal(t, 1, len(nw.v.udpConns), "should match")
+		assert.Equal(t, 1, nw.v.udpConns.size(), "should match")
 		assert.NoError(t, conn.Close(), "should succeed")
-		assert.Equal(t, 0, len(nw.v.udpConns), "should match")
+		assert.Equal(t, 0, nw.v.udpConns.size(), "should match")
 	})
 
 	t.Run("ListenUDP random port", func(t *testing.T) {
@@ -408,9 +410,9 @@ func TestVirtualUDPListen(t *testing.T) {
 		laddr := conn.LocalAddr().String()
 		log.Debugf("laddr: %s", laddr)
 
-		assert.Equal(t, 1, len(nw.v.udpConns), "should match")
+		assert.Equal(t, 1, nw.v.udpConns.size(), "should match")
 		assert.NoError(t, conn.Close(), "should succeed")
-		assert.Equal(t, 0, len(nw.v.udpConns), "should match")
+		assert.Equal(t, 0, nw.v.udpConns.size(), "should match")
 	})
 
 	t.Run("ListenUDP specific port", func(t *testing.T) {
@@ -426,9 +428,9 @@ func TestVirtualUDPListen(t *testing.T) {
 		laddr := conn.LocalAddr().String()
 		assert.Equal(t, "127.0.0.1:60916", laddr, "should match")
 
-		assert.Equal(t, 1, len(nw.v.udpConns), "should match")
+		assert.Equal(t, 1, nw.v.udpConns.size(), "should match")
 		assert.NoError(t, conn.Close(), "should succeed")
-		assert.Equal(t, 0, len(nw.v.udpConns), "should match")
+		assert.Equal(t, 0, nw.v.udpConns.size(), "should match")
 	})
 }
 
@@ -451,9 +453,9 @@ func TestVirtualUDPDial(t *testing.T) {
 		assert.Equal(t, "127.0.0.1", laddr.(*net.UDPAddr).IP.String(), "should match")
 		assert.True(t, laddr.(*net.UDPAddr).Port != 0, "should match")
 		assert.Equal(t, "127.0.0.1:1234", raddr.String(), "should match")
-		assert.Equal(t, 1, len(nw.v.udpConns), "should match")
+		assert.Equal(t, 1, nw.v.udpConns.size(), "should match")
 		assert.NoError(t, conn.Close(), "should succeed")
-		assert.Equal(t, 0, len(nw.v.udpConns), "should match")
+		assert.Equal(t, 0, nw.v.udpConns.size(), "should match")
 	})
 
 	t.Run("Simple eth0", func(t *testing.T) {
@@ -480,9 +482,9 @@ func TestVirtualUDPDial(t *testing.T) {
 		assert.Equal(t, "1.2.3.1", laddr.(*net.UDPAddr).IP.String(), "should match")
 		assert.True(t, laddr.(*net.UDPAddr).Port != 0, "should match")
 		assert.Equal(t, "27.3.4.5:1234", raddr.String(), "should match")
-		assert.Equal(t, 1, len(nw.v.udpConns), "should match")
+		assert.Equal(t, 1, nw.v.udpConns.size(), "should match")
 		assert.NoError(t, conn.Close(), "should succeed")
-		assert.Equal(t, 0, len(nw.v.udpConns), "should match")
+		assert.Equal(t, 0, nw.v.udpConns.size(), "should match")
 	})
 
 	t.Run("Using resolver", func(t *testing.T) {
@@ -512,9 +514,9 @@ func TestVirtualUDPDial(t *testing.T) {
 		assert.Equal(t, "1.2.3.1", laddr.(*net.UDPAddr).IP.String(), "should match")
 		assert.True(t, laddr.(*net.UDPAddr).Port != 0, "should match")
 		assert.Equal(t, "30.31.32.33:1234", raddr.String(), "should match")
-		assert.Equal(t, 1, len(nw.v.udpConns), "should match")
+		assert.Equal(t, 1, nw.v.udpConns.size(), "should match")
 		assert.NoError(t, conn.Close(), "should succeed")
-		assert.Equal(t, 0, len(nw.v.udpConns), "should match")
+		assert.Equal(t, 0, nw.v.udpConns.size(), "should match")
 	})
 }
 
@@ -579,7 +581,7 @@ func TestVirtualUDP(t *testing.T) {
 			}
 		}
 
-		assert.Equal(t, 0, len(nw.v.udpConns), "should match")
+		assert.Equal(t, 0, nw.v.udpConns.size(), "should match")
 		assert.True(t, hasReceived, "should have received data")
 	})
 
@@ -712,9 +714,9 @@ func TestUDPDialer(t *testing.T) {
 		assert.Equal(t, "127.0.0.1", laddr.(*net.UDPAddr).IP.String(), "should match")
 		assert.True(t, laddr.(*net.UDPAddr).Port != 0, "should match")
 		assert.Equal(t, "127.0.0.1:1234", raddr.String(), "should match")
-		assert.Equal(t, 1, len(nw.v.udpConns), "should match")
+		assert.Equal(t, 1, nw.v.udpConns.size(), "should match")
 		assert.NoError(t, conn.Close(), "should succeed")
-		assert.Equal(t, 0, len(nw.v.udpConns), "should match")
+		assert.Equal(t, 0, nw.v.udpConns.size(), "should match")
 	})
 
 	t.Run("Native lo0", func(t *testing.T) {
