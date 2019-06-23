@@ -210,13 +210,13 @@ func TestInterfaces(t *testing.T) {
 			assert.NoError(t, err2, "should succeed")
 			log.Debugf("[%d] got port: %d", i, port)
 
-			conn, err := newUDPConn(&net.UDPAddr{
+			conn, err2 := newUDPConn(&net.UDPAddr{
 				IP:   net.ParseIP(addr),
 				Port: port,
 			}, &myConnObserver{})
-			assert.NoError(t, err, "should succeed")
-			err = nw.v.udpConns.insert(conn)
-			assert.NoError(t, err, "should succeed")
+			assert.NoError(t, err2, "should succeed")
+			err2 = nw.v.udpConns.insert(conn)
+			assert.NoError(t, err2, "should succeed")
 		}
 
 		assert.Equal(t, space, nw.v.udpConns.size(), "should match")

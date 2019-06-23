@@ -156,14 +156,12 @@ func (v *vNet) _listenUDP(network string, locAddr *net.UDPAddr) (UDPPacketConn, 
 			}
 		}
 		locAddr.Port = port
-	} else {
-		if _, ok := v.udpConns.find(locAddr); ok {
-			return nil, &net.OpError{
-				Op:   "listen",
-				Net:  network,
-				Addr: locAddr,
-				Err:  fmt.Errorf("bind: address already in use"),
-			}
+	} else if _, ok := v.udpConns.find(locAddr); ok {
+		return nil, &net.OpError{
+			Op:   "listen",
+			Net:  network,
+			Addr: locAddr,
+			Err:  fmt.Errorf("bind: address already in use"),
 		}
 	}
 
@@ -311,7 +309,8 @@ func (v *vNet) write(c Chunk) error {
 
 func (v *vNet) onClosed(addr net.Addr) {
 	if addr.Network() == "udp" {
-		v.udpConns.delete(addr)
+		//nolint:errcheck
+		v.udpConns.delete(addr) // #nosec
 	}
 }
 

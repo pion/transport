@@ -34,7 +34,8 @@ func TestUDPConnMap(t *testing.T) {
 		}, obs)
 		assert.NoError(t, err, "should succeed")
 
-		connMap.insert(connIn)
+		err = connMap.insert(connIn)
+		assert.NoError(t, err, "should succeed")
 
 		connOut, ok := connMap.find(connIn.LocalAddr())
 		assert.True(t, ok, "should succeed")
