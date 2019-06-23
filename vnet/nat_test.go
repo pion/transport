@@ -14,6 +14,21 @@ import (
 // iic: inbound internal chunk
 // iec: inbound external chunk
 
+func TestNATTypeDefauts(t *testing.T) {
+	loggerFactory := logging.NewDefaultLoggerFactory()
+	nat := newNAT(&natConfig{
+		natType:       NATType{},
+		mappedIP:      "1.2.3.4",
+		loggerFactory: loggerFactory,
+	})
+
+	assert.Equal(t, EndpointIndependent, nat.natType.MappingBehavior, "should match")
+	assert.Equal(t, EndpointIndependent, nat.natType.FilteringBehavior, "should match")
+	assert.False(t, nat.natType.Hairpining, "should be false")
+	assert.False(t, nat.natType.PortPreservation, "should be false")
+	assert.Equal(t, defaultNATMappingLifeTime, nat.natType.MappingLifeTime, "should be false")
+}
+
 func TestNATMappingBehavior(t *testing.T) {
 	loggerFactory := logging.NewDefaultLoggerFactory()
 	log := loggerFactory.NewLogger("test")

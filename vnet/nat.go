@@ -25,6 +25,10 @@ const (
 	EndpointAddrPortDependent
 )
 
+const (
+	defaultNATMappingLifeTime = 30 * time.Second
+)
+
 // NATType has a set of parameters that define the behavior of NAT.
 type NATType struct {
 	MappingBehavior   EndpointDependencyType
@@ -59,8 +63,13 @@ type networkAddressTranslator struct {
 }
 
 func newNAT(config *natConfig) *networkAddressTranslator {
+	natType := config.natType
+	if natType.MappingLifeTime == 0 {
+		natType.MappingLifeTime = defaultNATMappingLifeTime
+	}
+
 	return &networkAddressTranslator{
-		natType:     config.natType,
+		natType:     natType,
 		mappedIP:    config.mappedIP,
 		outboundMap: map[string]*mapping{},
 		inboundMap:  map[string]*mapping{},
