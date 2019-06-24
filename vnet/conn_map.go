@@ -27,10 +27,7 @@ func (m *udpConnMap) insert(conn *UDPConn) error {
 
 		for _, conn := range conns {
 			laddr := conn.LocalAddr().(*net.UDPAddr)
-			if laddr.IP.IsUnspecified() {
-				return fmt.Errorf("address already in use")
-			}
-			if laddr.IP.Equal(udpAddr.IP) {
+			if laddr.IP.IsUnspecified() || laddr.IP.Equal(udpAddr.IP) {
 				return fmt.Errorf("address already in use")
 			}
 		}
@@ -60,12 +57,8 @@ func (m *udpConnMap) find(addr net.Addr) (*UDPConn, bool) {
 
 		for _, conn := range conns {
 			laddr := conn.LocalAddr().(*net.UDPAddr)
-			if laddr.IP.IsUnspecified() {
+			if laddr.IP.IsUnspecified() || laddr.IP.Equal(udpAddr.IP) {
 				return conn, ok
-			}
-
-			if laddr.IP.Equal(udpAddr.IP) {
-				return conn, true
 			}
 		}
 	}
