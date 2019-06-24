@@ -40,13 +40,14 @@ type UDPConn struct {
 	readTimer *time.Timer
 }
 
-func newUDPConn(addr *net.UDPAddr, obs connObserver) (*UDPConn, error) {
+func newUDPConn(locAddr, remAddr *net.UDPAddr, obs connObserver) (*UDPConn, error) {
 	if obs == nil {
 		return nil, fmt.Errorf("obs cannot be nil")
 	}
 
 	return &UDPConn{
-		locAddr:   addr,
+		locAddr:   locAddr,
+		remAddr:   remAddr,
 		obs:       obs,
 		readCh:    make(chan Chunk, maxReadQueueSize),
 		closeCh:   make(chan struct{}),

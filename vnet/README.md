@@ -201,7 +201,7 @@ func (a *Agent) listenUDP(...) error {
 |net.Listen()|a.net.Listen()|(TODO)|
 |net.ListenTCP()|(not supported)|(Listen() would be recommended)|
 |net.Dial()|a.net.Dial()||
-|net.DialUDP()|(not supported)|Use Dial()|
+|net.DialUDP()|a.net.DialUDP()||
 |net.DialTCP()|(not supported)||
 |net.Interface|vnet.Interface||
 |net.PacketConn|(use it as-is)||
@@ -218,14 +218,7 @@ func (a *Agent) listenUDP(...) error {
 ## TODO / Next Step
 * Implement TCP (TCPConn, Listen)
 * Support of IPv6
-* Convert pion/stun to use vnet (we will need to implement STUN server also)
-* Convert pion/ice to use vnet
-* Convert all other pion packages that use net package to vnet
 * Write a bunch of examples for building virtual networks.
-  - WAN only
-  - WAN + n x LAN(w/ NAT)
-  - Two Nets (NICs) under the same LAN(NAT)
-  - Set up various types of NAT (various cone NAT, symmetric NAT, etc)
 * Add network impairment features (on Router)
   - Introduce lantecy / jitter
   - Packet filtering handler (allow selectively drop packets, etc.)
