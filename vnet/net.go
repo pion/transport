@@ -11,17 +11,6 @@ import (
 
 var macAddrCounter uint64 = 0xBEEFED910200
 
-func isAnyIP(ip net.IP) bool {
-	switch ip.String() {
-	case "0.0.0.0":
-		return true
-	case "::":
-		return true
-	default:
-	}
-	return false
-}
-
 func newMACAddress() net.HardwareAddr {
 	b := make([]byte, 8)
 	binary.BigEndian.PutUint64(b, macAddrCounter)
@@ -128,7 +117,7 @@ func (v *vNet) onInboundChunk(c Chunk) {
 }
 
 // caller must hold the mutex
-func (v *vNet) _listenUDP(network string, locAddr *net.UDPAddr) (UDPPacketConn, error) {
+func (v *vNet) _dialUDP(network string, locAddr, remAddr *net.UDPAddr) (UDPPacketConn, error) {
 	// validate network
 	if network != "udp" && network != "udp4" {
 		return nil, fmt.Errorf("unexpected network: %s", network)
@@ -165,7 +154,7 @@ func (v *vNet) _listenUDP(network string, locAddr *net.UDPAddr) (UDPPacketConn, 
 		}
 	}
 
-	conn, err := newUDPConn(locAddr, v)
+	conn, err := newUDPConn(locAddr, remAddr, v)
 	if err != nil {
 		return nil, err
 	}
@@ -182,22 +171,29 @@ func (v *vNet) listenPacket(network string, address string) (UDPPacketConn, erro
 	v.mutex.Lock()
 	defer v.mutex.Unlock()
 
-	udpAddr, err := net.ResolveUDPAddr(network, address)
+	locAddr, err := net.ResolveUDPAddr(network, address)
 	if err != nil {
 		return nil, err
 	}
 
-	return v._listenUDP(network, udpAddr)
+	return v._dialUDP(network, locAddr, nil)
 }
 
 func (v *vNet) listenUDP(network string, locAddr *net.UDPAddr) (UDPPacketConn, error) {
 	v.mutex.Lock()
 	defer v.mutex.Unlock()
 
-	return v._listenUDP(network, locAddr)
+	return v._dialUDP(network, locAddr, nil)
 }
 
-func (v *vNet) dial(network string, address string) (net.Conn, error) {
+func (v *vNet) dialUDP(network string, locAddr, remAddr *net.UDPAddr) (UDPPacketConn, error) {
+	v.mutex.Lock()
+	defer v.mutex.Unlock()
+
+	return v._dialUDP(network, locAddr, remAddr)
+}
+
+func (v *vNet) dial(network string, address string) (UDPPacketConn, error) {
 	v.mutex.Lock()
 	defer v.mutex.Unlock()
 
@@ -230,56 +226,11 @@ func (v *vNet) dial(network string, address string) (net.Conn, error) {
 	}
 
 	// Determine source address
-	var srcIP net.IP
-	if remAddr.IP.IsLoopback() {
-		srcIP = net.ParseIP("127.0.0.1")
-	} else {
-		ifc, err2 := v._getInterface("eth0")
-		if err2 != nil {
-			return nil, err2
-		}
+	srcIP := v.determineSourceIP(nil, remAddr.IP)
 
-		addrs, err2 := ifc.Addrs()
-		if err2 != nil {
-			return nil, err2
-		}
+	locAddr := &net.UDPAddr{IP: srcIP, Port: 0}
 
-		if len(addrs) == 0 {
-			return nil, fmt.Errorf("no IP address available for eth0")
-		}
-
-		srcIP = addrs[0].(*net.IPNet).IP
-	}
-
-	// assign a port number
-	port, err = v.assignPort(srcIP, 5000, 5999)
-	if err != nil {
-		return nil, &net.OpError{
-			Op:   "dial",
-			Net:  network,
-			Addr: remAddr,
-			Err:  err,
-		}
-	}
-
-	locAddr := &net.UDPAddr{
-		IP:   srcIP,
-		Port: port,
-	}
-
-	conn, err := newUDPConn(locAddr, v)
-	if err != nil {
-		return nil, err
-	}
-
-	conn.remAddr = remAddr
-
-	err = v.udpConns.insert(conn)
-	if err != nil {
-		return nil, err
-	}
-
-	return conn, nil
+	return v._dialUDP(network, locAddr, remAddr)
 }
 
 func (v *vNet) write(c Chunk) error {
@@ -318,7 +269,7 @@ func (v *vNet) onClosed(addr net.Addr) {
 // is any IP address ("0.0.0.0" or "::"). If locIP is a non-any addr,
 // this method simply returns locIP.
 func (v *vNet) determineSourceIP(locIP, dstIP net.IP) net.IP {
-	if !isAnyIP(locIP) {
+	if locIP != nil && !locIP.IsUnspecified() {
 		return locIP
 	}
 
@@ -341,11 +292,16 @@ func (v *vNet) determineSourceIP(locIP, dstIP net.IP) net.IP {
 			return nil
 		}
 
-		isIPv4 := (locIP.To4() != nil)
+		var findIPv4 bool
+		if locIP != nil {
+			findIPv4 = (locIP.To4() != nil)
+		} else {
+			findIPv4 = (dstIP.To4() != nil)
+		}
 
 		for _, addr := range addrs {
 			ip := addr.(*net.IPNet).IP
-			if isIPv4 {
+			if findIPv4 {
 				if ip.To4() != nil {
 					srcIP = ip
 					break
@@ -586,6 +542,15 @@ func (n *Net) CreateDialer(dialer *net.Dialer) Dialer {
 		dialer: dialer,
 		v:      n.v,
 	}
+}
+
+// DialUDP acts like Dial for UDP networks.
+func (n *Net) DialUDP(network string, laddr, raddr *net.UDPAddr) (UDPPacketConn, error) {
+	if n.v == nil {
+		return net.DialUDP(network, laddr, raddr)
+	}
+
+	return n.v.dialUDP(network, laddr, raddr)
 }
 
 func (n *Net) getInterface(ifName string) (*Interface, error) {

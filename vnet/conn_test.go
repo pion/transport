@@ -64,7 +64,7 @@ func TestUDPConn(t *testing.T) {
 				atomic.AddInt32(&nClosed, 1)
 			},
 		}
-		conn, err = newUDPConn(srcAddr, obs)
+		conn, err = newUDPConn(srcAddr, nil, obs)
 		assert.NoError(t, err, "should succeed")
 
 		rcvdCh := make(chan struct{})
@@ -144,7 +144,7 @@ func TestUDPConn(t *testing.T) {
 				atomic.AddInt32(&nClosed, 1)
 			},
 		}
-		conn, err = newUDPConn(srcAddr, obs)
+		conn, err = newUDPConn(srcAddr, nil, obs)
 		assert.NoError(t, err, "should succeed")
 		conn.remAddr = dstAddr
 
@@ -202,7 +202,7 @@ func TestUDPConn(t *testing.T) {
 				atomic.AddInt32(&nClosed, 1)
 			},
 		}
-		conn, err = newUDPConn(srcAddr, obs)
+		conn, err = newUDPConn(srcAddr, nil, obs)
 		assert.NoError(t, err, "should succeed")
 
 		doneCh := make(chan struct{})
