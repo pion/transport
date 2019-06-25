@@ -33,6 +33,17 @@ func TestNetNative(t *testing.T) {
 		}
 	})
 
+	t.Run("ResolveUDPAddr", func(t *testing.T) {
+		nw := NewNet(nil)
+
+		udpAddr, err := nw.ResolveUDPAddr("udp", "localhost:1234")
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+		assert.Equal(t, "127.0.0.1", udpAddr.IP.String(), "should match")
+		assert.Equal(t, 1234, udpAddr.Port, "should match")
+	})
+
 	t.Run("ListenPacket", func(t *testing.T) {
 		nw := NewNet(nil)
 

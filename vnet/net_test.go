@@ -246,6 +246,17 @@ func TestNetVirtual(t *testing.T) {
 		assert.True(t, srcIP.Equal(anyIP), "IP change")
 	})
 
+	t.Run("ResolveUDPAddr", func(t *testing.T) {
+		nw := NewNet(&NetConfig{})
+
+		udpAddr, err := nw.ResolveUDPAddr("udp", "localhost:1234")
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+		assert.Equal(t, "127.0.0.1", udpAddr.IP.String(), "should match")
+		assert.Equal(t, 1234, udpAddr.Port, "should match")
+	})
+
 	t.Run("UDPLoopback", func(t *testing.T) {
 		nw := NewNet(&NetConfig{})
 

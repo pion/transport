@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -197,32 +198,9 @@ func (v *vNet) dial(network string, address string) (UDPPacketConn, error) {
 	v.mutex.Lock()
 	defer v.mutex.Unlock()
 
-	host, sPort, err := net.SplitHostPort(address)
+	remAddr, err := v.resolveUDPAddr(network, address)
 	if err != nil {
 		return nil, err
-	}
-
-	// Check if host is a domain name
-	ip := net.ParseIP(host)
-	if ip == nil {
-		// host is a domain name. resolve IP address by the name
-		if v.router == nil {
-			return nil, fmt.Errorf("no router linked")
-		}
-
-		ip, err = v.router.resolver.lookUp(host)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	port, err := strconv.Atoi(sPort)
-	if err != nil {
-		return nil, fmt.Errorf("invalid port number")
-	}
-	remAddr := &net.UDPAddr{
-		IP:   ip,
-		Port: port,
 	}
 
 	// Determine source address
@@ -231,6 +209,48 @@ func (v *vNet) dial(network string, address string) (UDPPacketConn, error) {
 	locAddr := &net.UDPAddr{IP: srcIP, Port: 0}
 
 	return v._dialUDP(network, locAddr, remAddr)
+}
+
+func (v *vNet) resolveUDPAddr(network, address string) (*net.UDPAddr, error) {
+	if network != "udp" && network != "udp4" {
+		return nil, fmt.Errorf("unknown network %s", network)
+	}
+
+	host, sPort, err := net.SplitHostPort(address)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check if host is a domain name
+	ip := net.ParseIP(host)
+	if ip == nil {
+		host = strings.ToLower(host)
+		if host == "localhost" {
+			ip = net.IPv4(127, 0, 0, 1)
+		} else {
+			// host is a domain name. resolve IP address by the name
+			if v.router == nil {
+				return nil, fmt.Errorf("no router linked")
+			}
+
+			ip, err = v.router.resolver.lookUp(host)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	port, err := strconv.Atoi(sPort)
+	if err != nil {
+		return nil, fmt.Errorf("invalid port number")
+	}
+
+	udpAddr := &net.UDPAddr{
+		IP:   ip,
+		Port: port,
+	}
+
+	return udpAddr, nil
 }
 
 func (v *vNet) write(c Chunk) error {
@@ -268,6 +288,7 @@ func (v *vNet) onClosed(addr net.Addr) {
 // This method determines the srcIP based on the dstIP when locIP
 // is any IP address ("0.0.0.0" or "::"). If locIP is a non-any addr,
 // this method simply returns locIP.
+// caller must hold the mutex
 func (v *vNet) determineSourceIP(locIP, dstIP net.IP) net.IP {
 	if locIP != nil && !locIP.IsUnspecified() {
 		return locIP
@@ -353,24 +374,21 @@ func (v *vNet) hasIPAddr(ip net.IP) bool {
 	return false
 }
 
+// caller must hold the mutex
 func (v *vNet) allocateLocalAddr(ip net.IP, port int) error {
+	// gather local IP addresses to bind
 	var ips []net.IP
-
-	switch ip.String() {
-	case "0.0.0.0":
+	if ip.IsUnspecified() {
 		ips = v.getAllIPAddrs(false)
-	case "::":
-		ips = v.getAllIPAddrs(true)
-	default:
-		if v.hasIPAddr(ip) {
-			ips = []net.IP{ip}
-		}
+	} else if v.hasIPAddr(ip) {
+		ips = []net.IP{ip}
 	}
 
 	if len(ips) == 0 {
 		return fmt.Errorf("bind failed for %s", ip.String())
 	}
 
+	// check if all these transport addresses are not in use
 	for _, ip2 := range ips {
 		addr := &net.UDPAddr{
 			IP:   ip2,
@@ -389,6 +407,7 @@ func (v *vNet) allocateLocalAddr(ip net.IP, port int) error {
 	return nil
 }
 
+// caller must hold the mutex
 func (v *vNet) assignPort(ip net.IP, start, end int) (int, error) {
 	// choose randomly from the range between start and end (inclusive)
 	if end < start {
@@ -551,6 +570,15 @@ func (n *Net) DialUDP(network string, laddr, raddr *net.UDPAddr) (UDPPacketConn,
 	}
 
 	return n.v.dialUDP(network, laddr, raddr)
+}
+
+// ResolveUDPAddr returns an address of UDP end point.
+func (n *Net) ResolveUDPAddr(network, address string) (*net.UDPAddr, error) {
+	if n.v == nil {
+		return net.ResolveUDPAddr(network, address)
+	}
+
+	return n.v.resolveUDPAddr(network, address)
 }
 
 func (n *Net) getInterface(ifName string) (*Interface, error) {
