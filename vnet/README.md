@@ -196,6 +196,7 @@ func (a *Agent) listenUDP(...) error {
 |---|---|---|
 |net.Interfaces()|a.net.Interfaces()||
 |net.InterfaceByName()|a.net.InterfaceByName()||
+|net.ResolveUDPAddr()|a.net.ResolveUDPAddr()||
 |net.ListenPacket()|a.net.ListenPacket()||
 |net.ListenUDP()|a.net.ListenUDP()|(ListenPacket() is recommended)|
 |net.Listen()|a.net.Listen()|(TODO)|
