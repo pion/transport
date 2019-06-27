@@ -379,7 +379,7 @@ func (v *vNet) allocateLocalAddr(ip net.IP, port int) error {
 	// gather local IP addresses to bind
 	var ips []net.IP
 	if ip.IsUnspecified() {
-		ips = v.getAllIPAddrs(false)
+		ips = v.getAllIPAddrs(ip.To4() == nil)
 	} else if v.hasIPAddr(ip) {
 		ips = []net.IP{ip}
 	}
