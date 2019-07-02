@@ -124,6 +124,14 @@ func (v *vNet) _dialUDP(network string, locAddr, remAddr *net.UDPAddr) (UDPPacke
 		return nil, fmt.Errorf("unexpected network: %s", network)
 	}
 
+	if locAddr == nil {
+		locAddr = &net.UDPAddr{
+			IP: net.IPv4zero,
+		}
+	} else if locAddr.IP == nil {
+		locAddr.IP = net.IPv4zero
+	}
+
 	// validate address. do we have that address?
 	if !v.hasIPAddr(locAddr.IP) {
 		return nil, &net.OpError{
