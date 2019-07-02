@@ -137,8 +137,13 @@ func (c *UDPConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 // Close closes the connection.
 // Any blocked ReadFrom or WriteTo operations will be unblocked and return errors.
 func (c *UDPConn) Close() error {
-	close(c.closeCh)
-	c.obs.onClosed(c.locAddr)
+	select {
+	case <-c.closeCh:
+		return fmt.Errorf("the UDPConn already closed")
+	default:
+		close(c.closeCh)
+		c.obs.onClosed(c.locAddr)
+	}
 	return nil
 }
 
