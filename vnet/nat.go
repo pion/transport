@@ -162,7 +162,7 @@ func (n *networkAddressTranslator) translateInbound(c Chunk) (Chunk, error) {
 
 		m := n.findInboundMapping(iKey)
 		if m == nil {
-			return nil, fmt.Errorf("no inbound mapping found")
+			return nil, fmt.Errorf("no inbound NAT mapping for %s", c.String())
 		}
 
 		if err := c.setDestinationAddr(m.local); err != nil {
