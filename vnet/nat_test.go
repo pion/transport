@@ -101,6 +101,7 @@ func TestNATMappingBehavior(t *testing.T) {
 		)
 
 		_, err = nat.translateInbound(iec)
+		log.Debug(err.Error())
 		assert.NotNil(t, err, "should fail (dropped)")
 
 		// packet from any addr will be accepted (full-cone)
@@ -187,6 +188,7 @@ func TestNATMappingBehavior(t *testing.T) {
 		)
 
 		_, err = nat.translateInbound(iec)
+		log.Debug(err.Error())
 		assert.NotNil(t, err, "should fail (dropped)")
 
 		// packet from any port will be accepted (restricted-cone)
@@ -217,6 +219,7 @@ func TestNATMappingBehavior(t *testing.T) {
 		)
 
 		_, err = nat.translateInbound(iec)
+		log.Debug(err.Error())
 		assert.NotNil(t, err, "should fail (dropped)")
 	})
 
