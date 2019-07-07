@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/pion/logging"
@@ -13,8 +14,20 @@ const (
 	defaultRouterQueueSize = 0 // unlimited
 )
 
+// Generate a unique router name
+var assignRouterName = func() func() string {
+	var routerIDCtr uint64
+
+	return func() string {
+		n := atomic.AddUint64(&routerIDCtr, 1)
+		return fmt.Sprintf("router%d", n)
+	}
+}()
+
 // RouterConfig ...
 type RouterConfig struct {
+	// Name of router. If not specified, a unique name will be assigned.
+	Name string
 	// CIDR notation, like "192.0.2.0/24"
 	CIDR string
 	// StaticIP is a static IP address to be assigned for this external network.
@@ -38,6 +51,7 @@ type NIC interface {
 
 // Router ...
 type Router struct {
+	name          string
 	interfaces    []*Interface
 	ipv4Net       *net.IPNet
 	staticIP      net.IP
@@ -92,7 +106,13 @@ func NewRouter(config *RouterConfig) (*Router, error) {
 		LoggerFactory: config.LoggerFactory,
 	})
 
+	name := config.Name
+	if len(name) == 0 {
+		name = assignRouterName()
+	}
+
 	return &Router{
+		name:          name,
 		interfaces:    []*Interface{lo0, eth0},
 		ipv4Net:       ipNet,
 		staticIP:      net.ParseIP(config.StaticIP),
@@ -148,7 +168,7 @@ func (r *Router) Start() error {
 		for {
 			err := r.onProcessChunks()
 			if err != nil {
-				r.log.Warn(err.Error())
+				r.log.Warnf("[%s] %s", r.name, err.Error())
 			}
 			select {
 			case <-r.pushCh:
@@ -276,7 +296,7 @@ func (r *Router) push(c Chunk) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
-	r.log.Debugf("Router.push: %s", c.String())
+	r.log.Debugf("[%s] route %s", r.name, c.String())
 	if r.stopFunc != nil {
 		c.setTimestamp()
 		if r.queue.push(c) {
@@ -285,7 +305,7 @@ func (r *Router) push(c Chunk) {
 			default:
 			}
 		} else {
-			r.log.Warn("queue was full. dropped a chunk")
+			r.log.Warnf("[%s] queue was full. dropped a chunk", r.name)
 		}
 	}
 }
@@ -392,6 +412,7 @@ func (r *Router) setRouter(parent *Router) error {
 		}
 	}
 	r.nat = newNAT(&natConfig{
+		name:          r.name,
 		natType:       *r.natType,
 		mappedIP:      mappedIP,
 		loggerFactory: r.loggerFactory,
@@ -403,7 +424,7 @@ func (r *Router) setRouter(parent *Router) error {
 func (r *Router) onInboundChunk(c Chunk) {
 	fromParent, err := r.nat.translateInbound(c)
 	if err != nil {
-		r.log.Warn(err.Error())
+		r.log.Warnf("[%s] %s", r.name, err.Error())
 		return
 	}
 

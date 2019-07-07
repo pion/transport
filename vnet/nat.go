@@ -39,6 +39,7 @@ type NATType struct {
 }
 
 type natConfig struct {
+	name          string
 	natType       NATType
 	mappedIP      string
 	loggerFactory logging.LoggerFactory
@@ -53,6 +54,7 @@ type mapping struct {
 }
 
 type networkAddressTranslator struct {
+	name           string
 	natType        NATType
 	mappedIP       string
 	outboundMap    map[string]*mapping // key: "<proto>:<local-ip>:<local-port>[:remote-ip[:remote-port]]
@@ -69,6 +71,7 @@ func newNAT(config *natConfig) *networkAddressTranslator {
 	}
 
 	return &networkAddressTranslator{
+		name:        config.name,
 		natType:     natType,
 		mappedIP:    config.mappedIP,
 		outboundMap: map[string]*mapping{},
@@ -78,26 +81,26 @@ func newNAT(config *natConfig) *networkAddressTranslator {
 
 }
 
-func (n *networkAddressTranslator) translateOutbound(c Chunk) (Chunk, error) {
+func (n *networkAddressTranslator) translateOutbound(from Chunk) (Chunk, error) {
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 
-	c = c.Clone()
+	to := from.Clone()
 
-	if c.Network() == "udp" {
+	if from.Network() == "udp" {
 		var filter string
 		switch n.natType.FilteringBehavior {
 		case EndpointIndependent:
 			filter = ""
 		case EndpointAddrDependent:
-			filter = fmt.Sprintf(":%s", c.getDestinationIP().String())
+			filter = fmt.Sprintf(":%s", from.getDestinationIP().String())
 		case EndpointAddrPortDependent:
-			filter = fmt.Sprintf(":%s", c.DestinationAddr().String())
+			filter = fmt.Sprintf(":%s", from.DestinationAddr().String())
 		}
 
-		oKey := fmt.Sprintf("udp:%s%s", c.SourceAddr().String(), filter)
+		oKey := fmt.Sprintf("udp:%s%s", from.SourceAddr().String(), filter)
 
-		n.log.Debugf("oKey: %s\n", oKey)
+		n.log.Tracef("[%s] oKey: %s\n", n.name, oKey)
 		m := n.findOutboundMapping(oKey)
 		if m == nil {
 			// Create a new mapping
@@ -105,8 +108,8 @@ func (n *networkAddressTranslator) translateOutbound(c Chunk) (Chunk, error) {
 			n.udpPortCounter++
 
 			m = &mapping{
-				proto:   c.SourceAddr().Network(),
-				local:   c.SourceAddr().String(),
+				proto:   from.SourceAddr().Network(),
+				local:   from.SourceAddr().String(),
 				mapped:  fmt.Sprintf("%s:%d", n.mappedIP, mappedPort),
 				filter:  filter,
 				expires: time.Now().Add(n.natType.MappingLifeTime),
@@ -116,15 +119,17 @@ func (n *networkAddressTranslator) translateOutbound(c Chunk) (Chunk, error) {
 
 			iKey := fmt.Sprintf("udp:%s:%d%s", n.mappedIP, mappedPort, filter)
 
-			n.log.Debugf("iKey: %s\n", iKey)
+			n.log.Tracef("[%s] iKey: %s\n", n.name, iKey)
 			n.inboundMap[iKey] = m
 		}
 
-		if err := c.setSourceAddr(m.mapped); err != nil {
+		if err := to.setSourceAddr(m.mapped); err != nil {
 			return nil, err
 		}
 
-		return c, nil
+		n.log.Debugf("[%s] translate outbound chunk from %s to %s", n.name, from.String(), to.String())
+
+		return to, nil
 	}
 
 	// TODO
@@ -134,42 +139,44 @@ func (n *networkAddressTranslator) translateOutbound(c Chunk) (Chunk, error) {
 	return nil, fmt.Errorf("non-udp translation is not supported yet")
 }
 
-func (n *networkAddressTranslator) translateInbound(c Chunk) (Chunk, error) {
+func (n *networkAddressTranslator) translateInbound(from Chunk) (Chunk, error) {
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 
-	c = c.Clone()
+	to := from.Clone()
 
-	if c.Network() == "udp" {
+	if from.Network() == "udp" {
 		var iKey string
 
 		switch n.natType.FilteringBehavior {
 		case EndpointIndependent:
 			iKey = fmt.Sprintf("udp:%s",
-				c.DestinationAddr().String(),
+				from.DestinationAddr().String(),
 			)
 		case EndpointAddrDependent:
 			iKey = fmt.Sprintf("udp:%s:%s",
-				c.DestinationAddr().String(),
-				c.getSourceIP().String(),
+				from.DestinationAddr().String(),
+				from.getSourceIP().String(),
 			)
 		case EndpointAddrPortDependent:
 			iKey = fmt.Sprintf("udp:%s:%s",
-				c.DestinationAddr().String(),
-				c.SourceAddr().String(),
+				from.DestinationAddr().String(),
+				from.SourceAddr().String(),
 			)
 		}
 
 		m := n.findInboundMapping(iKey)
 		if m == nil {
-			return nil, fmt.Errorf("no inbound NAT mapping for %s", c.String())
+			return nil, fmt.Errorf("no inbound NAT mapping for %s", from.String())
 		}
 
-		if err := c.setDestinationAddr(m.local); err != nil {
+		if err := to.setDestinationAddr(m.local); err != nil {
 			return nil, err
 		}
 
-		return c, nil
+		n.log.Debugf("[%s] translate inbound chunk from %s to %s", n.name, from.String(), to.String())
+
+		return to, nil
 	}
 
 	// TODO
