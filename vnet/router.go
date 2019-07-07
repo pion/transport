@@ -360,7 +360,9 @@ func (r *Router) onProcessChunks() error {
 
 		if r.nat.natType.Hairpining {
 			hairpinned, err := r.nat.translateInbound(toParent)
-			if err == nil {
+			if err != nil {
+				r.log.Warnf("[%s] %s", r.name, err.Error())
+			} else {
 				go func() {
 					r.push(hairpinned)
 				}()
