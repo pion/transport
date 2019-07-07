@@ -3,7 +3,9 @@ package vnet
 import (
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -38,6 +40,17 @@ func (f tcpFlag) String() string {
 	return strings.Join(sa, "-")
 }
 
+// Generate a base36-encoded unique tag
+// See: https://play.golang.org/p/0ZaAID1q-HN
+var assignChunkTag = func() func() string {
+	var tagCtr uint64
+
+	return func() string {
+		n := atomic.AddUint64(&tagCtr, 1)
+		return strconv.FormatUint(n, 36)
+	}
+}()
+
 // Chunk represents a packet passed around in the vnet
 type Chunk interface {
 	setTimestamp() time.Time                 // used by router
@@ -59,6 +72,7 @@ type chunkIP struct {
 	timestamp     time.Time
 	sourceIP      net.IP
 	destinationIP net.IP
+	tag           string
 }
 
 func (c *chunkIP) setTimestamp() time.Time {
@@ -90,6 +104,7 @@ func newChunkUDP(srcAddr, dstAddr *net.UDPAddr) *chunkUDP {
 		chunkIP: chunkIP{
 			sourceIP:      srcAddr.IP,
 			destinationIP: dstAddr.IP,
+			tag:           assignChunkTag(),
 		},
 		sourcePort:      srcAddr.Port,
 		destinationPort: dstAddr.Port,
@@ -126,6 +141,7 @@ func (c *chunkUDP) Clone() Chunk {
 			timestamp:     c.timestamp,
 			sourceIP:      c.sourceIP,
 			destinationIP: c.destinationIP,
+			tag:           c.tag,
 		},
 		sourcePort:      c.sourcePort,
 		destinationPort: c.destinationPort,
@@ -140,8 +156,9 @@ func (c *chunkUDP) Network() string {
 func (c *chunkUDP) String() string {
 	src := c.SourceAddr()
 	dst := c.DestinationAddr()
-	return fmt.Sprintf("%s chunk %s => %s",
+	return fmt.Sprintf("%s chunk %s %s => %s",
 		src.Network(),
+		c.tag,
 		src.String(),
 		dst.String(),
 	)
@@ -182,6 +199,7 @@ func newChunkTCP(srcAddr, dstAddr *net.TCPAddr, flags tcpFlag) *chunkTCP {
 		chunkIP: chunkIP{
 			sourceIP:      srcAddr.IP,
 			destinationIP: dstAddr.IP,
+			tag:           assignChunkTag(),
 		},
 		sourcePort:      srcAddr.Port,
 		destinationPort: dstAddr.Port,
@@ -230,9 +248,10 @@ func (c *chunkTCP) Network() string {
 func (c *chunkTCP) String() string {
 	src := c.SourceAddr()
 	dst := c.DestinationAddr()
-	return fmt.Sprintf("%s %s chunk %s => %s",
+	return fmt.Sprintf("%s %s chunk %s %s => %s",
 		src.Network(),
 		c.flags.String(),
+		c.tag,
 		src.String(),
 		dst.String(),
 	)
