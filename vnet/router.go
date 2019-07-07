@@ -335,6 +335,7 @@ func (r *Router) onProcessChunks() error {
 			var nic NIC
 			if nic, ok = r.nics[dstIP.String()]; !ok {
 				// NIC not found. drop it.
+				r.log.Debugf("[%s] %s unreachable", r.name, c.String())
 				continue
 			}
 
@@ -349,6 +350,7 @@ func (r *Router) onProcessChunks() error {
 		// is this WAN?
 		if r.parent == nil {
 			// this WAN. No route for this chunk
+			r.log.Debugf("[%s] no route found for %s", r.name, c.String())
 			continue
 		}
 
@@ -358,6 +360,7 @@ func (r *Router) onProcessChunks() error {
 			return err
 		}
 
+		/* FIXME: this implementation would introduce a duplicate packet!
 		if r.nat.natType.Hairpining {
 			hairpinned, err := r.nat.translateInbound(toParent)
 			if err != nil {
@@ -368,6 +371,7 @@ func (r *Router) onProcessChunks() error {
 				}()
 			}
 		}
+		*/
 
 		r.parent.push(toParent)
 	}
