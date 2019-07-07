@@ -100,7 +100,6 @@ func (n *networkAddressTranslator) translateOutbound(from Chunk) (Chunk, error) 
 
 		oKey := fmt.Sprintf("udp:%s%s", from.SourceAddr().String(), filter)
 
-		n.log.Tracef("[%s] oKey: %s\n", n.name, oKey)
 		m := n.findOutboundMapping(oKey)
 		if m == nil {
 			// Create a new mapping
@@ -119,7 +118,10 @@ func (n *networkAddressTranslator) translateOutbound(from Chunk) (Chunk, error) 
 
 			iKey := fmt.Sprintf("udp:%s:%d%s", n.mappedIP, mappedPort, filter)
 
-			n.log.Tracef("[%s] iKey: %s\n", n.name, iKey)
+			n.log.Debugf("[%s] created a new NAT binding oKey=%s iKey=%s\n",
+				n.name,
+				oKey,
+				iKey)
 			n.inboundMap[iKey] = m
 		}
 
@@ -167,7 +169,7 @@ func (n *networkAddressTranslator) translateInbound(from Chunk) (Chunk, error) {
 
 		m := n.findInboundMapping(iKey)
 		if m == nil {
-			return nil, fmt.Errorf("no inbound NAT mapping for %s", from.String())
+			return nil, fmt.Errorf("drop %s as no NAT binding found", from.String())
 		}
 
 		if err := to.setDestinationAddr(m.local); err != nil {
