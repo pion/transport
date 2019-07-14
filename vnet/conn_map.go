@@ -3,10 +3,12 @@ package vnet
 import (
 	"fmt"
 	"net"
+	"sync"
 )
 
 type udpConnMap struct {
 	portMap map[int][]*UDPConn
+	mutex   sync.RWMutex
 }
 
 func newUDPConnMap() *udpConnMap {
@@ -16,6 +18,9 @@ func newUDPConnMap() *udpConnMap {
 }
 
 func (m *udpConnMap) insert(conn *UDPConn) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
 	udpAddr := conn.LocalAddr().(*net.UDPAddr)
 
 	// check if the port has a listener
@@ -42,6 +47,9 @@ func (m *udpConnMap) insert(conn *UDPConn) error {
 }
 
 func (m *udpConnMap) find(addr net.Addr) (*UDPConn, bool) {
+	m.mutex.Lock() // could be RLock, but we have delete() op
+	defer m.mutex.Unlock()
+
 	udpAddr := addr.(*net.UDPAddr)
 
 	if conns, ok := m.portMap[udpAddr.Port]; ok {
@@ -67,6 +75,9 @@ func (m *udpConnMap) find(addr net.Addr) (*UDPConn, bool) {
 }
 
 func (m *udpConnMap) delete(addr net.Addr) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
 	udpAddr := addr.(*net.UDPAddr)
 
 	conns, ok := m.portMap[udpAddr.Port]
@@ -107,6 +118,9 @@ func (m *udpConnMap) delete(addr net.Addr) error {
 
 // size returns the number of UDPConns (UDP listeners)
 func (m *udpConnMap) size() int {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+
 	n := 0
 	for _, conns := range m.portMap {
 		n += len(conns)
@@ -114,15 +128,3 @@ func (m *udpConnMap) size() int {
 
 	return n
 }
-
-// patterns
-// * insert 0.0.0.0:1234
-// * find 0.0.0.0:1234
-// * find 192.168.0.1:1234
-//   - find 192.168.0.1:1234
-//   - find 0.0.0.0
-// * delete 0.0.0.0:1234
-// * delete 192.168.0.1:1234
-// question
-// * insert 192.168.0.1:1234 when 0.0.0.0 already exists => error
-// * insert 0.0.0.0 when 192.168.0.1 already exists => error

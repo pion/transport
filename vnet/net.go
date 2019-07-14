@@ -180,7 +180,7 @@ func (v *vNet) listenPacket(network string, address string) (UDPPacketConn, erro
 	v.mutex.Lock()
 	defer v.mutex.Unlock()
 
-	locAddr, err := net.ResolveUDPAddr(network, address)
+	locAddr, err := v.resolveUDPAddr(network, address)
 	if err != nil {
 		return nil, err
 	}
