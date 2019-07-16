@@ -3,6 +3,7 @@ package vnet
 import (
 	"fmt"
 	"net"
+	"sync"
 
 	"github.com/pion/logging"
 )
@@ -12,9 +13,10 @@ type resolverConfig struct {
 }
 
 type resolver struct {
-	parent *resolver
-	hosts  map[string]net.IP
-	log    logging.LeveledLogger
+	parent *resolver             // read-only
+	hosts  map[string]net.IP     // requires mutex
+	mutex  sync.RWMutex          // thread-safe
+	log    logging.LeveledLogger // read-only
 }
 
 func newResolver(config *resolverConfig) *resolver {
@@ -30,10 +32,16 @@ func newResolver(config *resolverConfig) *resolver {
 }
 
 func (r *resolver) setParent(parent *resolver) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
 	r.parent = parent
 }
 
 func (r *resolver) addHost(name string, ipAddr string) error {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
 	if len(name) == 0 {
 		return fmt.Errorf("host name must not be empty")
 	}
@@ -46,9 +54,20 @@ func (r *resolver) addHost(name string, ipAddr string) error {
 }
 
 func (r *resolver) lookUp(hostName string) (net.IP, error) {
-	if ip, ok := r.hosts[hostName]; ok {
+	ip := func() net.IP {
+		r.mutex.RLock()
+		defer r.mutex.RUnlock()
+
+		if ip2, ok := r.hosts[hostName]; ok {
+			return ip2
+		}
+		return nil
+	}()
+	if ip != nil {
 		return ip, nil
 	}
+
+	// mutex must be unlocked before calling into parent resolver
 
 	if r.parent != nil {
 		return r.parent.lookUp(hostName)

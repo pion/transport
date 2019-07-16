@@ -5,6 +5,7 @@ import (
 	"io"
 	"math"
 	"net"
+	"sync"
 	"time"
 )
 
@@ -32,12 +33,12 @@ type connObserver interface {
 // UDPConn is the implementation of the Conn and PacketConn interfaces for UDP network connections.
 // comatible with net.PacketConn and net.Conn
 type UDPConn struct {
-	locAddr   *net.UDPAddr
-	remAddr   *net.UDPAddr
-	obs       connObserver
-	readCh    chan Chunk
-	closeCh   chan struct{}
-	readTimer *time.Timer
+	locAddr   *net.UDPAddr // read-only
+	remAddr   *net.UDPAddr // read-only
+	obs       connObserver // read-only
+	readCh    chan Chunk   // requires mutex for writers
+	muReadCh  sync.Mutex   // to mutex reachCh writers
+	readTimer *time.Timer  // thread-safe
 }
 
 func newUDPConn(locAddr, remAddr *net.UDPAddr, obs connObserver) (*UDPConn, error) {
@@ -50,7 +51,6 @@ func newUDPConn(locAddr, remAddr *net.UDPAddr, obs connObserver) (*UDPConn, erro
 		remAddr:   remAddr,
 		obs:       obs,
 		readCh:    make(chan Chunk, maxReadQueueSize),
-		closeCh:   make(chan struct{}),
 		readTimer: time.NewTimer(time.Duration(math.MaxInt64)),
 	}, nil
 }
@@ -69,7 +69,10 @@ func (c *UDPConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 loop:
 	for {
 		select {
-		case chunk := <-c.readCh:
+		case chunk, ok := <-c.readCh:
+			if !ok {
+				break loop
+			}
 			var err error
 			n := copy(p, chunk.UserData())
 			addr := chunk.SourceAddr()
@@ -79,7 +82,7 @@ loop:
 
 			if c.remAddr != nil {
 				if addr.String() != c.remAddr.String() {
-					break // try again
+					break // discard (shouldn't happen)
 				}
 			}
 			return n, addr, err
@@ -91,9 +94,6 @@ loop:
 				Addr: c.locAddr,
 				Err:  newTimeoutError("i/o timeout"),
 			}
-
-		case <-c.closeCh:
-			break loop
 		}
 	}
 
@@ -136,13 +136,22 @@ func (c *UDPConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 
 // Close closes the connection.
 // Any blocked ReadFrom or WriteTo operations will be unblocked and return errors.
+// See: https://play.golang.org/p/GrCRAII0VSN
 func (c *UDPConn) Close() error {
-	select {
-	case <-c.closeCh:
-		return fmt.Errorf("the UDPConn already closed")
-	default:
-		close(c.closeCh)
-		c.obs.onClosed(c.locAddr)
+loop:
+	for {
+		select {
+		case _, ok := <-c.readCh:
+			if !ok {
+				return fmt.Errorf("already closed")
+			}
+		default:
+			c.muReadCh.Lock()
+			close(c.readCh)
+			c.muReadCh.Unlock()
+			c.obs.onClosed(c.locAddr)
+			break loop
+		}
 	}
 	return nil
 }
@@ -217,4 +226,14 @@ func (c *UDPConn) Write(b []byte) (int, error) {
 	}
 
 	return c.WriteTo(b, c.remAddr)
+}
+
+func (c *UDPConn) onInboundChunk(chunk Chunk) {
+	c.muReadCh.Lock()
+	defer c.muReadCh.Unlock()
+
+	select {
+	case c.readCh <- chunk:
+	default:
+	}
 }
