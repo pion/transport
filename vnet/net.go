@@ -20,10 +20,10 @@ func newMACAddress() net.HardwareAddr {
 }
 
 type vNet struct {
-	interfaces []*Interface
-	staticIP   net.IP
-	router     *Router
-	udpConns   *udpConnMap
+	interfaces []*Interface // read-only
+	staticIP   net.IP       // read-only
+	router     *Router      // read-only
+	udpConns   *udpConnMap  // read-only
 	mutex      sync.RWMutex
 }
 
@@ -109,10 +109,7 @@ func (v *vNet) onInboundChunk(c Chunk) {
 
 	if c.Network() == "udp" {
 		if conn, ok := v.udpConns.find(c.DestinationAddr()); ok {
-			select {
-			case conn.readCh <- c:
-			default:
-			}
+			conn.onInboundChunk(c)
 		}
 	}
 }
@@ -266,10 +263,7 @@ func (v *vNet) write(c Chunk) error {
 		if udp, ok := c.(*chunkUDP); ok {
 			if c.getDestinationIP().IsLoopback() {
 				if conn, ok := v.udpConns.find(udp.DestinationAddr()); ok {
-					select {
-					case conn.readCh <- udp:
-					default:
-					}
+					conn.onInboundChunk(udp)
 				}
 				return nil
 			}

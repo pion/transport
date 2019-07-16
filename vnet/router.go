@@ -51,23 +51,23 @@ type NIC interface {
 
 // Router ...
 type Router struct {
-	name          string
-	interfaces    []*Interface
-	ipv4Net       *net.IPNet
-	staticIP      net.IP
-	lastID        byte // used to assign the last digit of IPv4 address
-	queue         *chunkQueue
-	parent        *Router
-	children      []*Router
-	natType       *NATType
-	nat           *networkAddressTranslator
-	nics          map[string]NIC // https://stackoverflow.com/questions/50426955/net-ip-as-map-key-type-in-golang
-	stopFunc      func()
-	resolver      *resolver
-	mutex         sync.RWMutex
-	pushCh        chan struct{}
-	loggerFactory logging.LoggerFactory
-	log           logging.LeveledLogger
+	name          string                    // read-only
+	interfaces    []*Interface              // read-only
+	ipv4Net       *net.IPNet                // read-only
+	staticIP      net.IP                    // read-only
+	lastID        byte                      // requires mutex [x], used to assign the last digit of IPv4 address
+	queue         *chunkQueue               // read-only
+	parent        *Router                   // read-only
+	children      []*Router                 // read-only
+	natType       *NATType                  // read-only
+	nat           *networkAddressTranslator // read-only
+	nics          map[string]NIC            // read-only
+	stopFunc      func()                    // requires mutex [x]
+	resolver      *resolver                 // read-only
+	mutex         sync.RWMutex              // thread-safe
+	pushCh        chan struct{}             // writer requires mutex
+	loggerFactory logging.LoggerFactory     // read-only
+	log           logging.LeveledLogger     // read-only
 }
 
 // NewRouter ...
@@ -201,7 +201,11 @@ func (r *Router) Stop() error {
 	}
 
 	for _, router := range r.children {
-		if err := router.Stop(); err != nil {
+		r.mutex.Unlock()
+		err := router.Stop()
+		r.mutex.Lock()
+
+		if err != nil {
 			return err
 		}
 	}
@@ -340,6 +344,7 @@ func (r *Router) onProcessChunks() error {
 			}
 
 			// found the NIC, forward the chunk to the NIC.
+			// call to NIC mutex unlock mutex
 			r.mutex.Unlock()
 			nic.onInboundChunk(c)
 			r.mutex.Lock()
@@ -373,7 +378,10 @@ func (r *Router) onProcessChunks() error {
 		}
 		*/
 
+		// call to parent router mutex unlock mutex
+		r.mutex.Unlock()
 		r.parent.push(toParent)
+		r.mutex.Lock()
 	}
 
 	return nil
