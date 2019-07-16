@@ -17,7 +17,7 @@ func TestStressTestUDP(t *testing.T) {
 	log := loggerFactory.NewLogger("test")
 
 	t.Run("lan to wan", func(t *testing.T) {
-		tt := test.TimeOut(20 * time.Second)
+		tt := test.TimeOut(30 * time.Second)
 		defer tt.Stop()
 
 		// WAN with a nic (net0)
@@ -57,7 +57,10 @@ func TestStressTestUDP(t *testing.T) {
 
 		err = wan.Start()
 		assert.NoError(t, err, "should succeed")
-		defer wan.Stop()
+		defer func() {
+			err = wan.Stop()
+			assert.NoError(t, err, "should succeed")
+		}()
 
 		// Find IP address for net0
 		ifs, err := net0.Interfaces()
@@ -77,8 +80,8 @@ func TestStressTestUDP(t *testing.T) {
 				continue
 			}
 
-			addrs, err := ifc.Addrs()
-			if !assert.NoError(t, err, "should succeed") {
+			addrs, err2 := ifc.Addrs()
+			if !assert.NoError(t, err2, "should succeed") {
 				return
 			}
 			log.Debugf("num addrs: %d", len(addrs))
@@ -117,6 +120,9 @@ func TestStressTestUDP(t *testing.T) {
 				}
 				// echo back
 				_, err2 = conn0.WriteTo(buf[:n], from)
+				if err2 != nil {
+					break
+				}
 			}
 			close(doneCh0)
 		}()
@@ -126,10 +132,10 @@ func TestStressTestUDP(t *testing.T) {
 		var runEchoTest = func() {
 			// Set up a client
 			var numRecvd int
-			const numToSend int = 1000
+			const numToSend int = 400
 			const pktSize int = 1200
-			conn1, err := net0.ListenPacket("udp4", "0.0.0.0:0")
-			if !assert.NoError(t, err, "should succeed") {
+			conn1, err2 := net0.ListenPacket("udp4", "0.0.0.0:0")
+			if !assert.NoError(t, err2, "should succeed") {
 				return
 			}
 
@@ -137,8 +143,8 @@ func TestStressTestUDP(t *testing.T) {
 			go func() {
 				buf := make([]byte, 1500)
 				for {
-					n, _, err2 := conn1.ReadFrom(buf)
-					if err2 != nil {
+					n, _, err3 := conn1.ReadFrom(buf)
+					if err3 != nil {
 						break
 					}
 
@@ -156,11 +162,13 @@ func TestStressTestUDP(t *testing.T) {
 			for i := 0; i < numToSend; i++ {
 				_, err3 := conn1.WriteTo(buf, to)
 				assert.NoError(t, err3, "should succeed")
-				time.Sleep(3 * time.Millisecond)
+				time.Sleep(10 * time.Millisecond)
 			}
 
-			err = conn1.Close()
-			assert.NoError(t, err, "should succeed")
+			time.Sleep(time.Second)
+
+			err2 = conn1.Close()
+			assert.NoError(t, err2, "should succeed")
 
 			<-doneCh1
 
@@ -174,7 +182,7 @@ func TestStressTestUDP(t *testing.T) {
 		}
 
 		// Run echo tests concurrently
-		for i := 0; i < 100; i++ {
+		for i := 0; i < 20; i++ {
 			wg.Add(1)
 			go runEchoTest()
 		}
