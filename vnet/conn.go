@@ -37,7 +37,7 @@ type UDPConn struct {
 	remAddr   *net.UDPAddr // read-only
 	obs       connObserver // read-only
 	readCh    chan Chunk   // requires mutex for writers
-	muReadCh  sync.Mutex   // to mutex reachCh writers
+	muReadCh  sync.Mutex   // to mutex readCh writers
 	readTimer *time.Timer  // thread-safe
 }
 

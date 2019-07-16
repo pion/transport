@@ -344,7 +344,7 @@ func (r *Router) onProcessChunks() error {
 			}
 
 			// found the NIC, forward the chunk to the NIC.
-			// call to NIC mutex unlock mutex
+			// call to NIC must unlock mutex
 			r.mutex.Unlock()
 			nic.onInboundChunk(c)
 			r.mutex.Lock()
