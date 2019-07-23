@@ -63,6 +63,7 @@ type Chunk interface {
 	SourceAddr() net.Addr
 	DestinationAddr() net.Addr
 	UserData() []byte
+	Tag() string
 	Clone() Chunk
 	Network() string // returns "udp" or "tcp"
 	String() string
@@ -90,6 +91,10 @@ func (c *chunkIP) getDestinationIP() net.IP {
 
 func (c *chunkIP) getSourceIP() net.IP {
 	return c.sourceIP
+}
+
+func (c *chunkIP) Tag() string {
+	return c.tag
 }
 
 type chunkUDP struct {

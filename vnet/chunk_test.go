@@ -62,6 +62,10 @@ func TestChunk(t *testing.T) {
 		assert.Nil(t, err, "should succeed")
 		assert.Equal(t, "2.3.4.5:4000", uc.SourceAddr().String())
 
+		// Test Tag()
+		assert.True(t, len(uc.tag) > 0, "should not be empty")
+		assert.Equal(t, uc.tag, uc.Tag(), "should match")
+
 		// Verify cloned chunk was not affected by the changes to original chunk
 		uc.userData[0] = []byte("!")[0] // oroginal: "Hello" -> "Hell!"
 		assert.Equal(t, "Hello", string(cloned.userData), "should match")
@@ -107,6 +111,10 @@ func TestChunk(t *testing.T) {
 		err := tc.setSourceAddr("2.3.4.5:4000")
 		assert.Nil(t, err, "should succeed")
 		assert.Equal(t, "2.3.4.5:4000", tc.SourceAddr().String())
+
+		// Test Tag()
+		assert.True(t, len(tc.tag) > 0, "should not be empty")
+		assert.Equal(t, tc.tag, tc.Tag(), "should match")
 
 		// Verify cloned chunk was not affected by the changes to original chunk
 		tc.userData[0] = []byte("!")[0] // oroginal: "Hello" -> "Hell!"

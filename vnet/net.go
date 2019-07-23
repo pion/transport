@@ -615,6 +615,11 @@ func (n *Net) getStaticIP() net.IP {
 	return n.v.staticIP
 }
 
+// IsVirtual tests if the virtual network is enabled.
+func (n *Net) IsVirtual() bool {
+	return n.v != nil
+}
+
 // Dialer is identical to net.Dialer excepts that its methods
 // (Dial, DialContext) are overridden to use virtual network.
 // Use vnet.CreateDialer() to create an instance of this Dialer.

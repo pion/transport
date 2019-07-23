@@ -13,6 +13,7 @@ func TestNetNative(t *testing.T) {
 
 	t.Run("Interfaces", func(t *testing.T) {
 		nw := NewNet(nil)
+		assert.False(t, nw.IsVirtual(), "should be false")
 		interfaces, err := nw.Interfaces()
 		assert.NoError(t, err, "should succeed")
 		log.Debugf("interfaces: %+v\n", interfaces)

@@ -5,6 +5,7 @@ import (
 	"net"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/pion/logging"
 	"github.com/stretchr/testify/assert"
@@ -152,6 +153,94 @@ func TestRouterStandalone(t *testing.T) {
 		err = r.Stop()
 		assert.Nil(t, err, "should succeed")
 		assert.Equal(t, int32(0), atomic.LoadInt32(&nCbs0), "should be zero")
+	})
+
+	t.Run("AddChunkFilter", func(t *testing.T) {
+		var nCbs0 int32
+		var nCbs1 int32
+		r, err := NewRouter(&RouterConfig{
+			CIDR:          "1.2.3.0/24",
+			LoggerFactory: loggerFactory,
+		})
+		assert.Nil(t, err, "should succeed")
+
+		nic := make([]*dummyNIC, 2)
+		ip := make([]*net.UDPAddr, 2)
+
+		for i := 0; i < 2; i++ {
+			anic := NewNet(&NetConfig{})
+			assert.NotNil(t, anic, "should succeed")
+
+			nic[i] = &dummyNIC{
+				Net: *anic,
+			}
+
+			err2 := r.AddNet(nic[i])
+			assert.Nil(t, err2, "should succeed")
+
+			// Now, eth0 must have one address assigned
+			eth0, err2 := nic[i].getInterface("eth0")
+			assert.Nil(t, err2, "should succeed")
+			addrs, err2 := eth0.Addrs()
+			assert.Nil(t, err2, "should succeed")
+			assert.Equal(t, 1, len(addrs), "should match")
+			ip[i] = &net.UDPAddr{
+				IP:   addrs[0].(*net.IPNet).IP,
+				Port: 1111 * (i + 1),
+			}
+		}
+
+		nic[0].onInboundChunkHandler = func(c Chunk) {
+			log.Debugf("nic[0] received: %s", c.String())
+			atomic.AddInt32(&nCbs0, 1)
+		}
+
+		var seq byte
+		nic[1].onInboundChunkHandler = func(c Chunk) {
+			log.Debugf("nic[1] received: %s", c.String())
+			seq = c.UserData()[0]
+			atomic.AddInt32(&nCbs1, 1)
+		}
+
+		// this creates a filter that block the first chunk
+		makeFilter := func(name string) func(c Chunk) bool {
+			n := 0
+			return func(c Chunk) bool {
+				pass := (n > 0)
+				if pass {
+					log.Debugf("%s passed %s", name, c.String())
+				} else {
+					log.Debugf("%s blocked %s", name, c.String())
+				}
+				n++
+				return pass
+			}
+		}
+
+		// filter 1: block first one
+		r.AddChunkFilter(makeFilter("filter1"))
+
+		// filter 2: block first one
+		r.AddChunkFilter(makeFilter("filter2"))
+
+		err = r.Start()
+		assert.Nil(t, err, "should succeed")
+
+		// send 3 packets
+		for i := 0; i < 3; i++ {
+			c := newChunkUDP(ip[0], ip[1])
+			c.userData = make([]byte, 1)
+			c.userData[0] = byte(i) // 1-byte seq num
+			r.push(c)
+		}
+
+		time.Sleep(50 * time.Millisecond)
+
+		err = r.Stop()
+		assert.Nil(t, err, "should succeed")
+		assert.Equal(t, int32(0), atomic.LoadInt32(&nCbs0), "should be zero")
+		assert.Equal(t, int32(1), atomic.LoadInt32(&nCbs1), "should be zero")
+		assert.Equal(t, byte(2), seq, "should be the last chunk")
 	})
 }
 

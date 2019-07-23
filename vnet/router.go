@@ -49,6 +49,10 @@ type NIC interface {
 	setRouter(r *Router) error
 }
 
+// ChunkFilter is a handler users can add to filter chunks.
+// If the filter returns false, the packet will be dropped.
+type ChunkFilter func(c Chunk) bool
+
 // Router ...
 type Router struct {
 	name          string                    // read-only
@@ -64,6 +68,7 @@ type Router struct {
 	nics          map[string]NIC            // read-only
 	stopFunc      func()                    // requires mutex [x]
 	resolver      *resolver                 // read-only
+	chunkFilters  []ChunkFilter             // requires mutex [x]
 	mutex         sync.RWMutex              // thread-safe
 	pushCh        chan struct{}             // writer requires mutex
 	loggerFactory logging.LoggerFactory     // read-only
@@ -281,6 +286,16 @@ func (r *Router) AddHost(hostName string, ipAddr string) error {
 	return r.resolver.addHost(hostName, ipAddr)
 }
 
+// AddChunkFilter adds a filter for chunks traversing this router.
+// You may add more than one filter. The filters are called in the order of this method call.
+// If a chunk is dropped by a filter, subsequent filter will not receive the chunk.
+func (r *Router) AddChunkFilter(filter ChunkFilter) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	r.chunkFilters = append(r.chunkFilters, filter)
+}
+
 // caller should hold the mutex
 func (r *Router) assignIPAddress() (net.IP, error) {
 	// See: https://stackoverflow.com/questions/14915188/ip-address-ending-with-zero
@@ -329,6 +344,18 @@ func (r *Router) onProcessChunks() error {
 		var ok bool
 		if c, ok = r.queue.pop(); !ok {
 			break // no more chunk in the queue
+		}
+
+		blocked := false
+		for i := 0; i < len(r.chunkFilters); i++ {
+			filter := r.chunkFilters[i]
+			if !filter(c) {
+				blocked = true
+				break
+			}
+		}
+		if blocked {
+			continue // discard
 		}
 
 		dstIP := c.getDestinationIP()
