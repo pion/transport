@@ -15,6 +15,7 @@ func TestNetVirtual(t *testing.T) {
 
 	t.Run("Interfaces", func(t *testing.T) {
 		nw := NewNet(&NetConfig{})
+		assert.True(t, nw.IsVirtual(), "should be true")
 
 		interfaces, err := nw.Interfaces()
 		assert.Equal(t, 2, len(interfaces), "should be one interface")
