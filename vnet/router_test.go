@@ -286,7 +286,7 @@ func TestRouterStandalone(t *testing.T) {
 		nic[0].onInboundChunkHandler = func(c Chunk) {}
 
 		nic[1].onInboundChunkHandler = func(c Chunk) {
-			delay := time.Now().Sub(c.getTimestamp())
+			delay := time.Since(c.getTimestamp())
 			delayRes = append(delayRes, delay)
 			n := atomic.AddInt32(&nCBs, 1)
 			if n == int32(nPkts) {
