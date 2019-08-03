@@ -242,6 +242,81 @@ func TestRouterStandalone(t *testing.T) {
 		assert.Equal(t, int32(1), atomic.LoadInt32(&nCbs1), "should be zero")
 		assert.Equal(t, byte(2), seq, "should be the last chunk")
 	})
+
+	t.Run("Delay with jitter", func(t *testing.T) {
+		var nCBs int32
+		doneCh := make(chan struct{})
+		r, err := NewRouter(&RouterConfig{
+			CIDR:          "1.2.3.0/24",
+			MinDelay:      20 * time.Millisecond,
+			MaxJitter:     10 * time.Millisecond,
+			LoggerFactory: loggerFactory,
+		})
+		assert.Nil(t, err, "should succeed")
+
+		nic := make([]*dummyNIC, 2)
+		ip := make([]*net.UDPAddr, 2)
+
+		for i := 0; i < 2; i++ {
+			anic := NewNet(&NetConfig{})
+			assert.NotNil(t, anic, "should succeed")
+
+			nic[i] = &dummyNIC{
+				Net: *anic,
+			}
+
+			err2 := r.AddNet(nic[i])
+			assert.Nil(t, err2, "should succeed")
+
+			// Now, eth0 must have one address assigned
+			eth0, err2 := nic[i].getInterface("eth0")
+			assert.Nil(t, err2, "should succeed")
+			addrs, err2 := eth0.Addrs()
+			assert.Nil(t, err2, "should succeed")
+			assert.Equal(t, 1, len(addrs), "should match")
+			ip[i] = &net.UDPAddr{
+				IP:   addrs[0].(*net.IPNet).IP,
+				Port: 1111 * (i + 1),
+			}
+		}
+
+		var delayRes []time.Duration
+		nPkts := 10
+
+		nic[0].onInboundChunkHandler = func(c Chunk) {}
+
+		nic[1].onInboundChunkHandler = func(c Chunk) {
+			delay := time.Now().Sub(c.getTimestamp())
+			delayRes = append(delayRes, delay)
+			n := atomic.AddInt32(&nCBs, 1)
+			if n == int32(nPkts) {
+				close(doneCh)
+			}
+		}
+
+		err = r.Start()
+		assert.Nil(t, err, "should succeed")
+
+		for i := 0; i < nPkts; i++ {
+			c := newChunkUDP(ip[0], ip[1])
+			r.push(c)
+			time.Sleep(50 * time.Millisecond)
+		}
+
+		<-doneCh
+		err = r.Stop()
+		assert.Nil(t, err, "should succeed")
+
+		// Validate the amount of delays
+		for _, d := range delayRes {
+			//log.Debugf("delay: %v", d.Seconds()*1000.0)
+			assert.True(t, d >= 20*time.Millisecond, "should delay >= 20ms")
+			assert.True(t, d <= 38*time.Millisecond, "should delay <= 40ms")
+			// Note: actual delay should be within 30ms but giving a 8ms
+			// margin for possible extra delay (e.g. debug logs, etc)
+		}
+	})
+
 }
 
 func TestRouterOneChild(t *testing.T) {

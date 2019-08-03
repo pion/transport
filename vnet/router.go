@@ -2,6 +2,7 @@ package vnet
 
 import (
 	"fmt"
+	"math/rand"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -37,6 +38,10 @@ type RouterConfig struct {
 	QueueSize int
 	// Effective only when this router has a parent router
 	NATType *NATType
+	// Minimum Delay
+	MinDelay time.Duration
+	// Max Jitter
+	MaxJitter time.Duration
 	// Logger factory
 	LoggerFactory logging.LoggerFactory
 }
@@ -69,6 +74,8 @@ type Router struct {
 	stopFunc      func()                    // requires mutex [x]
 	resolver      *resolver                 // read-only
 	chunkFilters  []ChunkFilter             // requires mutex [x]
+	minDelay      time.Duration             // requires mutex [x]
+	maxJitter     time.Duration             // requires mutex [x]
 	mutex         sync.RWMutex              // thread-safe
 	pushCh        chan struct{}             // writer requires mutex
 	loggerFactory logging.LoggerFactory     // read-only
@@ -125,6 +132,8 @@ func NewRouter(config *RouterConfig) (*Router, error) {
 		natType:       config.NATType,
 		nics:          map[string]NIC{},
 		resolver:      resolver,
+		minDelay:      config.MinDelay,
+		maxJitter:     config.MaxJitter,
 		pushCh:        make(chan struct{}, 1),
 		loggerFactory: config.LoggerFactory,
 		log:           config.LoggerFactory.NewLogger("vnet"),
@@ -171,14 +180,25 @@ func (r *Router) Start() error {
 	go func() {
 	loop:
 		for {
-			err := r.onProcessChunks()
+			d, err := r.processChunks()
 			if err != nil {
-				r.log.Warnf("[%s] %s", r.name, err.Error())
+				r.log.Errorf("[%s] %s", r.name, err.Error())
+				break
 			}
-			select {
-			case <-r.pushCh:
-			case <-cancelCh:
-				break loop
+
+			if d <= 0 {
+				select {
+				case <-r.pushCh:
+				case <-cancelCh:
+					break loop
+				}
+			} else {
+				t := time.NewTimer(d)
+				select {
+				case <-t.C:
+				case <-cancelCh:
+					break loop
+				}
 			}
 		}
 	}()
@@ -329,17 +349,45 @@ func (r *Router) push(c Chunk) {
 	}
 }
 
-func (r *Router) onProcessChunks() error {
+func (r *Router) processChunks() (time.Duration, error) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
+	//      cutOff
+	//         v min delay
+	//         |<--->|
+	//  +------------:--
+	//  |OOOOOOXXXXX :   --> time
+	//  +------------:--
+	//  |<--->|     now
+	//    due
+
+	enteredAt := time.Now()
+	cutOff := enteredAt.Add(-r.minDelay)
+
+	var d time.Duration // the next sleep duration
+
 	for {
+		d = 0
+
 		c := r.queue.peek()
 		if c == nil {
 			break // no more chunk in the queue
 		}
 
-		// TODO: check timestamp to decide whether to delay the chunks
+		// check timestamp to find if the chunk is due
+		if c.getTimestamp().After(cutOff) {
+			// There is one or more chunk in the queue but none of them are due.
+			// Here it calculate the sleep duration. The sleep duration includes
+			// additional random duration to emulate jitter.
+			var jitter time.Duration
+			if r.maxJitter > 0 {
+				jitter = time.Duration(rand.Int63n(int64(r.maxJitter)))
+			}
+			nextExpire := c.getTimestamp().Add(r.minDelay).Add(jitter)
+			d = nextExpire.Sub(enteredAt)
+			break
+		}
 
 		var ok bool
 		if c, ok = r.queue.pop(); !ok {
@@ -389,7 +437,7 @@ func (r *Router) onProcessChunks() error {
 		// Pass it to the parent via NAT
 		toParent, err := r.nat.translateOutbound(c)
 		if err != nil {
-			return err
+			return 0, err
 		}
 
 		/* FIXME: this implementation would introduce a duplicate packet!
@@ -411,7 +459,7 @@ func (r *Router) onProcessChunks() error {
 		r.mutex.Lock()
 	}
 
-	return nil
+	return d, nil
 }
 
 // caller must hold the mutex
