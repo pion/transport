@@ -353,6 +353,12 @@ func (r *Router) processChunks() (time.Duration, error) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
+	// Introduce jitter by delaying the processing of chunks.
+	if r.maxJitter > 0 {
+		jitter := time.Duration(rand.Int63n(int64(r.maxJitter)))
+		time.Sleep(jitter)
+	}
+
 	//      cutOff
 	//         v min delay
 	//         |<--->|
@@ -378,13 +384,8 @@ func (r *Router) processChunks() (time.Duration, error) {
 		// check timestamp to find if the chunk is due
 		if c.getTimestamp().After(cutOff) {
 			// There is one or more chunk in the queue but none of them are due.
-			// Here it calculate the sleep duration. The sleep duration includes
-			// additional random duration to emulate jitter.
-			var jitter time.Duration
-			if r.maxJitter > 0 {
-				jitter = time.Duration(rand.Int63n(int64(r.maxJitter)))
-			}
-			nextExpire := c.getTimestamp().Add(r.minDelay).Add(jitter)
+			// Calculate the next sleep duration here.
+			nextExpire := c.getTimestamp().Add(r.minDelay)
 			d = nextExpire.Sub(enteredAt)
 			break
 		}
