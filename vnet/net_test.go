@@ -644,4 +644,96 @@ func TestNetVirtual(t *testing.T) {
 		assert.NoError(t, conn.Close(), "should succeed")
 		assert.Equal(t, 0, nw.v.udpConns.size(), "should match")
 	})
+
+	t.Run("Two IPs on a NIC", func(t *testing.T) {
+		doneCh := make(chan struct{})
+
+		// WAN
+		wan, err := NewRouter(&RouterConfig{
+			CIDR:          "1.2.3.0/24",
+			LoggerFactory: loggerFactory,
+		})
+		assert.NoError(t, err, "should succeed")
+		assert.NotNil(t, wan, "should succeed")
+
+		net1 := NewNet(&NetConfig{
+			StaticIPs: []string{
+				"1.2.3.4",
+				"1.2.3.5",
+			},
+		})
+
+		err = wan.AddNet(net1)
+		assert.NoError(t, err, "should succeed")
+
+		// start the router
+		err = wan.Start()
+		assert.NoError(t, err, "should succeed")
+
+		conn1, err := net1.ListenPacket("udp", "1.2.3.4:1234")
+		assert.NoError(t, err, "should succeed")
+
+		conn2, err := net1.ListenPacket("udp", "1.2.3.5:1234")
+		assert.NoError(t, err, "should succeed")
+
+		conn1RcvdCh := make(chan bool)
+
+		// conn1
+		go func() {
+			buf := make([]byte, 1500)
+			for {
+				log.Debug("conn1: wait for a message..")
+				n, _, err2 := conn1.ReadFrom(buf)
+				if err2 != nil {
+					log.Debugf("ReadFrom returned: %v", err2)
+					break
+				}
+
+				log.Debugf("conn1 received %s", string(buf[:n]))
+				conn1RcvdCh <- true
+			}
+			close(doneCh)
+		}()
+
+		// conn2
+		go func() {
+			buf := make([]byte, 1500)
+			for {
+				log.Debug("conn2: wait for a message..")
+				n, addr, err2 := conn2.ReadFrom(buf)
+				if err2 != nil {
+					log.Debugf("ReadFrom returned: %v", err2)
+					break
+				}
+
+				log.Debugf("conn2 received %s", string(buf[:n]))
+
+				// echo back to conn1
+				nSent, err2 := conn2.WriteTo([]byte("Good-bye!"), addr)
+				assert.NoError(t, err2, "should succeed")
+				assert.Equal(t, 9, nSent, "should match")
+			}
+		}()
+
+		log.Debug("conn1: sending")
+		nSent, err := conn1.WriteTo(
+			[]byte("Hello!"),
+			conn2.LocalAddr(),
+		)
+		assert.NoError(t, err, "should succeed")
+		assert.Equal(t, 6, nSent, "should match")
+
+	loop:
+		for {
+			select {
+			case <-conn1RcvdCh:
+				assert.NoError(t, conn1.Close(), "should succeed")
+				assert.NoError(t, conn2.Close(), "should succeed")
+			case <-doneCh:
+				break loop
+			}
+		}
+
+		assert.NoError(t, wan.Stop(), "should succeed")
+	})
 }

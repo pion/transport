@@ -21,7 +21,7 @@ func newMACAddress() net.HardwareAddr {
 
 type vNet struct {
 	interfaces []*Interface // read-only
-	staticIP   net.IP       // read-only
+	staticIPs  []net.IP     // read-only
 	router     *Router      // read-only
 	udpConns   *udpConnMap  // read-only
 	mutex      sync.RWMutex
@@ -432,8 +432,12 @@ func (v *vNet) assignPort(ip net.IP, start, end int) (int, error) {
 
 // NetConfig is a bag of configuration parameters passed to NewNet().
 type NetConfig struct {
-	// StaticIP is a static IP address to be assigned for this Net. If nil,
-	// the router will automatically assign an IP address.
+	// StaticIPs is an array of static IP addresses to be assigned for this Net.
+	// If no static IP address is given, the router will automatically assign
+	// an IP address.
+	StaticIPs []string
+
+	// StaticIP is deprecated. Use StaticIPs.
 	StaticIP string
 }
 
@@ -489,9 +493,21 @@ func NewNet(config *NetConfig) *Net {
 		Flags:        net.FlagUp | net.FlagMulticast,
 	})
 
+	var staticIPs []net.IP
+	for _, ipStr := range config.StaticIPs {
+		if ip := net.ParseIP(ipStr); ip != nil {
+			staticIPs = append(staticIPs, ip)
+		}
+	}
+	if len(config.StaticIP) > 0 {
+		if ip := net.ParseIP(config.StaticIP); ip != nil {
+			staticIPs = append(staticIPs, ip)
+		}
+	}
+
 	v := &vNet{
 		interfaces: []*Interface{lo0, eth0},
-		staticIP:   net.ParseIP(config.StaticIP),
+		staticIPs:  staticIPs,
 		udpConns:   newUDPConnMap(),
 	}
 
@@ -607,12 +623,12 @@ func (n *Net) onInboundChunk(c Chunk) {
 	n.v.onInboundChunk(c)
 }
 
-func (n *Net) getStaticIP() net.IP {
+func (n *Net) getStaticIPs() []net.IP {
 	if n.v == nil {
 		return nil
 	}
 
-	return n.v.staticIP
+	return n.v.staticIPs
 }
 
 // IsVirtual tests if the virtual network is enabled.
