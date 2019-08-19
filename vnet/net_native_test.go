@@ -202,8 +202,8 @@ func TestNetNative(t *testing.T) {
 		// onInboundChunk (shouldn't crash)
 		nw.onInboundChunk(nil)
 
-		// getStaticIP
-		ip := nw.getStaticIP()
-		assert.Nil(t, ip, "should be nil")
+		// getStaticIPs
+		ips := nw.getStaticIPs()
+		assert.Nil(t, ips, "should be nil")
 	})
 }

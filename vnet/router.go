@@ -31,8 +31,12 @@ type RouterConfig struct {
 	Name string
 	// CIDR notation, like "192.0.2.0/24"
 	CIDR string
-	// StaticIP is a static IP address to be assigned for this external network.
+	// StaticIPs is an array of static IP addresses to be assigned for this router.
+	// If no static IP address is given, the router will automatically assign
+	// an IP address.
 	// This will be ignored if this router is the root.
+	StaticIPs []string
+	// StaticIP is deprecated. Use StaticIPs.
 	StaticIP string
 	// Internal queue size
 	QueueSize int
@@ -50,7 +54,7 @@ type RouterConfig struct {
 type NIC interface {
 	getInterface(ifName string) (*Interface, error)
 	onInboundChunk(c Chunk)
-	getStaticIP() net.IP
+	getStaticIPs() []net.IP
 	setRouter(r *Router) error
 }
 
@@ -63,7 +67,7 @@ type Router struct {
 	name          string                    // read-only
 	interfaces    []*Interface              // read-only
 	ipv4Net       *net.IPNet                // read-only
-	staticIP      net.IP                    // read-only
+	staticIPs     []net.IP                  // read-only
 	lastID        byte                      // requires mutex [x], used to assign the last digit of IPv4 address
 	queue         *chunkQueue               // read-only
 	parent        *Router                   // read-only
@@ -123,11 +127,23 @@ func NewRouter(config *RouterConfig) (*Router, error) {
 		name = assignRouterName()
 	}
 
+	var staticIPs []net.IP
+	for _, ipStr := range config.StaticIPs {
+		if ip := net.ParseIP(ipStr); ip != nil {
+			staticIPs = append(staticIPs, ip)
+		}
+	}
+	if len(config.StaticIP) > 0 {
+		if ip := net.ParseIP(config.StaticIP); ip != nil {
+			staticIPs = append(staticIPs, ip)
+		}
+	}
+
 	return &Router{
 		name:          name,
 		interfaces:    []*Interface{lo0, eth0},
 		ipv4Net:       ipNet,
-		staticIP:      net.ParseIP(config.StaticIP),
+		staticIPs:     staticIPs,
 		queue:         newChunkQueue(queueSize),
 		natType:       config.NATType,
 		nics:          map[string]NIC{},
@@ -247,29 +263,34 @@ func (r *Router) addNIC(nic NIC) error {
 		return err
 	}
 
-	var ip net.IP
-	if ip = nic.getStaticIP(); ip != nil {
-		if !r.ipv4Net.Contains(ip) {
-			return fmt.Errorf("static IP is beyond subnet: %s", r.ipv4Net.String())
-		}
-	} else {
+	var ips []net.IP
+
+	if ips = nic.getStaticIPs(); len(ips) == 0 {
 		// assign an IP address
-		ip, err = r.assignIPAddress()
+		ip, err := r.assignIPAddress()
 		if err != nil {
 			return err
 		}
+		ips = append(ips, ip)
 	}
 
-	ifc.AddAddr(&net.IPNet{
-		IP:   ip,
-		Mask: r.ipv4Net.Mask,
-	})
+	for _, ip := range ips {
+		if !r.ipv4Net.Contains(ip) {
+			return fmt.Errorf("static IP is beyond subnet: %s", r.ipv4Net.String())
+		}
+
+		ifc.AddAddr(&net.IPNet{
+			IP:   ip,
+			Mask: r.ipv4Net.Mask,
+		})
+
+		r.nics[ip.String()] = nic
+	}
 
 	if err = nic.setRouter(r); err != nil {
 		return err
 	}
 
-	r.nics[ip.String()] = nic
 	return nil
 }
 
@@ -521,6 +542,6 @@ func (r *Router) onInboundChunk(c Chunk) {
 	r.push(fromParent)
 }
 
-func (r *Router) getStaticIP() net.IP {
-	return r.staticIP
+func (r *Router) getStaticIPs() []net.IP {
+	return r.staticIPs
 }

@@ -30,7 +30,7 @@ func TestStressTestUDP(t *testing.T) {
 		assert.NotNil(t, wan, "should succeed")
 
 		net0 := NewNet(&NetConfig{
-			StaticIP: "1.2.3.4",
+			StaticIPs: []string{"1.2.3.4"},
 		})
 
 		err = wan.AddNet(net0)
