@@ -267,9 +267,9 @@ func (r *Router) addNIC(nic NIC) error {
 
 	if ips = nic.getStaticIPs(); len(ips) == 0 {
 		// assign an IP address
-		ip, err := r.assignIPAddress()
-		if err != nil {
-			return err
+		ip, err2 := r.assignIPAddress()
+		if err2 != nil {
+			return err2
 		}
 		ips = append(ips, ip)
 	}
