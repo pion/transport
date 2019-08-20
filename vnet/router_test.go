@@ -424,3 +424,105 @@ func TestRouterOneChild(t *testing.T) {
 	})
 
 }
+
+func TestRouterStaticIPs(t *testing.T) {
+	loggerFactory := logging.NewDefaultLoggerFactory()
+	//log := loggerFactory.NewLogger("test")
+
+	t.Run("more than one static IP", func(t *testing.T) {
+		// WAN
+		wan, err := NewRouter(&RouterConfig{
+			CIDR: "1.2.3.0/24",
+			StaticIPs: []string{
+				"1.2.3.1",
+				"1.2.3.2",
+				"1.2.3.3",
+			},
+			LoggerFactory: loggerFactory,
+		})
+		assert.Nil(t, err, "should succeed")
+		assert.NotNil(t, wan, "should succeed")
+
+		assert.Equal(t, 3, len(wan.staticIPs), "should be 3")
+		assert.Equal(t, "1.2.3.1", wan.staticIPs[0].String(), "should match")
+		assert.Equal(t, "1.2.3.2", wan.staticIPs[1].String(), "should match")
+		assert.Equal(t, "1.2.3.3", wan.staticIPs[2].String(), "should match")
+	})
+
+	t.Run("StaticIPs and StaticIP in the mix", func(t *testing.T) {
+		// WAN
+		wan, err := NewRouter(&RouterConfig{
+			CIDR: "1.2.3.0/24",
+			StaticIPs: []string{
+				"1.2.3.1",
+				"1.2.3.2",
+				"1.2.3.3",
+			},
+			StaticIP:      "1.2.3.4",
+			LoggerFactory: loggerFactory,
+		})
+		assert.Nil(t, err, "should succeed")
+		assert.NotNil(t, wan, "should succeed")
+
+		assert.Equal(t, 4, len(wan.staticIPs), "should be 4")
+		assert.Equal(t, "1.2.3.1", wan.staticIPs[0].String(), "should match")
+		assert.Equal(t, "1.2.3.2", wan.staticIPs[1].String(), "should match")
+		assert.Equal(t, "1.2.3.3", wan.staticIPs[2].String(), "should match")
+		assert.Equal(t, "1.2.3.4", wan.staticIPs[3].String(), "should match")
+	})
+}
+
+func TestRouterFailures(t *testing.T) {
+	loggerFactory := logging.NewDefaultLoggerFactory()
+	//log := loggerFactory.NewLogger("test")
+
+	t.Run("Stop when router is stopped", func(t *testing.T) {
+		r, err := NewRouter(&RouterConfig{
+			CIDR:          "1.2.3.0/24",
+			LoggerFactory: loggerFactory,
+		})
+		assert.Nil(t, err, "should succeed")
+
+		err = r.Stop()
+		assert.Error(t, err, "should fail")
+	})
+
+	t.Run("AddNet", func(t *testing.T) {
+		r, err := NewRouter(&RouterConfig{
+			CIDR:          "1.2.3.0/24",
+			LoggerFactory: loggerFactory,
+		})
+		assert.Nil(t, err, "should succeed")
+
+		nic := NewNet(&NetConfig{
+			StaticIPs: []string{
+				"5.6.7.8", // out of parent router'c CIDR
+			},
+		})
+		assert.NotNil(t, nic, "should succeed")
+
+		err = r.AddNet(nic)
+		assert.Error(t, err, "should fail")
+	})
+
+	t.Run("AddRouter", func(t *testing.T) {
+		r1, err := NewRouter(&RouterConfig{
+			CIDR:          "1.2.3.0/24",
+			LoggerFactory: loggerFactory,
+		})
+		assert.Nil(t, err, "should succeed")
+
+		r2, err := NewRouter(&RouterConfig{
+			CIDR: "192.168.0.0/24",
+			StaticIPs: []string{
+				"5.6.7.8", // out of parent router'c CIDR
+			},
+
+			LoggerFactory: loggerFactory,
+		})
+		assert.Nil(t, err, "should succeed")
+
+		err = r1.AddRouter(r2)
+		assert.Error(t, err, "should fail")
+	})
+}
