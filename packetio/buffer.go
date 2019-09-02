@@ -7,7 +7,7 @@ import (
 )
 
 // ErrFull is returned when the buffer has hit the configured limits.
-var ErrFull = errors.New("full buffer")
+var ErrFull = errors.New("packetio.Buffer is full, discarding write")
 
 // Buffer allows writing packets to an intermediate buffer, which can then be read form.
 // This is verify similar to bytes.Buffer but avoids combining multiple writes into a single read.
