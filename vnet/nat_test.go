@@ -148,8 +148,21 @@ func TestNATMappingBehavior(t *testing.T) {
 		assert.Nil(t, err, "should succeed")
 		assert.Equal(t, 1, len(nat.outboundMap), "should match")
 		assert.Equal(t, 1, len(nat.inboundMap), "should match")
-
 		log.Debugf("o-translated: %s\n", oec.String())
+
+		// sending different (IP: 5.6.7.9) won't create a new mapping
+		oic2 := newChunkUDP(&net.UDPAddr{
+			IP:   net.ParseIP("192.168.0.2"),
+			Port: 1234,
+		}, &net.UDPAddr{
+			IP:   net.ParseIP("5.6.7.9"),
+			Port: 9000,
+		})
+		oec2, err := nat.translateOutbound(oic2)
+		assert.Nil(t, err, "should succeed")
+		assert.Equal(t, 1, len(nat.outboundMap), "should match")
+		assert.Equal(t, 1, len(nat.inboundMap), "should match")
+		log.Debugf("o-translated: %s\n", oec2.String())
 
 		iec := newChunkUDP(
 			&net.UDPAddr{
@@ -165,7 +178,9 @@ func TestNATMappingBehavior(t *testing.T) {
 		log.Debugf("i-original  : %s\n", iec.String())
 
 		iic, err := nat.translateInbound(iec)
-		assert.Nil(t, err, "should succeed")
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
 
 		log.Debugf("i-translated: %s\n", iic.String())
 
@@ -253,6 +268,20 @@ func TestNATMappingBehavior(t *testing.T) {
 		assert.Equal(t, 1, len(nat.inboundMap), "should match")
 
 		log.Debugf("o-translated: %s\n", oec.String())
+
+		// sending different (IP: 5.6.7.9) won't create a new mapping
+		oic2 := newChunkUDP(&net.UDPAddr{
+			IP:   net.ParseIP("192.168.0.2"),
+			Port: 1234,
+		}, &net.UDPAddr{
+			IP:   net.ParseIP("5.6.7.9"),
+			Port: 9000,
+		})
+		oec2, err := nat.translateOutbound(oic2)
+		assert.Nil(t, err, "should succeed")
+		assert.Equal(t, 1, len(nat.outboundMap), "should match")
+		assert.Equal(t, 1, len(nat.inboundMap), "should match")
+		log.Debugf("o-translated: %s\n", oec2.String())
 
 		iec := newChunkUDP(
 			&net.UDPAddr{

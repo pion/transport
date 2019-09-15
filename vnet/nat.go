@@ -46,11 +46,12 @@ type natConfig struct {
 }
 
 type mapping struct {
-	proto   string    // "udp" or "tcp"
-	local   string    // "<ip-addr>:<port>"
-	mapped  string    // "<ip-addr>:<port>"
-	filter  string    // ":[<ip-addr>[:<port>]]"
-	expires time.Time // time to expire
+	proto   string              // "udp" or "tcp"
+	local   string              // "<local-ip>:<local-port>"
+	mapped  string              // "<mapped-ip>:<mapped-port>"
+	bound   string              // key: "[<remote-ip>[:<remote-port>]]"
+	filters map[string]struct{} // key: "[<remote-ip>[:<remote-port>]]"
+	expires time.Time           // time to expire
 }
 
 type networkAddressTranslator struct {
@@ -58,7 +59,7 @@ type networkAddressTranslator struct {
 	natType        NATType
 	mappedIP       string
 	outboundMap    map[string]*mapping // key: "<proto>:<local-ip>:<local-port>[:remote-ip[:remote-port]]
-	inboundMap     map[string]*mapping // key: "<proto>:<mapped-ip>:<mapped-port>[:remote-ip[:remote-port]]"
+	inboundMap     map[string]*mapping // key: "<proto>:<mapped-ip>:<mapped-port>"
 	udpPortCounter int
 	mutex          sync.RWMutex
 	log            logging.LeveledLogger
@@ -88,17 +89,27 @@ func (n *networkAddressTranslator) translateOutbound(from Chunk) (Chunk, error) 
 	to := from.Clone()
 
 	if from.Network() == "udp" {
-		var filter string
-		switch n.natType.FilteringBehavior {
+		var bound, filterKey string
+
+		switch n.natType.MappingBehavior {
 		case EndpointIndependent:
-			filter = ""
+			bound = ""
 		case EndpointAddrDependent:
-			filter = fmt.Sprintf(":%s", from.getDestinationIP().String())
+			bound = from.getDestinationIP().String()
 		case EndpointAddrPortDependent:
-			filter = fmt.Sprintf(":%s", from.DestinationAddr().String())
+			bound = from.DestinationAddr().String()
 		}
 
-		oKey := fmt.Sprintf("udp:%s%s", from.SourceAddr().String(), filter)
+		switch n.natType.FilteringBehavior {
+		case EndpointIndependent:
+			filterKey = ""
+		case EndpointAddrDependent:
+			filterKey = from.getDestinationIP().String()
+		case EndpointAddrPortDependent:
+			filterKey = from.DestinationAddr().String()
+		}
+
+		oKey := fmt.Sprintf("udp:%s:%s", from.SourceAddr().String(), bound)
 
 		m := n.findOutboundMapping(oKey)
 		if m == nil {
@@ -109,20 +120,27 @@ func (n *networkAddressTranslator) translateOutbound(from Chunk) (Chunk, error) 
 			m = &mapping{
 				proto:   from.SourceAddr().Network(),
 				local:   from.SourceAddr().String(),
+				bound:   bound,
 				mapped:  fmt.Sprintf("%s:%d", n.mappedIP, mappedPort),
-				filter:  filter,
+				filters: map[string]struct{}{},
 				expires: time.Now().Add(n.natType.MappingLifeTime),
 			}
 
 			n.outboundMap[oKey] = m
 
-			iKey := fmt.Sprintf("udp:%s:%d%s", n.mappedIP, mappedPort, filter)
+			iKey := fmt.Sprintf("udp:%s", m.mapped)
 
 			n.log.Debugf("[%s] created a new NAT binding oKey=%s iKey=%s\n",
 				n.name,
 				oKey,
 				iKey)
+
+			m.filters[filterKey] = struct{}{}
+			n.log.Debugf("[%s] permit access from %s to %s\n", n.name, filterKey, m.mapped)
 			n.inboundMap[iKey] = m
+		} else if _, ok := m.filters[filterKey]; !ok {
+			n.log.Debugf("[%s] permit access from %s to %s\n", n.name, filterKey, m.mapped)
+			m.filters[filterKey] = struct{}{}
 		}
 
 		if err := to.setSourceAddr(m.mapped); err != nil {
@@ -148,29 +166,33 @@ func (n *networkAddressTranslator) translateInbound(from Chunk) (Chunk, error) {
 	to := from.Clone()
 
 	if from.Network() == "udp" {
-		var iKey string
-
-		switch n.natType.FilteringBehavior {
-		case EndpointIndependent:
-			iKey = fmt.Sprintf("udp:%s",
-				from.DestinationAddr().String(),
-			)
-		case EndpointAddrDependent:
-			iKey = fmt.Sprintf("udp:%s:%s",
-				from.DestinationAddr().String(),
-				from.getSourceIP().String(),
-			)
-		case EndpointAddrPortDependent:
-			iKey = fmt.Sprintf("udp:%s:%s",
-				from.DestinationAddr().String(),
-				from.SourceAddr().String(),
-			)
-		}
-
+		iKey := fmt.Sprintf("udp:%s", from.DestinationAddr().String())
 		m := n.findInboundMapping(iKey)
 		if m == nil {
 			return nil, fmt.Errorf("drop %s as no NAT binding found", from.String())
 		}
+
+		var filterKey string
+		switch n.natType.FilteringBehavior {
+		case EndpointIndependent:
+			filterKey = ""
+		case EndpointAddrDependent:
+			filterKey = from.getSourceIP().String()
+		case EndpointAddrPortDependent:
+			filterKey = from.SourceAddr().String()
+		}
+
+		if _, ok := m.filters[filterKey]; !ok {
+			return nil, fmt.Errorf("drop %s as the remote %s has no permission", from.String(), filterKey)
+		}
+
+		// See RFC 4847 Section 4.3.  Mapping Refresh
+		// a) Inbound refresh may be useful for applications with no outgoing
+		//   UDP traffic.  However, allowing inbound refresh may allow an
+		//   external attacker or misbehaving application to keep a mapping
+		//   alive indefinitely.  This may be a security risk.  Also, if the
+		//   process is repeated with different ports, over time, it could
+		//   use up all the ports on the NAT.
 
 		if err := to.setDestinationAddr(m.local); err != nil {
 			return nil, err
@@ -209,22 +231,15 @@ func (n *networkAddressTranslator) findOutboundMapping(oKey string) *mapping {
 // caller must hold the mutex
 func (n *networkAddressTranslator) findInboundMapping(iKey string) *mapping {
 	now := time.Now()
-
 	m, ok := n.inboundMap[iKey]
-	if ok {
-		// check if this mapping is expired
-		if now.After(m.expires) {
-			n.removeMapping(m)
-			m = nil // expired
-		}
+	if !ok {
+		return nil
+	}
 
-		// See RFC 4847 Section 4.3.  Mapping Refresh
-		// a) Inbound refresh may be useful for applications with no outgoing
-		//   UDP traffic.  However, allowing inbound refresh may allow an
-		//   external attacker or misbehaving application to keep a mapping
-		//   alive indefinitely.  This may be a security risk.  Also, if the
-		//   process is repeated with different ports, over time, it could
-		//   use up all the ports on the NAT.
+	// check if this mapping is expired
+	if now.After(m.expires) {
+		n.removeMapping(m)
+		return nil
 	}
 
 	return m
@@ -232,15 +247,8 @@ func (n *networkAddressTranslator) findInboundMapping(iKey string) *mapping {
 
 // caller must hold the mutex
 func (n *networkAddressTranslator) removeMapping(m *mapping) {
-	oKey := fmt.Sprintf("%s:%s%s",
-		m.proto,
-		m.local,
-		m.filter)
-
-	iKey := fmt.Sprintf("%s:%s%s",
-		m.proto,
-		m.mapped,
-		m.filter)
+	oKey := fmt.Sprintf("%s:%s:%s", m.proto, m.local, m.bound)
+	iKey := fmt.Sprintf("%s:%s", m.proto, m.mapped)
 
 	delete(n.outboundMap, oKey)
 	delete(n.inboundMap, iKey)
