@@ -16,11 +16,12 @@ import (
 
 func TestNATTypeDefauts(t *testing.T) {
 	loggerFactory := logging.NewDefaultLoggerFactory()
-	nat := newNAT(&natConfig{
+	nat, err := newNAT(&natConfig{
 		natType:       NATType{},
-		mappedIP:      "1.2.3.4",
+		mappedIPs:     []net.IP{net.ParseIP("1.2.3.4")},
 		loggerFactory: loggerFactory,
 	})
+	assert.NoError(t, err, "should succeed")
 
 	assert.Equal(t, EndpointIndependent, nat.natType.MappingBehavior, "should match")
 	assert.Equal(t, EndpointIndependent, nat.natType.FilteringBehavior, "should match")
@@ -34,16 +35,17 @@ func TestNATMappingBehavior(t *testing.T) {
 	log := loggerFactory.NewLogger("test")
 
 	t.Run("full-cone NAT", func(t *testing.T) {
-		nat := newNAT(&natConfig{
+		nat, err := newNAT(&natConfig{
 			natType: NATType{
 				MappingBehavior:   EndpointIndependent,
 				FilteringBehavior: EndpointIndependent,
 				Hairpining:        false,
 				MappingLifeTime:   30 * time.Second,
 			},
-			mappedIP:      "1.2.3.4",
+			mappedIPs:     []net.IP{net.ParseIP("1.2.3.4")},
 			loggerFactory: loggerFactory,
 		})
+		assert.NoError(t, err, "should succeed")
 
 		src := &net.UDPAddr{
 			IP:   net.ParseIP("192.168.0.2"),
@@ -87,7 +89,7 @@ func TestNATMappingBehavior(t *testing.T) {
 			iic.(*chunkUDP).DestinationAddr().String(),
 			"should match")
 
-		// packet with dest addr that does not existing in the mapping table
+		// packet with dest addr that does not exist in the mapping table
 		// will be dropped
 		iec = newChunkUDP(
 			&net.UDPAddr{
@@ -121,16 +123,17 @@ func TestNATMappingBehavior(t *testing.T) {
 	})
 
 	t.Run("addr-restricted-cone NAT", func(t *testing.T) {
-		nat := newNAT(&natConfig{
+		nat, err := newNAT(&natConfig{
 			natType: NATType{
 				MappingBehavior:   EndpointIndependent,
 				FilteringBehavior: EndpointAddrDependent,
 				Hairpining:        false,
 				MappingLifeTime:   30 * time.Second,
 			},
-			mappedIP:      "1.2.3.4",
+			mappedIPs:     []net.IP{net.ParseIP("1.2.3.4")},
 			loggerFactory: loggerFactory,
 		})
+		assert.NoError(t, err, "should succeed")
 
 		src := &net.UDPAddr{
 			IP:   net.ParseIP("192.168.0.2"),
@@ -189,7 +192,7 @@ func TestNATMappingBehavior(t *testing.T) {
 			iic.(*chunkUDP).DestinationAddr().String(),
 			"should match")
 
-		// packet with dest addr that does not existing in the mapping table
+		// packet with dest addr that does not exist in the mapping table
 		// will be dropped
 		iec = newChunkUDP(
 			&net.UDPAddr{
@@ -239,16 +242,17 @@ func TestNATMappingBehavior(t *testing.T) {
 	})
 
 	t.Run("port-restricted-cone NAT", func(t *testing.T) {
-		nat := newNAT(&natConfig{
+		nat, err := newNAT(&natConfig{
 			natType: NATType{
 				MappingBehavior:   EndpointIndependent,
 				FilteringBehavior: EndpointAddrPortDependent,
 				Hairpining:        false,
 				MappingLifeTime:   30 * time.Second,
 			},
-			mappedIP:      "1.2.3.4",
+			mappedIPs:     []net.IP{net.ParseIP("1.2.3.4")},
 			loggerFactory: loggerFactory,
 		})
+		assert.NoError(t, err, "should succeed")
 
 		src := &net.UDPAddr{
 			IP:   net.ParseIP("192.168.0.2"),
@@ -306,7 +310,7 @@ func TestNATMappingBehavior(t *testing.T) {
 			iic.(*chunkUDP).DestinationAddr().String(),
 			"should match")
 
-		// packet with dest addr that does not existing in the mapping table
+		// packet with dest addr that does not exist in the mapping table
 		// will be dropped
 		iec = newChunkUDP(
 			&net.UDPAddr{
@@ -354,16 +358,17 @@ func TestNATMappingBehavior(t *testing.T) {
 	})
 
 	t.Run("symmetric NAT addr dependent mapping", func(t *testing.T) {
-		nat := newNAT(&natConfig{
+		nat, err := newNAT(&natConfig{
 			natType: NATType{
 				MappingBehavior:   EndpointAddrDependent,
 				FilteringBehavior: EndpointAddrDependent,
 				Hairpining:        false,
 				MappingLifeTime:   30 * time.Second,
 			},
-			mappedIP:      "1.2.3.4",
+			mappedIPs:     []net.IP{net.ParseIP("1.2.3.4")},
 			loggerFactory: loggerFactory,
 		})
+		assert.NoError(t, err, "should succeed")
 
 		oic1 := newChunkUDP(
 			&net.UDPAddr{
@@ -423,16 +428,17 @@ func TestNATMappingBehavior(t *testing.T) {
 	})
 
 	t.Run("symmetric NAT port dependent mapping", func(t *testing.T) {
-		nat := newNAT(&natConfig{
+		nat, err := newNAT(&natConfig{
 			natType: NATType{
 				MappingBehavior:   EndpointAddrPortDependent,
 				FilteringBehavior: EndpointAddrPortDependent,
 				Hairpining:        false,
 				MappingLifeTime:   30 * time.Second,
 			},
-			mappedIP:      "1.2.3.4",
+			mappedIPs:     []net.IP{net.ParseIP("1.2.3.4")},
 			loggerFactory: loggerFactory,
 		})
+		assert.NoError(t, err, "should succeed")
 
 		oic1 := newChunkUDP(
 			&net.UDPAddr{
@@ -497,16 +503,17 @@ func TestNATMappingTimeout(t *testing.T) {
 	log := loggerFactory.NewLogger("test")
 
 	t.Run("refresh on outbound", func(t *testing.T) {
-		nat := newNAT(&natConfig{
+		nat, err := newNAT(&natConfig{
 			natType: NATType{
 				MappingBehavior:   EndpointIndependent,
 				FilteringBehavior: EndpointIndependent,
 				Hairpining:        false,
 				MappingLifeTime:   100 * time.Millisecond,
 			},
-			mappedIP:      "1.2.3.4",
+			mappedIPs:     []net.IP{net.ParseIP("1.2.3.4")},
 			loggerFactory: loggerFactory,
 		})
+		assert.NoError(t, err, "should succeed")
 
 		src := &net.UDPAddr{
 			IP:   net.ParseIP("192.168.0.2"),
@@ -559,16 +566,17 @@ func TestNATMappingTimeout(t *testing.T) {
 	})
 
 	t.Run("outbound detects timeout", func(t *testing.T) {
-		nat := newNAT(&natConfig{
+		nat, err := newNAT(&natConfig{
 			natType: NATType{
 				MappingBehavior:   EndpointIndependent,
 				FilteringBehavior: EndpointIndependent,
 				Hairpining:        false,
 				MappingLifeTime:   100 * time.Millisecond,
 			},
-			mappedIP:      "1.2.3.4",
+			mappedIPs:     []net.IP{net.ParseIP("1.2.3.4")},
 			loggerFactory: loggerFactory,
 		})
+		assert.NoError(t, err, "should succeed")
 
 		src := &net.UDPAddr{
 			IP:   net.ParseIP("192.168.0.2"),
@@ -609,5 +617,230 @@ func TestNATMappingTimeout(t *testing.T) {
 		assert.NotNil(t, err, "should drop")
 		assert.Equal(t, 0, len(nat.outboundMap), "should have no binding")
 		assert.Equal(t, 0, len(nat.inboundMap), "should have no binding")
+	})
+}
+
+func TestNAT1To1Bahavior(t *testing.T) {
+	loggerFactory := logging.NewDefaultLoggerFactory()
+	log := loggerFactory.NewLogger("test")
+
+	t.Run("1:1 NAT with one mapping", func(t *testing.T) {
+		nat, err := newNAT(&natConfig{
+			natType: NATType{
+				Mode: NATModeNAT1To1,
+			},
+			mappedIPs:     []net.IP{net.ParseIP("1.2.3.4")},
+			localIPs:      []net.IP{net.ParseIP("10.0.0.1")},
+			loggerFactory: loggerFactory,
+		})
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+
+		src := &net.UDPAddr{
+			IP:   net.ParseIP("10.0.0.1"),
+			Port: 1234,
+		}
+		dst := &net.UDPAddr{
+			IP:   net.ParseIP("5.6.7.8"),
+			Port: 5678,
+		}
+
+		oic := newChunkUDP(src, dst)
+
+		oec, err := nat.translateOutbound(oic)
+		assert.Nil(t, err, "should succeed")
+		assert.Equal(t, 0, len(nat.outboundMap), "should match")
+		assert.Equal(t, 0, len(nat.inboundMap), "should match")
+
+		log.Debugf("o-original  : %s\n", oic.String())
+		log.Debugf("o-translated: %s\n", oec.String())
+
+		assert.Equal(t, "1.2.3.4:1234", oec.SourceAddr().String(), "should match")
+
+		iec := newChunkUDP(
+			&net.UDPAddr{
+				IP:   dst.IP,
+				Port: dst.Port,
+			},
+			&net.UDPAddr{
+				IP:   oec.(*chunkUDP).sourceIP,
+				Port: oec.(*chunkUDP).sourcePort,
+			},
+		)
+
+		log.Debugf("i-original  : %s\n", iec.String())
+
+		iic, err := nat.translateInbound(iec)
+		assert.Nil(t, err, "should succeed")
+
+		log.Debugf("i-translated: %s\n", iic.String())
+
+		assert.Equal(t,
+			oic.SourceAddr().String(),
+			iic.DestinationAddr().String(),
+			"should match")
+	})
+
+	t.Run("1:1 NAT with more than one mapping", func(t *testing.T) {
+		nat, err := newNAT(&natConfig{
+			natType: NATType{
+				Mode: NATModeNAT1To1,
+			},
+			mappedIPs: []net.IP{
+				net.ParseIP("1.2.3.4"),
+				net.ParseIP("1.2.3.5"),
+			},
+			localIPs: []net.IP{
+				net.ParseIP("10.0.0.1"),
+				net.ParseIP("10.0.0.2"),
+			},
+			loggerFactory: loggerFactory,
+		})
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+
+		// outbound translation
+
+		before := newChunkUDP(
+			&net.UDPAddr{
+				IP:   net.ParseIP("10.0.0.1"),
+				Port: 1234,
+			},
+			&net.UDPAddr{
+				IP:   net.ParseIP("5.6.7.8"),
+				Port: 5678,
+			})
+
+		after, err := nat.translateOutbound(before)
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+		assert.Equal(t, "1.2.3.4:1234", after.SourceAddr().String(), "should match")
+
+		before = newChunkUDP(
+			&net.UDPAddr{
+				IP:   net.ParseIP("10.0.0.2"),
+				Port: 1234,
+			},
+			&net.UDPAddr{
+				IP:   net.ParseIP("5.6.7.8"),
+				Port: 5678,
+			})
+
+		after, err = nat.translateOutbound(before)
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+		assert.Equal(t, "1.2.3.5:1234", after.SourceAddr().String(), "should match")
+
+		// inbound translation
+
+		before = newChunkUDP(
+			&net.UDPAddr{
+				IP:   net.ParseIP("5.6.7.8"),
+				Port: 5678,
+			},
+			&net.UDPAddr{
+				IP:   net.ParseIP("1.2.3.4"),
+				Port: 2525,
+			})
+
+		after, err = nat.translateInbound(before)
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+		assert.Equal(t, "10.0.0.1:2525", after.DestinationAddr().String(), "should match")
+
+		before = newChunkUDP(
+			&net.UDPAddr{
+				IP:   net.ParseIP("5.6.7.8"),
+				Port: 5678,
+			},
+			&net.UDPAddr{
+				IP:   net.ParseIP("1.2.3.5"),
+				Port: 9847,
+			})
+
+		after, err = nat.translateInbound(before)
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+		assert.Equal(t, "10.0.0.2:9847", after.DestinationAddr().String(), "should match")
+	})
+
+	t.Run("1:1 NAT failure", func(t *testing.T) {
+		// 1:1 NAT requires more than one mapping
+		_, err := newNAT(&natConfig{
+			natType: NATType{
+				Mode: NATModeNAT1To1,
+			},
+			loggerFactory: loggerFactory,
+		})
+		assert.Error(t, err, "should fail")
+
+		// 1:1 NAT requires the same number of mappedIPs and localIPs
+		_, err = newNAT(&natConfig{
+			natType: NATType{
+				Mode: NATModeNAT1To1,
+			},
+			mappedIPs: []net.IP{
+				net.ParseIP("1.2.3.4"),
+				net.ParseIP("1.2.3.5"),
+			},
+			localIPs: []net.IP{
+				net.ParseIP("10.0.0.1"),
+			},
+			loggerFactory: loggerFactory,
+		})
+		assert.Error(t, err, "should fail")
+
+		// drop outbound or inbound chunk with no route in 1:1 NAT
+
+		nat, err := newNAT(&natConfig{
+			natType: NATType{
+				Mode: NATModeNAT1To1,
+			},
+			mappedIPs: []net.IP{
+				net.ParseIP("1.2.3.4"),
+			},
+			localIPs: []net.IP{
+				net.ParseIP("10.0.0.1"),
+			},
+			loggerFactory: loggerFactory,
+		})
+		assert.NoError(t, err, "should succeed")
+
+		before := newChunkUDP(
+			&net.UDPAddr{
+				IP:   net.ParseIP("10.0.0.2"), // no external mapping for this
+				Port: 1234,
+			},
+			&net.UDPAddr{
+				IP:   net.ParseIP("5.6.7.8"),
+				Port: 5678,
+			})
+
+		after, err := nat.translateOutbound(before)
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+		if !assert.Nil(t, after, "should be nil") {
+			return
+		}
+
+		before = newChunkUDP(
+			&net.UDPAddr{
+				IP:   net.ParseIP("5.6.7.8"),
+				Port: 5678,
+			},
+			&net.UDPAddr{
+				IP:   net.ParseIP("10.0.0.2"), // no local mapping for this
+				Port: 1234,
+			})
+
+		_, err = nat.translateInbound(before)
+		assert.Error(t, err, "should fail")
 	})
 }

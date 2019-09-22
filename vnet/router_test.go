@@ -430,9 +430,8 @@ func TestRouterStaticIPs(t *testing.T) {
 	//log := loggerFactory.NewLogger("test")
 
 	t.Run("more than one static IP", func(t *testing.T) {
-		// WAN
-		wan, err := NewRouter(&RouterConfig{
-			CIDR: "1.2.3.0/24",
+		lan, err := NewRouter(&RouterConfig{
+			CIDR: "192.168.0.0/24",
 			StaticIPs: []string{
 				"1.2.3.1",
 				"1.2.3.2",
@@ -441,18 +440,17 @@ func TestRouterStaticIPs(t *testing.T) {
 			LoggerFactory: loggerFactory,
 		})
 		assert.Nil(t, err, "should succeed")
-		assert.NotNil(t, wan, "should succeed")
+		assert.NotNil(t, lan, "should succeed")
 
-		assert.Equal(t, 3, len(wan.staticIPs), "should be 3")
-		assert.Equal(t, "1.2.3.1", wan.staticIPs[0].String(), "should match")
-		assert.Equal(t, "1.2.3.2", wan.staticIPs[1].String(), "should match")
-		assert.Equal(t, "1.2.3.3", wan.staticIPs[2].String(), "should match")
+		assert.Equal(t, 3, len(lan.staticIPs), "should be 3")
+		assert.Equal(t, "1.2.3.1", lan.staticIPs[0].String(), "should match")
+		assert.Equal(t, "1.2.3.2", lan.staticIPs[1].String(), "should match")
+		assert.Equal(t, "1.2.3.3", lan.staticIPs[2].String(), "should match")
 	})
 
 	t.Run("StaticIPs and StaticIP in the mix", func(t *testing.T) {
-		// WAN
-		wan, err := NewRouter(&RouterConfig{
-			CIDR: "1.2.3.0/24",
+		lan, err := NewRouter(&RouterConfig{
+			CIDR: "192.168.0.0/24",
 			StaticIPs: []string{
 				"1.2.3.1",
 				"1.2.3.2",
@@ -462,13 +460,123 @@ func TestRouterStaticIPs(t *testing.T) {
 			LoggerFactory: loggerFactory,
 		})
 		assert.Nil(t, err, "should succeed")
-		assert.NotNil(t, wan, "should succeed")
+		assert.NotNil(t, lan, "should succeed")
 
-		assert.Equal(t, 4, len(wan.staticIPs), "should be 4")
-		assert.Equal(t, "1.2.3.1", wan.staticIPs[0].String(), "should match")
-		assert.Equal(t, "1.2.3.2", wan.staticIPs[1].String(), "should match")
-		assert.Equal(t, "1.2.3.3", wan.staticIPs[2].String(), "should match")
-		assert.Equal(t, "1.2.3.4", wan.staticIPs[3].String(), "should match")
+		assert.Equal(t, 4, len(lan.staticIPs), "should be 4")
+		assert.Equal(t, "1.2.3.1", lan.staticIPs[0].String(), "should match")
+		assert.Equal(t, "1.2.3.2", lan.staticIPs[1].String(), "should match")
+		assert.Equal(t, "1.2.3.3", lan.staticIPs[2].String(), "should match")
+		assert.Equal(t, "1.2.3.4", lan.staticIPs[3].String(), "should match")
+	})
+
+	t.Run("Static IP and local IP mapping", func(t *testing.T) {
+		lan, err := NewRouter(&RouterConfig{
+			CIDR: "192.168.0.0/24",
+			StaticIPs: []string{
+				"1.2.3.1/192.168.0.1",
+				"1.2.3.2/192.168.0.2",
+				"1.2.3.3/192.168.0.3",
+			},
+			LoggerFactory: loggerFactory,
+		})
+		assert.NoError(t, err, "should succeed")
+		assert.NotNil(t, lan, "should succeed")
+
+		assert.Equal(t, 3, len(lan.staticIPs), "should be 3")
+		assert.Equal(t, "1.2.3.1", lan.staticIPs[0].String(), "should match")
+		assert.Equal(t, "1.2.3.2", lan.staticIPs[1].String(), "should match")
+		assert.Equal(t, "1.2.3.3", lan.staticIPs[2].String(), "should match")
+		assert.Equal(t, 3, len(lan.staticLocalIPs), "should be 3")
+		localIPs := []string{"192.168.0.1", "192.168.0.2", "192.168.0.3"}
+		for i, extIPStr := range []string{"1.2.3.1", "1.2.3.2", "1.2.3.3"} {
+			locIP, ok := lan.staticLocalIPs[extIPStr]
+			assert.True(t, ok, "should have the external IP")
+			assert.Equal(t, localIPs[i], locIP.String(), "should match")
+
+		}
+
+		// bad local IP
+		_, err = NewRouter(&RouterConfig{
+			CIDR: "192.168.0.0/24",
+			StaticIPs: []string{
+				"1.2.3.1/192.168.0.1",
+				"1.2.3.2/bad", // <-- invalid local IP
+			},
+			LoggerFactory: loggerFactory,
+		})
+		assert.Error(t, err, "should fail")
+
+		// local IP out of CIDR
+		_, err = NewRouter(&RouterConfig{
+			CIDR: "192.168.0.0/24",
+			StaticIPs: []string{
+				"1.2.3.1/192.168.0.1",
+				"1.2.3.2/172.16.1.2", // <-- out of CIDR
+			},
+			LoggerFactory: loggerFactory,
+		})
+		assert.Error(t, err, "should fail")
+
+		// num of local IPs mismatch
+		_, err = NewRouter(&RouterConfig{
+			CIDR: "192.168.0.0/24",
+			StaticIPs: []string{
+				"1.2.3.1/192.168.0.1",
+				"1.2.3.2", // <-- lack of local IP
+			},
+			LoggerFactory: loggerFactory,
+		})
+		assert.Error(t, err, "should fail")
+	})
+
+	t.Run("1:1 NAT configuration", func(t *testing.T) {
+		wan, err := NewRouter(&RouterConfig{
+			CIDR:          "0.0.0.0/0",
+			LoggerFactory: loggerFactory,
+		})
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+		if !assert.NotNil(t, wan, "should succeed") {
+			return
+		}
+
+		lan, err := NewRouter(&RouterConfig{
+			CIDR: "192.168.0.0/24",
+			StaticIPs: []string{
+				"1.2.3.1/192.168.0.1",
+				"1.2.3.2/192.168.0.2",
+				"1.2.3.3/192.168.0.3",
+			},
+			NATType: &NATType{
+				Mode: NATModeNAT1To1,
+			},
+			LoggerFactory: loggerFactory,
+		})
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+		if !assert.NotNil(t, lan, "should succeed") {
+			return
+		}
+
+		err = wan.AddRouter(lan)
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+
+		if !assert.NotNil(t, lan.nat, "should not be nil") {
+			return
+		}
+
+		assert.Equal(t, 3, len(lan.nat.mappedIPs), "should match")
+		assert.Equal(t, "1.2.3.1", lan.nat.mappedIPs[0].String(), "should match")
+		assert.Equal(t, "1.2.3.2", lan.nat.mappedIPs[1].String(), "should match")
+		assert.Equal(t, "1.2.3.3", lan.nat.mappedIPs[2].String(), "should match")
+		assert.Equal(t, 3, len(lan.nat.localIPs), "should match")
+		assert.Equal(t, "192.168.0.1", lan.nat.localIPs[0].String(), "should match")
+		assert.Equal(t, "192.168.0.2", lan.nat.localIPs[1].String(), "should match")
+		assert.Equal(t, "192.168.0.3", lan.nat.localIPs[2].String(), "should match")
 	})
 }
 
