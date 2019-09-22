@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -64,31 +65,35 @@ type ChunkFilter func(c Chunk) bool
 
 // Router ...
 type Router struct {
-	name          string                    // read-only
-	interfaces    []*Interface              // read-only
-	ipv4Net       *net.IPNet                // read-only
-	staticIPs     []net.IP                  // read-only
-	lastID        byte                      // requires mutex [x], used to assign the last digit of IPv4 address
-	queue         *chunkQueue               // read-only
-	parent        *Router                   // read-only
-	children      []*Router                 // read-only
-	natType       *NATType                  // read-only
-	nat           *networkAddressTranslator // read-only
-	nics          map[string]NIC            // read-only
-	stopFunc      func()                    // requires mutex [x]
-	resolver      *resolver                 // read-only
-	chunkFilters  []ChunkFilter             // requires mutex [x]
-	minDelay      time.Duration             // requires mutex [x]
-	maxJitter     time.Duration             // requires mutex [x]
-	mutex         sync.RWMutex              // thread-safe
-	pushCh        chan struct{}             // writer requires mutex
-	loggerFactory logging.LoggerFactory     // read-only
-	log           logging.LeveledLogger     // read-only
+	name           string                    // read-only
+	interfaces     []*Interface              // read-only
+	ipv4Net        *net.IPNet                // read-only
+	staticIPs      []net.IP                  // read-only
+	staticLocalIPs map[string]net.IP         // read-only,
+	lastID         byte                      // requires mutex [x], used to assign the last digit of IPv4 address
+	queue          *chunkQueue               // read-only
+	parent         *Router                   // read-only
+	children       []*Router                 // read-only
+	natType        *NATType                  // read-only
+	nat            *networkAddressTranslator // read-only
+	nics           map[string]NIC            // read-only
+	stopFunc       func()                    // requires mutex [x]
+	resolver       *resolver                 // read-only
+	chunkFilters   []ChunkFilter             // requires mutex [x]
+	minDelay       time.Duration             // requires mutex [x]
+	maxJitter      time.Duration             // requires mutex [x]
+	mutex          sync.RWMutex              // thread-safe
+	pushCh         chan struct{}             // writer requires mutex
+	loggerFactory  logging.LoggerFactory     // read-only
+	log            logging.LeveledLogger     // read-only
 }
 
 // NewRouter ...
 func NewRouter(config *RouterConfig) (*Router, error) {
-	_, ipNet, err := net.ParseCIDR(config.CIDR)
+	loggerFactory := config.LoggerFactory
+	log := loggerFactory.NewLogger("vnet")
+
+	_, ipv4Net, err := net.ParseCIDR(config.CIDR)
 	if err != nil {
 		return nil, err
 	}
@@ -128,31 +133,51 @@ func NewRouter(config *RouterConfig) (*Router, error) {
 	}
 
 	var staticIPs []net.IP
+	staticLocalIPs := map[string]net.IP{}
 	for _, ipStr := range config.StaticIPs {
-		if ip := net.ParseIP(ipStr); ip != nil {
+		ipPair := strings.Split(ipStr, "/")
+		if ip := net.ParseIP(ipPair[0]); ip != nil {
+			if len(ipPair) > 1 {
+				locIP := net.ParseIP(ipPair[1])
+				if locIP == nil {
+					return nil, fmt.Errorf("invalid local IP in StaticIPs")
+				}
+				if !ipv4Net.Contains(locIP) {
+					return nil, fmt.Errorf("local IP %s mapped in StaticIPs is beyond subnet", locIP.String())
+				}
+				staticLocalIPs[ip.String()] = locIP
+			}
 			staticIPs = append(staticIPs, ip)
 		}
 	}
 	if len(config.StaticIP) > 0 {
+		log.Warn("StaticIP is deprecated. Use StaticIPs instead")
 		if ip := net.ParseIP(config.StaticIP); ip != nil {
 			staticIPs = append(staticIPs, ip)
 		}
 	}
 
+	if nStaticLocal := len(staticLocalIPs); nStaticLocal > 0 {
+		if nStaticLocal != len(staticIPs) {
+			return nil, fmt.Errorf("all StaticIPs must have associated local IPs")
+		}
+	}
+
 	return &Router{
-		name:          name,
-		interfaces:    []*Interface{lo0, eth0},
-		ipv4Net:       ipNet,
-		staticIPs:     staticIPs,
-		queue:         newChunkQueue(queueSize),
-		natType:       config.NATType,
-		nics:          map[string]NIC{},
-		resolver:      resolver,
-		minDelay:      config.MinDelay,
-		maxJitter:     config.MaxJitter,
-		pushCh:        make(chan struct{}, 1),
-		loggerFactory: config.LoggerFactory,
-		log:           config.LoggerFactory.NewLogger("vnet"),
+		name:           name,
+		interfaces:     []*Interface{lo0, eth0},
+		ipv4Net:        ipv4Net,
+		staticIPs:      staticIPs,
+		staticLocalIPs: staticLocalIPs,
+		queue:          newChunkQueue(queueSize),
+		natType:        config.NATType,
+		nics:           map[string]NIC{},
+		resolver:       resolver,
+		minDelay:       config.MinDelay,
+		maxJitter:      config.MaxJitter,
+		pushCh:         make(chan struct{}, 1),
+		loggerFactory:  loggerFactory,
+		log:            log,
 	}, nil
 }
 
@@ -462,6 +487,10 @@ func (r *Router) processChunks() (time.Duration, error) {
 			return 0, err
 		}
 
+		if toParent == nil {
+			continue
+		}
+
 		/* FIXME: this implementation would introduce a duplicate packet!
 		if r.nat.natType.Hairpining {
 			hairpinned, err := r.nat.translateInbound(toParent)
@@ -489,7 +518,7 @@ func (r *Router) setRouter(parent *Router) error {
 	r.parent = parent
 	r.resolver.setParent(parent.resolver)
 
-	// when this method is called, an IP address has already been assigned by
+	// when this method is called, one or more IP address has already been assigned by
 	// the parent router.
 	ifc, err := r.getInterface("eth0")
 	if err != nil {
@@ -500,17 +529,29 @@ func (r *Router) setRouter(parent *Router) error {
 		return fmt.Errorf("no IP address is assigned for eth0")
 	}
 
-	var ip net.IP
-	switch addr := ifc.addrs[0].(type) {
-	case *net.IPNet:
-		ip = addr.IP
-	case *net.IPAddr: // Do we really need this case?
-		ip = addr.IP
-	default:
-		return fmt.Errorf("unexpected address type for eth0")
-	}
+	mappedIPs := []net.IP{}
+	localIPs := []net.IP{}
 
-	mappedIP := ip.String()
+	for _, ifcAddr := range ifc.addrs {
+		var ip net.IP
+		switch addr := ifcAddr.(type) {
+		case *net.IPNet:
+			ip = addr.IP
+		case *net.IPAddr: // Do we really need this case?
+			ip = addr.IP
+		default:
+		}
+
+		if ip == nil {
+			continue
+		}
+
+		mappedIPs = append(mappedIPs, ip)
+
+		if locIP := r.staticLocalIPs[ip.String()]; locIP != nil {
+			localIPs = append(localIPs, locIP)
+		}
+	}
 
 	// Set up NAT here
 	if r.natType == nil {
@@ -522,12 +563,16 @@ func (r *Router) setRouter(parent *Router) error {
 			MappingLifeTime:   30 * time.Second,
 		}
 	}
-	r.nat = newNAT(&natConfig{
+	r.nat, err = newNAT(&natConfig{
 		name:          r.name,
 		natType:       *r.natType,
-		mappedIP:      mappedIP,
+		mappedIPs:     mappedIPs,
+		localIPs:      localIPs,
 		loggerFactory: r.loggerFactory,
 	})
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
