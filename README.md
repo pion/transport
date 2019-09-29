@@ -36,6 +36,7 @@ Check out the **[contributing wiki](https://github.com/pion/webrtc/wiki/Contribu
 * [Sean DuBois](https://github.com/Sean-Der) - *Testing Infra*
 * [Woodrow Douglass](https://github.com/wdouglass) *Fix test flakiness*
 * [Luke Curley](https://github.com/kixelated)
+* [Hugo Arregui](https://github.com/hugoArregui)
 
 ### License
 MIT License - see [LICENSE](LICENSE) for full text
