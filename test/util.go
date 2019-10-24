@@ -24,21 +24,26 @@ func TimeOut(t time.Duration) *time.Timer {
 
 // CheckRoutines is used to check for leaked go-routines
 func CheckRoutines(t *testing.T) func() {
-	initial := getRoutines()
-	return func() {
+	tryLoop := func(failMessage string) {
 		try := 0
 		ticker := time.NewTicker(200 * time.Millisecond)
 		defer ticker.Stop()
 		for range ticker.C {
 			routines := getRoutines()
-			if len(routines) <= len(initial) {
+			if len(routines) == 0 {
 				return
 			}
 			if try >= 50 {
-				t.Fatalf("Unexpected routines: \n%s", strings.Join(routines, "\n\n"))
+				t.Fatalf("%s: \n%s", failMessage, strings.Join(routines, "\n\n"))
 			}
 			try++
 		}
+
+	}
+
+	tryLoop("Unexpected routines on test startup")
+	return func() {
+		tryLoop("Unexpected routines on test end")
 	}
 }
 
