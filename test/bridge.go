@@ -52,7 +52,7 @@ func (conn *bridgeConn) Close() error {
 	defer conn.mutex.Unlock()
 
 	if conn.closed {
-		return fmt.Errorf("bridge has already been closed")
+		return nil
 	}
 
 	conn.closed = true
