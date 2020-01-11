@@ -11,8 +11,11 @@ var randomness []byte
 func init() {
 	// read 1MB of randomness
 	randomness = make([]byte, 1<<20)
-	if _, err := crand.Read(randomness); err != nil {
-		fmt.Println("Failed to initiate randomness:", err)
+	for i := 0; i < len(randomness); i += 65536 {
+		// the number of bytes of entropy is limited by 65536 on some js environment
+		if _, err := crand.Read(randomness[i : i+65536]); err != nil {
+			fmt.Println("Failed to initiate randomness:", err)
+		}
 	}
 }
 
