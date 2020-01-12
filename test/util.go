@@ -38,7 +38,6 @@ func CheckRoutines(t *testing.T) func() {
 			}
 			try++
 		}
-
 	}
 
 	tryLoop("Unexpected routines on test startup")

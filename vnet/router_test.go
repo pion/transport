@@ -422,7 +422,6 @@ func TestRouterOneChild(t *testing.T) {
 		err = wan.Stop()
 		assert.Nil(t, err, "should succeed")
 	})
-
 }
 
 func TestRouterStaticIPs(t *testing.T) {
@@ -492,7 +491,6 @@ func TestRouterStaticIPs(t *testing.T) {
 			locIP, ok := lan.staticLocalIPs[extIPStr]
 			assert.True(t, ok, "should have the external IP")
 			assert.Equal(t, localIPs[i], locIP.String(), "should match")
-
 		}
 
 		// bad local IP

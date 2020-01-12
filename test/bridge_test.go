@@ -10,7 +10,6 @@ import (
 func closeBridge(br *Bridge) error {
 	if err := br.conn0.Close(); err != nil {
 		return err
-
 	}
 
 	return br.conn1.Close()

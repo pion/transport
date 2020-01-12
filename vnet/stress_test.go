@@ -190,7 +190,5 @@ func TestStressTestUDP(t *testing.T) {
 
 		err = conn0.Close()
 		assert.NoError(t, err, "should succeed")
-
 	})
-
 }
