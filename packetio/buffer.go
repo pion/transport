@@ -1,3 +1,4 @@
+// Package packetio provides packet buffer
 package packetio
 
 import (

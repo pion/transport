@@ -65,13 +65,11 @@ func StressDuplex(ca io.ReadWriter, cb io.ReadWriter, opt Options) error {
 	go func() {
 		defer wg.Done()
 		errCh <- Stress(ca, cb, opt)
-
 	}()
 
 	go func() {
 		defer wg.Done()
 		errCh <- Stress(cb, ca, opt)
-
 	}()
 
 	go func() {
