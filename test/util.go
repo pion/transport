@@ -18,7 +18,7 @@ func TimeOut(t time.Duration) *time.Timer {
 		if err := pprof.Lookup("goroutine").WriteTo(os.Stdout, 1); err != nil {
 			fmt.Printf("failed to print goroutines: %v \n", err)
 		}
-		panic("timeout")
+		panic("timeout") // nolint
 	})
 }
 
