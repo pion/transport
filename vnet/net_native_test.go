@@ -43,7 +43,7 @@ func TestNetNative(t *testing.T) {
 		if !assert.NoError(t, err, "should succeed") {
 			return
 		}
-		assert.Equal(t, "127.0.0.1", udpAddr.IP.String(), "should match")
+		assert.Contains(t, []string{"127.0.0.1", "127.0.1.1"}, udpAddr.IP.String(), "should match")
 		assert.Equal(t, 1234, udpAddr.Port, "should match")
 	})
 
