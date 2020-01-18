@@ -12,7 +12,7 @@ func init() {
 	// read 1MB of randomness
 	randomness = make([]byte, 1<<20)
 	if _, err := crand.Read(randomness); err != nil {
-		fmt.Println("Failed to initiate randomness:", err)
+		fmt.Println("Failed to initiate randomness:", err) // nolint
 	}
 }
 
