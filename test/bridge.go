@@ -163,30 +163,30 @@ func (br *Bridge) Push(d []byte, fromID int) {
 		switch {
 		case br.dropNWrites0 > 0:
 			br.dropNWrites0--
-			//fmt.Printf("br: dropped a packet of size %d (rem: %d for q0)\n", len(d), br.dropNWrites0)
+			//fmt.Printf("br: dropped a packet of size %d (rem: %d for q0)\n", len(d), br.dropNWrites0) // nolint
 		case br.reorderNWrites0 > 0:
 			br.reorderNWrites0--
 			br.stack0 = append(br.stack0, d)
-			//fmt.Printf("stack0 size: %d\n", len(br.stack0))
+			//fmt.Printf("stack0 size: %d\n", len(br.stack0)) // nolint
 			if br.reorderNWrites0 == 0 {
 				if err := inverse(br.stack0); err == nil {
-					//fmt.Printf("stack0 reordered!\n")
+					//fmt.Printf("stack0 reordered!\n") // nolint
 					br.queue0to1 = append(br.queue0to1, br.stack0...)
 				} else {
 					br.err = err
 				}
 			}
 		case br.filterCB0 != nil && !br.filterCB0(d):
-			//fmt.Printf("br: filtered out a packet of size %d (q0)\n", len(d))
+			//fmt.Printf("br: filtered out a packet of size %d (q0)\n", len(d)) // nolint
 		default:
-			//fmt.Printf("br: routed a packet of size %d (q0)\n", len(d))
+			//fmt.Printf("br: routed a packet of size %d (q0)\n", len(d)) // nolint
 			br.queue0to1 = append(br.queue0to1, d)
 		}
 	} else {
 		switch {
 		case br.dropNWrites1 > 0:
 			br.dropNWrites1--
-			//fmt.Printf("br: dropped a packet of size %d (rem: %d for q1)\n", len(d), br.dropNWrites0)
+			//fmt.Printf("br: dropped a packet of size %d (rem: %d for q1)\n", len(d), br.dropNWrites0) // nolint
 		case br.reorderNWrites1 > 0:
 			br.reorderNWrites1--
 			br.stack1 = append(br.stack1, d)
@@ -197,9 +197,9 @@ func (br *Bridge) Push(d []byte, fromID int) {
 				br.queue1to0 = append(br.queue1to0, br.stack1...)
 			}
 		case br.filterCB1 != nil && !br.filterCB1(d):
-			//fmt.Printf("br: filtered out a packet of size %d (q1)\n", len(d))
+			//fmt.Printf("br: filtered out a packet of size %d (q1)\n", len(d)) // nolint
 		default:
-			//fmt.Printf("br: routed a packet of size %d (q1)\n", len(d))
+			//fmt.Printf("br: routed a packet of size %d (q1)\n", len(d)) // nolint
 			br.queue1to0 = append(br.queue1to0, d)
 		}
 	}
@@ -268,7 +268,7 @@ func (br *Bridge) Tick() int {
 		select {
 		case br.conn1.readCh <- br.queue0to1[0]:
 			n++
-			//fmt.Printf("conn1 received data (%d bytes)\n", len(br.queue0to1[0]))
+			//fmt.Printf("conn1 received data (%d bytes)\n", len(br.queue0to1[0])) // nolint
 			br.queue0to1 = br.queue0to1[1:]
 		default:
 		}
@@ -278,7 +278,7 @@ func (br *Bridge) Tick() int {
 		select {
 		case br.conn0.readCh <- br.queue1to0[0]:
 			n++
-			//fmt.Printf("conn0 received data (%d bytes)\n", len(br.queue1to0[0]))
+			//fmt.Printf("conn0 received data (%d bytes)\n", len(br.queue1to0[0])) // nolint
 			br.queue1to0 = br.queue1to0[1:]
 		default:
 		}

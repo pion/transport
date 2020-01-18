@@ -16,7 +16,7 @@ import (
 func TimeOut(t time.Duration) *time.Timer {
 	return time.AfterFunc(t, func() {
 		if err := pprof.Lookup("goroutine").WriteTo(os.Stdout, 1); err != nil {
-			fmt.Printf("failed to print goroutines: %v \n", err)
+			fmt.Printf("failed to print goroutines: %v \n", err) // nolint
 		}
 		panic("timeout") // nolint
 	})
@@ -34,7 +34,7 @@ func CheckRoutines(t *testing.T) func() {
 				return
 			}
 			if try >= 50 {
-				t.Fatalf("%s: \n%s", failMessage, strings.Join(routines, "\n\n"))
+				t.Fatalf("%s: \n%s", failMessage, strings.Join(routines, "\n\n")) // nolint
 			}
 			try++
 		}
