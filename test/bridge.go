@@ -2,11 +2,16 @@ package test
 
 import (
 	"fmt"
+	"io"
 	"math/rand"
 	"net"
 	"sync"
 	"time"
+
+	"github.com/pion/transport/deadline"
 )
+
+const tickWait = 10 * time.Microsecond
 
 type bridgeConnAddr int
 
@@ -19,30 +24,66 @@ func (a bridgeConnAddr) String() string {
 
 // bridgeConn is a net.Conn that represents an endpoint of the bridge.
 type bridgeConn struct {
-	br         *Bridge
-	id         int
-	closed     bool
-	mutex      sync.RWMutex
-	readCh     chan []byte
-	lossChance int
+	br            *Bridge
+	id            int
+	closeReq      bool
+	closing       bool
+	closed        bool
+	mutex         sync.RWMutex
+	readCh        chan []byte
+	lossChance    int
+	readDeadline  *deadline.Deadline
+	writeDeadline *deadline.Deadline
+}
+
+type netError struct {
+	error
+	timeout, temporary bool
+}
+
+func (e *netError) Timeout() bool {
+	return e.timeout
+}
+
+func (e *netError) Temporary() bool {
+	return e.timeout
 }
 
 // Read reads data, block until the data becomes available.
 func (conn *bridgeConn) Read(b []byte) (int, error) {
-	if data, ok := <-conn.readCh; ok {
+	select {
+	case <-conn.readDeadline.Done():
+		return 0, &netError{fmt.Errorf("i/o timeout"), true, true}
+	default:
+	}
+
+	select {
+	case data, ok := <-conn.readCh:
+		if !ok {
+			return 0, io.EOF
+		}
 		n := copy(b, data)
 		return n, nil
+	case <-conn.readDeadline.Done():
+		return 0, &netError{fmt.Errorf("i/o timeout"), true, true}
 	}
-	return 0, fmt.Errorf("bridgeConn closed")
 }
 
 // Write writes data to the bridge.
 func (conn *bridgeConn) Write(b []byte) (int, error) {
+	select {
+	case <-conn.writeDeadline.Done():
+		return 0, &netError{fmt.Errorf("i/o timeout"), true, true}
+	default:
+	}
+
 	if rand.Intn(100) < conn.lossChance {
 		return len(b), nil
 	}
 
-	conn.br.Push(b, conn.id)
+	if !conn.br.Push(b, conn.id) {
+		return 0, &netError{fmt.Errorf("bridgeConn closed"), false, false}
+	}
 	return len(b), nil
 }
 
@@ -51,12 +92,12 @@ func (conn *bridgeConn) Close() error {
 	conn.mutex.Lock()
 	defer conn.mutex.Unlock()
 
-	if conn.closed {
-		return fmt.Errorf("bridge has already been closed")
+	if conn.closeReq {
+		return &netError{fmt.Errorf("bridge has already been closed"), false, false}
 	}
 
-	conn.closed = true
-	close(conn.readCh)
+	conn.closeReq = true
+	conn.closing = true
 	return nil
 }
 
@@ -68,14 +109,27 @@ func (conn *bridgeConn) LocalAddr() net.Addr {
 // RemoteAddr is not used
 func (conn *bridgeConn) RemoteAddr() net.Addr { return nil }
 
-// SetDeadline is not used
-func (conn *bridgeConn) SetDeadline(t time.Time) error { return nil }
+// SetDeadline sets deadline of Read/Write operation.
+// Setting zero means no deadline.
+func (conn *bridgeConn) SetDeadline(t time.Time) error {
+	conn.writeDeadline.Set(t)
+	conn.readDeadline.Set(t)
+	return nil
+}
 
-// SetReadDeadline is not used
-func (conn *bridgeConn) SetReadDeadline(t time.Time) error { return nil }
+// SetReadDeadline sets deadline of Read operation.
+// Setting zero means no deadline.
+func (conn *bridgeConn) SetReadDeadline(t time.Time) error {
+	conn.readDeadline.Set(t)
+	return nil
+}
 
-// SetWriteDeadline is not used
-func (conn *bridgeConn) SetWriteDeadline(t time.Time) error { return nil }
+// SetWriteDeadline sets deadline of Write operation.
+// Setting zero means no deadline.
+func (conn *bridgeConn) SetWriteDeadline(t time.Time) error {
+	conn.writeDeadline.Set(t)
+	return nil
+}
 
 func (conn *bridgeConn) isClosed() bool {
 	conn.mutex.RLock()
@@ -131,14 +185,18 @@ func NewBridge() *Bridge {
 	}
 
 	br.conn0 = &bridgeConn{
-		br:     br,
-		id:     0,
-		readCh: make(chan []byte),
+		br:            br,
+		id:            0,
+		readCh:        make(chan []byte),
+		readDeadline:  deadline.New(),
+		writeDeadline: deadline.New(),
 	}
 	br.conn1 = &bridgeConn{
-		br:     br,
-		id:     1,
-		readCh: make(chan []byte),
+		br:            br,
+		id:            1,
+		readCh:        make(chan []byte),
+		readDeadline:  deadline.New(),
+		writeDeadline: deadline.New(),
 	}
 
 	return br
@@ -154,10 +212,45 @@ func (br *Bridge) GetConn1() net.Conn {
 	return br.conn1
 }
 
-// Push pushes a packet into the specified queue.
-func (br *Bridge) Push(d []byte, fromID int) {
+// Len returns number of queued packets.
+func (br *Bridge) Len(fromID int) int {
 	br.mutex.Lock()
 	defer br.mutex.Unlock()
+
+	if fromID == 0 {
+		return len(br.queue0to1)
+	}
+	return len(br.queue1to0)
+}
+
+// Push pushes a packet into the specified queue.
+func (br *Bridge) Push(packet []byte, fromID int) bool {
+	d := make([]byte, len(packet))
+	copy(d, packet)
+
+	// Push rate should be limited as same as Tick rate.
+	// Otherwise, queue grows too fast on free running Write.
+	time.Sleep(tickWait)
+
+	br.mutex.Lock()
+	defer br.mutex.Unlock()
+
+	br.conn0.mutex.Lock()
+	br.conn1.mutex.Lock()
+	closing0 := br.conn0.closing
+	closing1 := br.conn1.closing
+	br.conn1.mutex.Unlock()
+	br.conn0.mutex.Unlock()
+
+	if closing0 || closing1 {
+		if fromID == 0 && closing0 {
+			return false
+		}
+		if fromID == 1 && closing1 {
+			return false
+		}
+		return true
+	}
 
 	if fromID == 0 {
 		switch {
@@ -203,6 +296,7 @@ func (br *Bridge) Push(d []byte, fromID int) {
 			br.queue1to0 = append(br.queue1to0, d)
 		}
 	}
+	return true
 }
 
 // Reorder inverses the order of packets currently in the specified queue.
@@ -255,6 +349,14 @@ func (br *Bridge) ReorderNextNWrites(fromID, n int) {
 	}
 }
 
+func (br *Bridge) clear() {
+	br.mutex.Lock()
+	defer br.mutex.Unlock()
+
+	br.queue1to0 = nil
+	br.queue0to1 = nil
+}
+
 // Tick attempts to hand a packet from the queue for each directions, to readers,
 // if there are waiting on the queue. If there's no reader, it will return
 // immediately.
@@ -262,8 +364,20 @@ func (br *Bridge) Tick() int {
 	br.mutex.Lock()
 	defer br.mutex.Unlock()
 
-	var n int
+	br.conn0.mutex.Lock()
+	if br.conn0.closing && !br.conn0.closed && len(br.queue1to0) == 0 {
+		br.conn0.closed = true
+		close(br.conn0.readCh)
+	}
+	br.conn0.mutex.Unlock()
+	br.conn1.mutex.Lock()
+	if br.conn1.closing && !br.conn1.closed && len(br.queue0to1) == 0 {
+		br.conn1.closed = true
+		close(br.conn1.readCh)
+	}
+	br.conn1.mutex.Unlock()
 
+	var n int
 	if len(br.queue0to1) > 0 && !br.conn1.isClosed() {
 		select {
 		case br.conn1.readCh <- br.queue0to1[0]:
@@ -290,9 +404,9 @@ func (br *Bridge) Tick() int {
 // Process repeats tick() calls until no more outstanding packet in the queues.
 func (br *Bridge) Process() {
 	for {
-		time.Sleep(10 * time.Millisecond)
-		n := br.Tick()
-		if n == 0 {
+		time.Sleep(tickWait)
+		br.Tick()
+		if br.Len(0) == 0 && br.Len(1) == 0 {
 			break
 		}
 	}

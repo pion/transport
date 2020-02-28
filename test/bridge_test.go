@@ -3,7 +3,11 @@ package test
 import (
 	"fmt"
 	"net"
+	"sync"
 	"testing"
+	"time"
+
+	"golang.org/x/net/nettest"
 )
 
 // helper to close both conns
@@ -22,6 +26,9 @@ type AsyncResult struct {
 }
 
 func TestBridge(t *testing.T) {
+	tt := TimeOut(30 * time.Second)
+	defer tt.Stop()
+
 	buf := make([]byte, 256)
 
 	t.Run("normal", func(t *testing.T) {
@@ -360,30 +367,16 @@ func TestBridge(t *testing.T) {
 		}
 	})
 
-	t.Run("read closed conn", func(t *testing.T) {
-		br := NewBridge()
-		conn0 := br.GetConn0()
-		conn1 := br.GetConn1()
-
-		if err := conn0.Close(); err != nil {
-			t.Error(err)
-		}
-		if err := conn1.Close(); err != nil {
-			t.Error(err)
-		}
-
-		_, err := conn0.Read(buf)
-		if err == nil {
-			t.Error("read should fail as conn is closed")
-		}
-	})
-
 	t.Run("drop next N packets", func(t *testing.T) {
 		testFrom := func(t *testing.T, fromID int) {
 			readRes := make(chan AsyncResult, 5)
 			br := NewBridge()
 			conn0 := br.GetConn0()
 			conn1 := br.GetConn1()
+
+			var wg sync.WaitGroup
+			wg.Add(1)
+
 			var srcConn, dstConn net.Conn
 
 			if fromID == 0 {
@@ -397,6 +390,7 @@ func TestBridge(t *testing.T) {
 			}
 
 			go func() {
+				defer wg.Done()
 				for {
 					nInner, errInner := dstConn.Read(buf)
 					if errInner != nil {
@@ -424,9 +418,15 @@ func TestBridge(t *testing.T) {
 				br.Process()
 			}
 
+			if err := closeBridge(br); err != nil {
+				t.Errorf("[%d] %s", fromID, err.Error())
+			}
+			br.Process()
+			wg.Wait()
+
 			nResults := len(readRes)
 			if nResults != 2 {
-				t.Errorf("[%d] unexpected number of packets", fromID)
+				t.Errorf("[%d] unexpected number of packets, expected %v, got %v", fromID, 2, nResults)
 			}
 
 			for i := 0; i < 2; i++ {
@@ -438,13 +438,50 @@ func TestBridge(t *testing.T) {
 					t.Errorf("[%d] unexpected length", fromID)
 				}
 			}
-
-			if err := closeBridge(br); err != nil {
-				t.Errorf("[%d] %s", fromID, err.Error())
-			}
 		}
 
 		testFrom(t, 0)
 		testFrom(t, 1)
+	})
+}
+
+type closePropagator struct {
+	*bridgeConn
+	otherEnd *bridgeConn
+}
+
+func (c *closePropagator) Close() error {
+	c.otherEnd.mutex.Lock()
+	c.otherEnd.closing = true
+	c.otherEnd.mutex.Unlock()
+	return c.bridgeConn.Close()
+}
+
+func TestNetTest(t *testing.T) {
+	nettest.TestConn(t, func() (net.Conn, net.Conn, func(), error) {
+		br := NewBridge()
+		conn0 := br.GetConn0().(*bridgeConn)
+		conn1 := br.GetConn1().(*bridgeConn)
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			for {
+				br.Process()
+				if conn0.closed && conn1.closed {
+					wg.Done()
+					return
+				}
+			}
+		}()
+		return &closePropagator{conn0, conn1}, &closePropagator{conn1, conn0},
+			func() {
+				// RacyRead test leave receive buffer filled.
+				// As net.Conn.Read() shoud return received data even after Close()-ed,
+				// queue must be cleared explicitly.
+				br.clear()
+				_ = conn0.Close()
+				_ = conn1.Close()
+				wg.Wait()
+			}, nil
 	})
 }
