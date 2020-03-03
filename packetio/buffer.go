@@ -2,13 +2,12 @@
 package packetio
 
 import (
-	"errors"
 	"io"
 	"sync"
-)
+	"time"
 
-// ErrFull is returned when the buffer has hit the configured limits.
-var ErrFull = errors.New("packetio.Buffer is full, discarding write")
+	"github.com/pion/transport/deadline"
+)
 
 // Buffer allows writing packets to an intermediate buffer, which can then be read form.
 // This is verify similar to bytes.Buffer but avoids combining multiple writes into a single read.
@@ -26,12 +25,16 @@ type Buffer struct {
 	// The limit on Write in packet count and total size.
 	limitCount int
 	limitSize  int
+
+	// Read deadline timer.
+	readDeadline *deadline.Deadline
 }
 
 // NewBuffer creates a new Buffer object.
 func NewBuffer() *Buffer {
 	return &Buffer{
-		notify: make(chan struct{}),
+		notify:       make(chan struct{}),
+		readDeadline: deadline.New(),
 	}
 }
 
@@ -93,6 +96,13 @@ func (b *Buffer) Write(packet []byte) (n int, err error) {
 // Returns io.ErrShortBuffer is the packet is too small to copy the Write.
 // Returns io.EOF if the buffer is closed.
 func (b *Buffer) Read(packet []byte) (n int, err error) {
+	// Return immediately if the deadline is already exceeded.
+	select {
+	case <-b.readDeadline.Done():
+		return 0, &netError{errTimeout, true, true}
+	default:
+	}
+
 	for {
 		b.mutex.Lock()
 
@@ -133,7 +143,11 @@ func (b *Buffer) Read(packet []byte) (n int, err error) {
 		b.mutex.Unlock()
 
 		// Wake for the broadcast.
-		<-notify
+		select {
+		case <-b.readDeadline.Done():
+			return 0, &netError{errTimeout, true, true}
+		case <-notify:
+		}
 	}
 }
 
@@ -193,4 +207,11 @@ func (b *Buffer) SetLimitSize(limit int) {
 	defer b.mutex.Unlock()
 
 	b.limitSize = limit
+}
+
+// SetReadDeadline sets deadline of Read operation.
+// Setting zero means no deadline.
+func (b *Buffer) SetReadDeadline(t time.Time) error {
+	b.readDeadline.Set(t)
+	return nil
 }

@@ -2,6 +2,7 @@ package packetio
 
 import (
 	"io"
+	"net"
 	"testing"
 	"time"
 
@@ -24,6 +25,19 @@ func TestBuffer(t *testing.T) {
 	assert.NoError(err)
 	assert.Equal(2, n)
 	assert.Equal([]byte{0, 1}, packet[:n])
+
+	// Read deadline
+	err = buffer.SetReadDeadline(time.Unix(0, 1))
+	assert.NoError(err)
+	n, err = buffer.Read(packet)
+	if e, ok := err.(net.Error); !ok || !e.Timeout() {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	assert.Equal(0, n)
+
+	// Reset deadline
+	err = buffer.SetReadDeadline(time.Time{})
+	assert.NoError(err)
 
 	// Write twice
 	n, err = buffer.Write([]byte{2, 3, 4})
