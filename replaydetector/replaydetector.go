@@ -31,7 +31,7 @@ func (d *slidingWindowDetector) Check(seq uint64) (accept func(), ok bool) {
 	}
 
 	if seq <= d.latestSeq {
-		if d.latestSeq > uint64(d.windowSize)+seq {
+		if d.latestSeq >= uint64(d.windowSize)+seq {
 			return func() {}, false
 		}
 		if d.mask.Bit(uint(d.latestSeq-seq)) != 0 {
