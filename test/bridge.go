@@ -87,6 +87,19 @@ func (conn *bridgeConn) Write(b []byte) (int, error) {
 	return len(b), nil
 }
 
+func (conn *bridgeConn) tryClose() {
+	var n int
+	if conn.id == 0 {
+		n = len(conn.br.queue1to0)
+	} else {
+		n = len(conn.br.queue0to1)
+	}
+	if conn.closing && !conn.closed && n == 0 {
+		conn.closed = true
+		close(conn.readCh)
+	}
+}
+
 // Close closes the bridge (releases resources used).
 func (conn *bridgeConn) Close() error {
 	conn.mutex.Lock()
@@ -98,6 +111,11 @@ func (conn *bridgeConn) Close() error {
 
 	conn.closeReq = true
 	conn.closing = true
+
+	conn.br.mutex.Lock()
+	conn.tryClose()
+	conn.br.mutex.Unlock()
+
 	return nil
 }
 
@@ -135,7 +153,7 @@ func (conn *bridgeConn) isClosed() bool {
 	conn.mutex.RLock()
 	defer conn.mutex.RUnlock()
 
-	return conn.closed
+	return conn.closed || conn.closing
 }
 
 // Bridge represents a network between the two endpoints.
@@ -365,16 +383,10 @@ func (br *Bridge) Tick() int {
 	defer br.mutex.Unlock()
 
 	br.conn0.mutex.Lock()
-	if br.conn0.closing && !br.conn0.closed && len(br.queue1to0) == 0 {
-		br.conn0.closed = true
-		close(br.conn0.readCh)
-	}
+	br.conn0.tryClose()
 	br.conn0.mutex.Unlock()
 	br.conn1.mutex.Lock()
-	if br.conn1.closing && !br.conn1.closed && len(br.queue0to1) == 0 {
-		br.conn1.closed = true
-		close(br.conn1.readCh)
-	}
+	br.conn1.tryClose()
 	br.conn1.mutex.Unlock()
 
 	var n int
