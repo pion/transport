@@ -186,7 +186,7 @@ func TestBufferLimitSize(t *testing.T) {
 	assert := assert.New(t)
 
 	buffer := NewBuffer()
-	buffer.SetLimitSize(5)
+	buffer.SetLimitSize(11)
 
 	assert.Equal(0, buffer.Size())
 
@@ -194,23 +194,23 @@ func TestBufferLimitSize(t *testing.T) {
 	n, err := buffer.Write([]byte{0, 1})
 	assert.NoError(err)
 	assert.Equal(2, n)
-	assert.Equal(2, buffer.Size())
+	assert.Equal(4, buffer.Size())
 
 	n, err = buffer.Write([]byte{2, 3})
 	assert.NoError(err)
 	assert.Equal(2, n)
-	assert.Equal(4, buffer.Size())
+	assert.Equal(8, buffer.Size())
 
 	// Over capacity
 	_, err = buffer.Write([]byte{4, 5})
 	assert.Equal(ErrFull, err)
-	assert.Equal(4, buffer.Size())
+	assert.Equal(8, buffer.Size())
 
 	// Cheeky write at exact size.
 	n, err = buffer.Write([]byte{6})
 	assert.NoError(err)
 	assert.Equal(1, n)
-	assert.Equal(5, buffer.Size())
+	assert.Equal(11, buffer.Size())
 
 	// Read once
 	packet := make([]byte, 4)
@@ -218,31 +218,31 @@ func TestBufferLimitSize(t *testing.T) {
 	assert.NoError(err)
 	assert.Equal(2, n)
 	assert.Equal([]byte{0, 1}, packet[:n])
-	assert.Equal(3, buffer.Size())
+	assert.Equal(7, buffer.Size())
 
 	// Write once
 	n, err = buffer.Write([]byte{7, 8})
 	assert.NoError(err)
 	assert.Equal(2, n)
-	assert.Equal(5, buffer.Size())
+	assert.Equal(11, buffer.Size())
 
 	// Over capacity
 	_, err = buffer.Write([]byte{9, 10})
 	assert.Equal(ErrFull, err)
-	assert.Equal(5, buffer.Size())
+	assert.Equal(11, buffer.Size())
 
 	// Read everything
 	n, err = buffer.Read(packet)
 	assert.NoError(err)
 	assert.Equal(2, n)
 	assert.Equal([]byte{2, 3}, packet[:n])
-	assert.Equal(3, buffer.Size())
+	assert.Equal(7, buffer.Size())
 
 	n, err = buffer.Read(packet)
 	assert.NoError(err)
 	assert.Equal(1, n)
 	assert.Equal([]byte{6}, packet[:n])
-	assert.Equal(2, buffer.Size())
+	assert.Equal(4, buffer.Size())
 
 	n, err = buffer.Read(packet)
 	assert.NoError(err)
