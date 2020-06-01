@@ -82,6 +82,68 @@ func TestBuffer(t *testing.T) {
 	assert.Equal(io.EOF, err)
 }
 
+func testWraparound(t *testing.T, grow bool) {
+	assert := assert.New(t)
+
+	buffer := NewBuffer()
+	err := buffer.grow()
+	assert.NoError(err)
+
+	buffer.head = len(buffer.data) - 13
+	buffer.tail = buffer.head
+
+	p1 := []byte{1, 2, 3}
+	p2 := []byte{4, 5, 6}
+	p3 := []byte{7, 8, 9}
+	p4 := []byte{10, 11, 12}
+
+	_, err = buffer.Write(p1)
+	assert.NoError(err)
+	_, err = buffer.Write(p2)
+	assert.NoError(err)
+	_, err = buffer.Write(p3)
+	assert.NoError(err)
+
+	p := make([]byte, 10)
+
+	n, err := buffer.Read(p)
+	assert.NoError(err)
+	assert.Equal(p1, p[:n])
+
+	if grow {
+		err = buffer.grow()
+		assert.NoError(err)
+	}
+
+	n, err = buffer.Read(p)
+	assert.NoError(err)
+	assert.Equal(p2, p[:n])
+
+	_, err = buffer.Write(p4)
+	assert.NoError(err)
+
+	n, err = buffer.Read(p)
+	assert.NoError(err)
+	assert.Equal(p3, p[:n])
+	n, err = buffer.Read(p)
+	assert.NoError(err)
+	assert.Equal(p4, p[:n])
+
+	if !grow {
+		assert.Equal(len(buffer.data), minSize)
+	} else {
+		assert.Equal(len(buffer.data), 2*minSize)
+	}
+}
+
+func TestBufferWraparound(t *testing.T) {
+	testWraparound(t, false)
+}
+
+func TestBufferWraparoundGrow(t *testing.T) {
+	testWraparound(t, true)
+}
+
 func TestBufferAsync(t *testing.T) {
 	assert := assert.New(t)
 
