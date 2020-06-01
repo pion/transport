@@ -311,7 +311,14 @@ func benchmarkBuffer(b *testing.B, size int64) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_, err := buffer.Write(packet)
+		var err error
+		for {
+			_, err = buffer.Write(packet)
+			if err != ErrFull {
+				break
+			}
+			time.Sleep(time.Microsecond)
+		}
 		if err != nil {
 			b.Fatal(err)
 		}
