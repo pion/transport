@@ -110,12 +110,6 @@ func (b *Buffer) Read(packet []byte) (n int, err error) {
 		if len(b.packets) > 0 {
 			first := b.packets[0]
 
-			// This is a packet-based reader/writer so we can't truncate.
-			if len(first) > len(packet) {
-				b.mutex.Unlock()
-				return 0, io.ErrShortBuffer
-			}
-
 			// Remove our packet and continue.
 			b.packets = b.packets[1:]
 			b.size -= len(first)
@@ -124,6 +118,9 @@ func (b *Buffer) Read(packet []byte) (n int, err error) {
 
 			// Actually transfer the data.
 			n := copy(packet, first)
+			if len(first) > len(packet) {
+				return n, io.ErrShortBuffer
+			}
 			return n, nil
 		}
 
