@@ -270,12 +270,6 @@ func TestBufferMisc(t *testing.T) {
 	_, err = buffer.Read(packet)
 	assert.Equal(io.ErrShortBuffer, err)
 
-	// Try again with the right size
-	packet = make([]byte, 4)
-	n, err = buffer.Read(packet)
-	assert.NoError(err)
-	assert.Equal(4, n)
-
 	// Close
 	err = buffer.Close()
 	assert.NoError(err)
