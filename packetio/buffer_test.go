@@ -394,6 +394,74 @@ func TestBufferAlloc(t *testing.T) {
 	t.Run("10000 writes and reads", test(wr, 10000, 7))
 }
 
+func benchmarkBufferWR(b *testing.B, size int64, write bool, grow int) {
+	buffer := NewBuffer()
+	packet := make([]byte, size)
+
+	// Grow the buffer first
+	pad := make([]byte, 1022)
+	for buffer.Size() < grow {
+		_, err := buffer.Write(pad)
+		if err != nil {
+			b.Fatalf("Write: %v", err)
+		}
+	}
+	for buffer.Size() > 0 {
+		_, err := buffer.Read(pad)
+		if err != nil {
+			b.Fatalf("Write: %v", err)
+		}
+	}
+
+	if write {
+		_, err := buffer.Write(packet)
+		if err != nil {
+			b.Fatalf("Write: %v", err)
+		}
+	}
+
+	b.SetBytes(size)
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		_, err := buffer.Write(packet)
+		if err != nil {
+			b.Fatalf("Write: %v", err)
+		}
+		_, err = buffer.Read(packet)
+		if err != nil {
+			b.Fatalf("Read: %v", err)
+		}
+	}
+}
+
+// In this benchmark, the buffer is often empty, which is hopefully
+// typical of real usage.
+func BenchmarkBufferWR14(b *testing.B) {
+	benchmarkBufferWR(b, 14, false, 128000)
+}
+
+func BenchmarkBufferWR140(b *testing.B) {
+	benchmarkBufferWR(b, 140, false, 128000)
+}
+
+func BenchmarkBufferWR1400(b *testing.B) {
+	benchmarkBufferWR(b, 1400, false, 128000)
+}
+
+// Here, the buffer never becomes empty, which forces wraparound
+func BenchmarkBufferWWR14(b *testing.B) {
+	benchmarkBufferWR(b, 14, true, 128000)
+}
+
+func BenchmarkBufferWWR140(b *testing.B) {
+	benchmarkBufferWR(b, 140, true, 128000)
+}
+
+func BenchmarkBufferWWR1400(b *testing.B) {
+	benchmarkBufferWR(b, 1400, true, 128000)
+}
+
 func benchmarkBuffer(b *testing.B, size int64) {
 	buffer := NewBuffer()
 	b.SetBytes(size)
