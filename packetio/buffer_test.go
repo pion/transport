@@ -341,6 +341,59 @@ func TestBufferMisc(t *testing.T) {
 	assert.NoError(err)
 }
 
+func TestBufferAlloc(t *testing.T) {
+	packet := make([]byte, 1024)
+
+	test := func(f func(count int) func(), count int, max float64) func(t *testing.T) {
+		return func(t *testing.T) {
+			allocs := testing.AllocsPerRun(3, f(count))
+			if allocs > max {
+				t.Errorf("count=%v, max=%v, got %v",
+					count, max, allocs,
+				)
+			}
+		}
+	}
+
+	w := func(count int) func() {
+		return func() {
+			buffer := NewBuffer()
+			for i := 0; i < count; i++ {
+				_, err := buffer.Write(packet)
+				if err != nil {
+					t.Errorf("Write: %v", err)
+					break
+				}
+			}
+		}
+	}
+
+	t.Run("100 writes", test(w, 100, 13))
+	t.Run("200 writes", test(w, 200, 17))
+	t.Run("400 writes", test(w, 400, 19))
+	t.Run("1000 writes", test(w, 1000, 23))
+
+	wr := func(count int) func() {
+		return func() {
+			buffer := NewBuffer()
+			for i := 0; i < count; i++ {
+				_, err := buffer.Write(packet)
+				if err != nil {
+					t.Fatalf("Write: %v", err)
+				}
+				_, err = buffer.Read(packet)
+				if err != nil {
+					t.Fatalf("Read: %v", err)
+				}
+			}
+		}
+	}
+
+	t.Run("100 writes and reads", test(wr, 100, 7))
+	t.Run("1000 writes and reads", test(wr, 1000, 7))
+	t.Run("10000 writes and reads", test(wr, 10000, 7))
+}
+
 func benchmarkBuffer(b *testing.B, size int64) {
 	buffer := NewBuffer()
 	b.SetBytes(size)
