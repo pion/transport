@@ -74,7 +74,7 @@ func (b *Buffer) grow() error {
 	if newsize < minSize {
 		newsize = minSize
 	}
-	if newsize > maxSize {
+	if (b.limitSize <= 0 || sizeHardlimit) && newsize > maxSize {
 		newsize = maxSize
 	}
 
@@ -107,6 +107,8 @@ func (b *Buffer) grow() error {
 
 // Write appends a copy of the packet data to the buffer.
 // Returns ErrFull if the packet doesn't fit.
+//
+// Note that the packet size is limited to 65536 bytes since v0.11.0 due to the internal data structure.
 func (b *Buffer) Write(packet []byte) (int, error) {
 	if len(packet) >= 0x10000 {
 		return 0, errPacketTooBig
@@ -313,7 +315,11 @@ func (b *Buffer) size() int {
 
 // SetLimitSize controls the maximum number of bytes that can be buffered.
 // Causes Write to return ErrFull when this limit is reached.
-// A zero value will disable this limit.
+// A zero value means 4MB since v0.11.0.
+//
+// User can set packetioSizeHardlimit build tag to enable 4MB hardlimit.
+// When packetioSizeHardlimit build tag is set, SetLimitSize exceeding
+// the hardlimit will be silently discarded.
 func (b *Buffer) SetLimitSize(limit int) {
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
