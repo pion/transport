@@ -2,6 +2,7 @@
 package packetio
 
 import (
+	"context"
 	"io"
 	"sync"
 	"time"
@@ -96,10 +97,17 @@ func (b *Buffer) Write(packet []byte) (n int, err error) {
 // Returns io.ErrShortBuffer is the packet is too small to copy the Write.
 // Returns io.EOF if the buffer is closed.
 func (b *Buffer) Read(packet []byte) (n int, err error) {
-	// Return immediately if the deadline is already exceeded.
+	return b.ReadContext(context.Background(), packet)
+}
+
+func (b *Buffer) ReadContext(ctx context.Context, packet []byte) (n int, err error) {
+	// Return immediately if the deadline is already exceeded
+	// or the context has already been cancelled.
 	select {
 	case <-b.readDeadline.Done():
 		return 0, &netError{errTimeout, true, true}
+	case <-ctx.Done():
+		return 0, ctx.Err()
 	default:
 	}
 
@@ -146,6 +154,8 @@ func (b *Buffer) Read(packet []byte) (n int, err error) {
 		select {
 		case <-b.readDeadline.Done():
 			return 0, &netError{errTimeout, true, true}
+		case <-ctx.Done():
+			return 0, ctx.Err()
 		case <-notify:
 		}
 	}
