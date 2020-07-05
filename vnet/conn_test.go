@@ -238,4 +238,38 @@ func TestUDPConn(t *testing.T) {
 	t.Run("SetDeadline", func(t *testing.T) {
 		deadlineTest(t, false)
 	})
+
+	t.Run("Inbound during close", func(t *testing.T) {
+		var conn *UDPConn
+		var err error
+		srcAddr := &net.UDPAddr{
+			IP:   net.ParseIP("127.0.0.1"),
+			Port: 1234,
+		}
+		obs := &dummyObserver{
+			onOnClosed: func(net.Addr) {},
+		}
+
+		for i := 0; i < 1000; i++ { // nolint:staticcheck // (false positive detection)
+			conn, err = newUDPConn(srcAddr, nil, obs)
+			assert.NoError(t, err, "should succeed")
+
+			chDone := make(chan struct{})
+			go func() {
+				time.Sleep(20 * time.Millisecond)
+				assert.NoError(t, conn.Close())
+				close(chDone)
+			}()
+			tick := time.NewTicker(10 * time.Millisecond)
+			for {
+				defer tick.Stop()
+				select {
+				case <-chDone:
+					return
+				case <-tick.C:
+					conn.onInboundChunk(nil)
+				}
+			}
+		}
+	})
 }
