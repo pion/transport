@@ -394,7 +394,7 @@ func TestBufferAlloc(t *testing.T) {
 	t.Run("10000 writes and reads", test(wr, 10000, 7))
 }
 
-func benchmarkBufferWR(b *testing.B, size int64, write bool, grow int) {
+func benchmarkBufferWR(b *testing.B, size int64, write bool, grow int) { // nolint:unparam
 	buffer := NewBuffer()
 	packet := make([]byte, size)
 
