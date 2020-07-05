@@ -36,8 +36,9 @@ type UDPConn struct {
 	locAddr   *net.UDPAddr // read-only
 	remAddr   *net.UDPAddr // read-only
 	obs       connObserver // read-only
-	readCh    chan Chunk   // requires mutex for writers
-	muReadCh  sync.Mutex   // to mutex readCh writers
+	readCh    chan Chunk   // thread-safe
+	closed    bool         // requires mutex
+	mu        sync.Mutex   // to mutex closed flag
 	readTimer *time.Timer  // thread-safe
 }
 
@@ -136,23 +137,17 @@ func (c *UDPConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 
 // Close closes the connection.
 // Any blocked ReadFrom or WriteTo operations will be unblocked and return errors.
-// See: https://play.golang.org/p/GrCRAII0VSN
 func (c *UDPConn) Close() error {
-loop:
-	for {
-		select {
-		case _, ok := <-c.readCh:
-			if !ok {
-				return fmt.Errorf("already closed")
-			}
-		default:
-			c.muReadCh.Lock()
-			close(c.readCh)
-			c.muReadCh.Unlock()
-			c.obs.onClosed(c.locAddr)
-			break loop
-		}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.closed {
+		return fmt.Errorf("already closed")
 	}
+	c.closed = true
+	close(c.readCh)
+
+	c.obs.onClosed(c.locAddr)
 	return nil
 }
 
@@ -229,8 +224,12 @@ func (c *UDPConn) Write(b []byte) (int, error) {
 }
 
 func (c *UDPConn) onInboundChunk(chunk Chunk) {
-	c.muReadCh.Lock()
-	defer c.muReadCh.Unlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.closed {
+		return
+	}
 
 	select {
 	case c.readCh <- chunk:
