@@ -1,7 +1,7 @@
 package vnet
 
 import (
-	"fmt"
+	"errors"
 	"io"
 	"math"
 	"net"
@@ -13,7 +13,14 @@ const (
 	maxReadQueueSize = 1024
 )
 
-var noDeadline time.Time
+var (
+	errObsCannotBeNil       = errors.New("obs cannot be nil")
+	errUseClosedNetworkConn = errors.New("use of closed network connection")
+	errAddrNotUDPAddr       = errors.New("addr is not a net.UDPAddr")
+	errLocAddr              = errors.New("something went wrong with locAddr")
+	errAlreadyClosed        = errors.New("already closed")
+	errNoRemAddr            = errors.New("no remAddr defined")
+)
 
 // UDPPacketConn is packet-oriented connection for UDP.
 type UDPPacketConn interface {
@@ -44,7 +51,7 @@ type UDPConn struct {
 
 func newUDPConn(locAddr, remAddr *net.UDPAddr, obs connObserver) (*UDPConn, error) {
 	if obs == nil {
-		return nil, fmt.Errorf("obs cannot be nil")
+		return nil, errObsCannotBeNil
 	}
 
 	return &UDPConn{
@@ -102,7 +109,7 @@ loop:
 		Op:   "read",
 		Net:  c.locAddr.Network(),
 		Addr: c.locAddr,
-		Err:  fmt.Errorf("use of closed network connection"),
+		Err:  errUseClosedNetworkConn,
 	}
 }
 
@@ -114,12 +121,12 @@ loop:
 func (c *UDPConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 	dstAddr, ok := addr.(*net.UDPAddr)
 	if !ok {
-		return 0, fmt.Errorf("addr is not a net.UDPAddr")
+		return 0, errAddrNotUDPAddr
 	}
 
 	srcIP := c.obs.determineSourceIP(c.locAddr.IP, dstAddr.IP)
 	if srcIP == nil {
-		return 0, fmt.Errorf("something went wrong with locAddr")
+		return 0, errLocAddr
 	}
 	srcAddr := &net.UDPAddr{
 		IP:   srcIP,
@@ -142,7 +149,7 @@ func (c *UDPConn) Close() error {
 	defer c.mu.Unlock()
 
 	if c.closed {
-		return fmt.Errorf("already closed")
+		return errAlreadyClosed
 	}
 	c.closed = true
 	close(c.readCh)
@@ -180,6 +187,7 @@ func (c *UDPConn) SetDeadline(t time.Time) error {
 // A zero value for t means ReadFrom will not time out.
 func (c *UDPConn) SetReadDeadline(t time.Time) error {
 	var d time.Duration
+	var noDeadline time.Time
 	if t == noDeadline {
 		d = time.Duration(math.MaxInt64)
 	} else {
@@ -217,7 +225,7 @@ func (c *UDPConn) RemoteAddr() net.Addr {
 // after a fixed time limit; see SetDeadline and SetWriteDeadline.
 func (c *UDPConn) Write(b []byte) (int, error) {
 	if c.remAddr == nil {
-		return 0, fmt.Errorf("no remAddr defined")
+		return 0, errNoRemAddr
 	}
 
 	return c.WriteTo(b, c.remAddr)

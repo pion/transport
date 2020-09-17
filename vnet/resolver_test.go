@@ -27,7 +27,7 @@ func TestResolver(t *testing.T) {
 		assert.True(t, resolved.Equal(ip), "should match")
 
 		name = "abc.com"
-		ipAddr = "1.2.3.4"
+		ipAddr = demoIP
 		ip = net.ParseIP(ipAddr)
 		log.Debugf("adding %s %s", name, ipAddr)
 
@@ -44,7 +44,7 @@ func TestResolver(t *testing.T) {
 			LoggerFactory: loggerFactory,
 		})
 		name0 := "abc.com"
-		ipAddr0 := "1.2.3.4"
+		ipAddr0 := demoIP
 		ip0 := net.ParseIP(ipAddr0)
 		err := r0.addHost(name0, ipAddr0)
 		assert.NoError(t, err, "should succeed")

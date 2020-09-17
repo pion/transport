@@ -20,7 +20,7 @@ func TestNetNative(t *testing.T) {
 		assert.NoError(t, err, "should succeed")
 		log.Debugf("interfaces: %+v\n", interfaces)
 		for _, ifc := range interfaces {
-			if ifc.Name == "lo0" {
+			if ifc.Name == lo0String {
 				_, err := ifc.Addrs()
 				assert.NoError(t, err, "should succeed")
 			}
@@ -39,7 +39,7 @@ func TestNetNative(t *testing.T) {
 	t.Run("ResolveUDPAddr", func(t *testing.T) {
 		nw := NewNet(nil)
 
-		udpAddr, err := nw.ResolveUDPAddr("udp", "localhost:1234")
+		udpAddr, err := nw.ResolveUDPAddr(udpString, "localhost:1234")
 		if !assert.NoError(t, err, "should succeed") {
 			return
 		}
@@ -50,7 +50,7 @@ func TestNetNative(t *testing.T) {
 	t.Run("ListenPacket", func(t *testing.T) {
 		nw := NewNet(nil)
 
-		conn, err := nw.ListenPacket("udp", "127.0.0.1:0")
+		conn, err := nw.ListenPacket(udpString, "127.0.0.1:0")
 		if !assert.NoError(t, err, "should succeed") {
 			return
 		}
@@ -69,7 +69,7 @@ func TestNetNative(t *testing.T) {
 		srcAddr := &net.UDPAddr{
 			IP: net.ParseIP("127.0.0.1"),
 		}
-		conn, err := nw.ListenUDP("udp", srcAddr)
+		conn, err := nw.ListenUDP(udpString, srcAddr)
 		assert.NoError(t, err, "should succeed")
 
 		laddr := conn.LocalAddr().String()
@@ -81,7 +81,7 @@ func TestNetNative(t *testing.T) {
 	t.Run("Dial (UDP)", func(t *testing.T) {
 		nw := NewNet(nil)
 
-		conn, err := nw.Dial("udp", "127.0.0.1:1234")
+		conn, err := nw.Dial(udpString, "127.0.0.1:1234")
 		assert.NoError(t, err, "should succeed")
 
 		laddr := conn.LocalAddr()
@@ -109,7 +109,7 @@ func TestNetNative(t *testing.T) {
 			Port: 1234,
 		}
 
-		conn, err := nw.DialUDP("udp", locAddr, remAddr)
+		conn, err := nw.DialUDP(udpString, locAddr, remAddr)
 		assert.NoError(t, err, "should succeed")
 
 		laddr := conn.LocalAddr()
@@ -127,7 +127,7 @@ func TestNetNative(t *testing.T) {
 	t.Run("UDPLoopback", func(t *testing.T) {
 		nw := NewNet(nil)
 
-		conn, err := nw.ListenPacket("udp", "127.0.0.1:0")
+		conn, err := nw.ListenPacket(udpString, "127.0.0.1:0")
 		assert.NoError(t, err, "should succeed")
 		laddr := conn.LocalAddr()
 		msg := "PING!"
@@ -154,7 +154,7 @@ func TestNetNative(t *testing.T) {
 			},
 		})
 
-		conn, err := dialer.Dial("udp", "127.0.0.1:1234")
+		conn, err := dialer.Dial(udpString, "127.0.0.1:1234")
 		assert.NoError(t, err, "should succeed")
 
 		laddr := conn.LocalAddr()

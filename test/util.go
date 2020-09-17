@@ -1,6 +1,7 @@
 package test
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"runtime"
@@ -9,6 +10,8 @@ import (
 	"testing"
 	"time"
 )
+
+var errFlattenErrs = errors.New("")
 
 // TimeOut is used to panic if a test takes to long.
 // It will print the current goroutines and panic.
@@ -94,5 +97,5 @@ func FlattenErrs(errs []error) error {
 		return nil
 	}
 
-	return fmt.Errorf(strings.Join(errstrings, "\n"))
+	return fmt.Errorf("%w %s", errFlattenErrs, strings.Join(errstrings, "\n"))
 }

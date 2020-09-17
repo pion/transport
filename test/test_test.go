@@ -51,13 +51,13 @@ func BenchmarkUDP(b *testing.B) {
 	var ca net.Conn
 	var cb net.Conn
 
-	ca, err := net.ListenUDP("udp", nil)
+	ca, err := net.ListenUDP(udpString, nil)
 	check(err)
 	defer func() {
 		check(ca.Close())
 	}()
 
-	cb, err = net.Dial("udp", ca.LocalAddr().String())
+	cb, err = net.Dial(udpString, ca.LocalAddr().String())
 	check(err)
 	defer func() {
 		check(cb.Close())

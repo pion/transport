@@ -34,14 +34,14 @@ func TestChunk(t *testing.T) {
 			Port: 1234,
 		}
 		dst := &net.UDPAddr{
-			IP:   net.ParseIP("1.2.3.4"),
+			IP:   net.ParseIP(demoIP),
 			Port: 5678,
 		}
 
 		var c Chunk = newChunkUDP(src, dst)
 		str := c.String()
 		log.Debugf("chunk: %s", str)
-		assert.Equal(t, "udp", c.Network(), "should match")
+		assert.Equal(t, udpString, c.Network(), "should match")
 		assert.True(t, strings.Contains(str, src.Network()), "should include network type")
 		assert.True(t, strings.Contains(str, src.String()), "should include address")
 		assert.True(t, strings.Contains(str, dst.String()), "should include address")
@@ -80,7 +80,7 @@ func TestChunk(t *testing.T) {
 			Port: 1234,
 		}
 		dst := &net.TCPAddr{
-			IP:   net.ParseIP("1.2.3.4"),
+			IP:   net.ParseIP(demoIP),
 			Port: 5678,
 		}
 

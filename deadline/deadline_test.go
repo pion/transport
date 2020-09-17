@@ -3,6 +3,7 @@ package deadline
 import (
 	"bytes"
 	"context"
+	"errors"
 	"testing"
 	"time"
 )
@@ -33,7 +34,7 @@ func TestDeadline(t *testing.T) {
 		}
 	})
 
-	t.Run("DeadlineExtend", func(t *testing.T) {
+	t.Run("DeadlineExtend", func(t *testing.T) { //nolint:dupl
 		now := time.Now()
 
 		ctx0, cancel0 := context.WithDeadline(ctx, now.Add(40*time.Millisecond))
@@ -56,7 +57,7 @@ func TestDeadline(t *testing.T) {
 		}
 	})
 
-	t.Run("DeadlinePretend", func(t *testing.T) {
+	t.Run("DeadlinePretend", func(t *testing.T) { //nolint:dupl
 		now := time.Now()
 
 		ctx0, cancel0 := context.WithDeadline(ctx, now.Add(40*time.Millisecond))
@@ -108,6 +109,7 @@ func sendOnDone(ctx context.Context, done <-chan struct{}, dest chan byte, val b
 	}
 	dest <- val
 }
+
 func collectCh(ch <-chan byte, n int, timeout time.Duration) []byte {
 	a := time.After(timeout)
 	var calls []byte
@@ -139,7 +141,7 @@ func TestContext(t *testing.T) {
 		case <-time.After(50 * time.Millisecond):
 			t.Fatal("Timeout")
 		}
-		if err := d.Err(); err != context.DeadlineExceeded {
+		if err := d.Err(); !errors.Is(err, context.DeadlineExceeded) {
 			t.Errorf("Wrong Err(), expected: %v, got: %v", context.DeadlineExceeded, err)
 		}
 	})

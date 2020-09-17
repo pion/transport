@@ -10,6 +10,11 @@ import (
 	"golang.org/x/net/nettest"
 )
 
+const (
+	msg1 = `ADC`
+	msg2 = `DEFG`
+)
+
 // helper to close both conns
 func closeBridge(br *Bridge) error {
 	if err := br.conn0.Close(); err != nil {
@@ -33,7 +38,6 @@ func TestBridge(t *testing.T) {
 
 	t.Run("normal", func(t *testing.T) {
 		readRes := make(chan AsyncResult)
-		msg := "ABC"
 		br := NewBridge()
 		conn0 := br.GetConn0()
 		conn1 := br.GetConn1()
@@ -54,11 +58,11 @@ func TestBridge(t *testing.T) {
 			t.Error("conn0 local addr name should be a1")
 		}
 
-		n, err := conn0.Write([]byte(msg))
+		n, err := conn0.Write([]byte(msg1))
 		if err != nil {
 			t.Error(err.Error())
 		}
-		if n != len(msg) {
+		if n != len(msg1) {
 			t.Error("unexpected length")
 		}
 
@@ -73,7 +77,7 @@ func TestBridge(t *testing.T) {
 		if ar.err != nil {
 			t.Error(err.Error())
 		}
-		if ar.n != len(msg) {
+		if ar.n != len(msg1) {
 			t.Error("unexpected length")
 		}
 		if err = closeBridge(br); err != nil {
@@ -81,10 +85,8 @@ func TestBridge(t *testing.T) {
 		}
 	})
 
-	t.Run("drop 1st packet from conn0", func(t *testing.T) {
+	t.Run("drop 1st packet from conn0", func(t *testing.T) { //nolint:dupl
 		readRes := make(chan AsyncResult)
-		msg1 := "ABC"
-		msg2 := "DEFG"
 		br := NewBridge()
 		conn0 := br.GetConn0()
 		conn1 := br.GetConn1()
@@ -124,10 +126,8 @@ func TestBridge(t *testing.T) {
 		}
 	})
 
-	t.Run("drop 2nd packet from conn0", func(t *testing.T) {
+	t.Run("drop 2nd packet from conn0", func(t *testing.T) { //nolint:dupl
 		readRes := make(chan AsyncResult)
-		msg1 := "ABC"
-		msg2 := "DEFG"
 		br := NewBridge()
 		conn0 := br.GetConn0()
 		conn1 := br.GetConn1()
@@ -167,10 +167,8 @@ func TestBridge(t *testing.T) {
 		}
 	})
 
-	t.Run("drop 1st packet from conn1", func(t *testing.T) {
+	t.Run("drop 1st packet from conn1", func(t *testing.T) { //nolint:dupl
 		readRes := make(chan AsyncResult)
-		msg1 := "ABC"
-		msg2 := "DEFG"
 		br := NewBridge()
 		conn0 := br.GetConn0()
 		conn1 := br.GetConn1()
@@ -210,10 +208,8 @@ func TestBridge(t *testing.T) {
 		}
 	})
 
-	t.Run("drop 2nd packet from conn1", func(t *testing.T) {
+	t.Run("drop 2nd packet from conn1", func(t *testing.T) { //nolint:dupl
 		readRes := make(chan AsyncResult)
-		msg1 := "ABC"
-		msg2 := "DEFG"
 		br := NewBridge()
 		conn0 := br.GetConn0()
 		conn1 := br.GetConn1()
@@ -253,9 +249,7 @@ func TestBridge(t *testing.T) {
 		}
 	})
 
-	t.Run("reorder packets from conn0", func(t *testing.T) {
-		msg1 := "ABC"
-		msg2 := "DEFG"
+	t.Run("reorder packets from conn0", func(t *testing.T) { //nolint:dupl
 		br := NewBridge()
 		conn0 := br.GetConn0()
 		conn1 := br.GetConn1()
@@ -306,9 +300,7 @@ func TestBridge(t *testing.T) {
 		}
 	})
 
-	t.Run("reorder packets from conn1", func(t *testing.T) {
-		msg1 := "ABC"
-		msg2 := "DEFG"
+	t.Run("reorder packets from conn1", func(t *testing.T) { //nolint:dupl
 		br := NewBridge()
 		conn0 := br.GetConn0()
 		conn1 := br.GetConn1()
@@ -399,7 +391,8 @@ func TestBridge(t *testing.T) {
 					readRes <- AsyncResult{
 						n:   nInner,
 						err: nil,
-						msg: string(buf)}
+						msg: string(buf),
+					}
 				}
 			}()
 			msgs := make([]string, 0)

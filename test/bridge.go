@@ -1,6 +1,7 @@
 package test
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"math/rand"
@@ -11,13 +12,25 @@ import (
 	"github.com/pion/transport/deadline"
 )
 
-const tickWait = 10 * time.Microsecond
+const (
+	tickWait  = 10 * time.Microsecond
+	udpString = "udp"
+)
+
+var (
+	errIOTimeout           = errors.New("i/o timeout")
+	errBridgeConnClosed    = errors.New("bridgeConn closed")
+	errBridgeAlreadyClosed = errors.New("bridge has already been closed")
+	errInverseArrayWithOne = errors.New("inverse requires more than one item in the array")
+	errBadLossChanceRange  = errors.New("loss must be < 100 && > 0")
+)
 
 type bridgeConnAddr int
 
 func (a bridgeConnAddr) Network() string {
-	return "udp"
+	return udpString
 }
+
 func (a bridgeConnAddr) String() string {
 	return fmt.Sprintf("a%d", a)
 }
@@ -53,7 +66,7 @@ func (e *netError) Temporary() bool {
 func (conn *bridgeConn) Read(b []byte) (int, error) {
 	select {
 	case <-conn.readDeadline.Done():
-		return 0, &netError{fmt.Errorf("i/o timeout"), true, true}
+		return 0, &netError{errIOTimeout, true, true}
 	default:
 	}
 
@@ -65,7 +78,7 @@ func (conn *bridgeConn) Read(b []byte) (int, error) {
 		n := copy(b, data)
 		return n, nil
 	case <-conn.readDeadline.Done():
-		return 0, &netError{fmt.Errorf("i/o timeout"), true, true}
+		return 0, &netError{errIOTimeout, true, true}
 	}
 }
 
@@ -73,16 +86,16 @@ func (conn *bridgeConn) Read(b []byte) (int, error) {
 func (conn *bridgeConn) Write(b []byte) (int, error) {
 	select {
 	case <-conn.writeDeadline.Done():
-		return 0, &netError{fmt.Errorf("i/o timeout"), true, true}
+		return 0, &netError{errIOTimeout, true, true}
 	default:
 	}
 
-	if rand.Intn(100) < conn.lossChance {
+	if rand.Intn(100) < conn.lossChance { //nolint:gosec
 		return len(b), nil
 	}
 
 	if !conn.br.Push(b, conn.id) {
-		return 0, &netError{fmt.Errorf("bridgeConn closed"), false, false}
+		return 0, &netError{errBridgeConnClosed, false, false}
 	}
 	return len(b), nil
 }
@@ -93,7 +106,7 @@ func (conn *bridgeConn) Close() error {
 	defer conn.mutex.Unlock()
 
 	if conn.closeReq {
-		return &netError{fmt.Errorf("bridge has already been closed"), false, false}
+		return &netError{errBridgeAlreadyClosed, false, false}
 	}
 
 	conn.closeReq = true
@@ -160,7 +173,7 @@ type Bridge struct {
 
 func inverse(s [][]byte) error {
 	if len(s) < 2 {
-		return fmt.Errorf("inverse requires more than one item in the array")
+		return errInverseArrayWithOne
 	}
 
 	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
@@ -224,7 +237,7 @@ func (br *Bridge) Len(fromID int) int {
 }
 
 // Push pushes a packet into the specified queue.
-func (br *Bridge) Push(packet []byte, fromID int) bool {
+func (br *Bridge) Push(packet []byte, fromID int) bool { //nolint:gocognit
 	d := make([]byte, len(packet))
 	copy(d, packet)
 
@@ -256,30 +269,30 @@ func (br *Bridge) Push(packet []byte, fromID int) bool {
 		switch {
 		case br.dropNWrites0 > 0:
 			br.dropNWrites0--
-			//fmt.Printf("br: dropped a packet of size %d (rem: %d for q0)\n", len(d), br.dropNWrites0) // nolint
+			// fmt.Printf("br: dropped a packet of size %d (rem: %d for q0)\n", len(d), br.dropNWrites0) // nolint
 		case br.reorderNWrites0 > 0:
 			br.reorderNWrites0--
 			br.stack0 = append(br.stack0, d)
-			//fmt.Printf("stack0 size: %d\n", len(br.stack0)) // nolint
+			// fmt.Printf("stack0 size: %d\n", len(br.stack0)) // nolint
 			if br.reorderNWrites0 == 0 {
 				if err := inverse(br.stack0); err == nil {
-					//fmt.Printf("stack0 reordered!\n") // nolint
+					// fmt.Printf("stack0 reordered!\n") // nolint
 					br.queue0to1 = append(br.queue0to1, br.stack0...)
 				} else {
 					br.err = err
 				}
 			}
 		case br.filterCB0 != nil && !br.filterCB0(d):
-			//fmt.Printf("br: filtered out a packet of size %d (q0)\n", len(d)) // nolint
+			// fmt.Printf("br: filtered out a packet of size %d (q0)\n", len(d)) // nolint
 		default:
-			//fmt.Printf("br: routed a packet of size %d (q0)\n", len(d)) // nolint
+			// fmt.Printf("br: routed a packet of size %d (q0)\n", len(d)) // nolint
 			br.queue0to1 = append(br.queue0to1, d)
 		}
 	} else {
 		switch {
 		case br.dropNWrites1 > 0:
 			br.dropNWrites1--
-			//fmt.Printf("br: dropped a packet of size %d (rem: %d for q1)\n", len(d), br.dropNWrites0) // nolint
+			// fmt.Printf("br: dropped a packet of size %d (rem: %d for q1)\n", len(d), br.dropNWrites0) // nolint
 		case br.reorderNWrites1 > 0:
 			br.reorderNWrites1--
 			br.stack1 = append(br.stack1, d)
@@ -290,9 +303,9 @@ func (br *Bridge) Push(packet []byte, fromID int) bool {
 				br.queue1to0 = append(br.queue1to0, br.stack1...)
 			}
 		case br.filterCB1 != nil && !br.filterCB1(d):
-			//fmt.Printf("br: filtered out a packet of size %d (q1)\n", len(d)) // nolint
+			// fmt.Printf("br: filtered out a packet of size %d (q1)\n", len(d)) // nolint
 		default:
-			//fmt.Printf("br: routed a packet of size %d (q1)\n", len(d)) // nolint
+			// fmt.Printf("br: routed a packet of size %d (q1)\n", len(d)) // nolint
 			br.queue1to0 = append(br.queue1to0, d)
 		}
 	}
@@ -382,7 +395,7 @@ func (br *Bridge) Tick() int {
 		select {
 		case br.conn1.readCh <- br.queue0to1[0]:
 			n++
-			//fmt.Printf("conn1 received data (%d bytes)\n", len(br.queue0to1[0])) // nolint
+			// fmt.Printf("conn1 received data (%d bytes)\n", len(br.queue0to1[0])) // nolint
 			br.queue0to1 = br.queue0to1[1:]
 		default:
 		}
@@ -392,7 +405,7 @@ func (br *Bridge) Tick() int {
 		select {
 		case br.conn0.readCh <- br.queue1to0[0]:
 			n++
-			//fmt.Printf("conn0 received data (%d bytes)\n", len(br.queue1to0[0])) // nolint
+			// fmt.Printf("conn0 received data (%d bytes)\n", len(br.queue1to0[0])) // nolint
 			br.queue1to0 = br.queue1to0[1:]
 		default:
 		}
@@ -415,7 +428,7 @@ func (br *Bridge) Process() {
 // SetLossChance sets the probability of writes being discard (to introduce artificial loss)
 func (br *Bridge) SetLossChance(chance int) error {
 	if chance > 100 || chance < 0 {
-		return fmt.Errorf("loss must be < 100 && > 0")
+		return errBadLossChanceRange
 	}
 
 	rand.Seed(time.Now().UTC().UnixNano())

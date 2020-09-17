@@ -1,6 +1,7 @@
 package packetio
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -548,7 +549,7 @@ func benchmarkBuffer(b *testing.B, size int64) {
 		var err error
 		for {
 			_, err = buffer.Write(packet)
-			if err != ErrFull {
+			if !errors.Is(err, ErrFull) {
 				break
 			}
 			time.Sleep(time.Microsecond)

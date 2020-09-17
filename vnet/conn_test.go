@@ -1,7 +1,7 @@
 package vnet
 
 import (
-	"fmt"
+	"errors"
 	"net"
 	"sync/atomic"
 	"testing"
@@ -10,6 +10,8 @@ import (
 	"github.com/pion/logging"
 	"github.com/stretchr/testify/assert"
 )
+
+var errFailedToCovertToChuckUDP = errors.New("failed to convert chunk to chunkUDP")
 
 type dummyObserver struct {
 	onWrite    func(Chunk) error
@@ -49,7 +51,7 @@ func TestUDPConn(t *testing.T) {
 			onWrite: func(c Chunk) error {
 				uc, ok := c.(*chunkUDP)
 				if !ok {
-					return fmt.Errorf("failed to convert chunk to chunkUDP")
+					return errFailedToCovertToChuckUDP
 				}
 				chunk := newChunkUDP(
 					uc.DestinationAddr().(*net.UDPAddr),
@@ -129,7 +131,7 @@ func TestUDPConn(t *testing.T) {
 			onWrite: func(c Chunk) error {
 				uc, ok := c.(*chunkUDP)
 				if !ok {
-					return fmt.Errorf("failed to convert chunk to chunkUDP")
+					return errFailedToCovertToChuckUDP
 				}
 				chunk := newChunkUDP(
 					uc.DestinationAddr().(*net.UDPAddr),
