@@ -22,7 +22,7 @@ func (obs *myConnObserver) determineSourceIP(locIP, dstIP net.IP) net.IP {
 }
 
 func TestUDPConnMap(t *testing.T) {
-	//log := logging.NewDefaultLoggerFactory().NewLogger("test")
+	// log := logging.NewDefaultLoggerFactory().NewLogger("test")
 
 	t.Run("insert an UDPConn and remove it", func(t *testing.T) {
 		connMap := newUDPConnMap()

@@ -2,10 +2,13 @@ package test
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
 )
+
+var errByteSequenceChanged = errors.New("byte sequence changed")
 
 // Options represents the configuration of the stress test
 type Options struct {
@@ -48,7 +51,7 @@ func read(r io.Reader, original, result []byte) error {
 		return err
 	}
 	if !bytes.Equal(original, result[:n]) {
-		return fmt.Errorf("byte sequence changed %#v != %#v", original, result)
+		return fmt.Errorf("%w %#v != %#v", errByteSequenceChanged, original, result)
 	}
 
 	return nil
@@ -81,8 +84,9 @@ func StressDuplex(ca io.ReadWriter, cb io.ReadWriter, opt Options) error {
 }
 
 func write(c io.Writer, bufs chan []byte, opt Options) error {
+	randomizer := initRand()
 	for i := 0; i < opt.MsgCount; i++ {
-		buf, err := randBuf(opt.MsgSize)
+		buf, err := randomizer.randBuf(opt.MsgSize)
 		if err != nil {
 			return err
 		}

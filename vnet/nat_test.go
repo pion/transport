@@ -14,11 +14,13 @@ import (
 // iic: inbound internal chunk
 // iec: inbound external chunk
 
+const demoIP = "1.2.3.4"
+
 func TestNATTypeDefauts(t *testing.T) {
 	loggerFactory := logging.NewDefaultLoggerFactory()
 	nat, err := newNAT(&natConfig{
 		natType:       NATType{},
-		mappedIPs:     []net.IP{net.ParseIP("1.2.3.4")},
+		mappedIPs:     []net.IP{net.ParseIP(demoIP)},
 		loggerFactory: loggerFactory,
 	})
 	assert.NoError(t, err, "should succeed")
@@ -42,7 +44,7 @@ func TestNATMappingBehavior(t *testing.T) {
 				Hairpining:        false,
 				MappingLifeTime:   30 * time.Second,
 			},
-			mappedIPs:     []net.IP{net.ParseIP("1.2.3.4")},
+			mappedIPs:     []net.IP{net.ParseIP(demoIP)},
 			loggerFactory: loggerFactory,
 		})
 		assert.NoError(t, err, "should succeed")
@@ -130,7 +132,7 @@ func TestNATMappingBehavior(t *testing.T) {
 				Hairpining:        false,
 				MappingLifeTime:   30 * time.Second,
 			},
-			mappedIPs:     []net.IP{net.ParseIP("1.2.3.4")},
+			mappedIPs:     []net.IP{net.ParseIP(demoIP)},
 			loggerFactory: loggerFactory,
 		})
 		assert.NoError(t, err, "should succeed")
@@ -249,7 +251,7 @@ func TestNATMappingBehavior(t *testing.T) {
 				Hairpining:        false,
 				MappingLifeTime:   30 * time.Second,
 			},
-			mappedIPs:     []net.IP{net.ParseIP("1.2.3.4")},
+			mappedIPs:     []net.IP{net.ParseIP(demoIP)},
 			loggerFactory: loggerFactory,
 		})
 		assert.NoError(t, err, "should succeed")
@@ -357,7 +359,7 @@ func TestNATMappingBehavior(t *testing.T) {
 		assert.NotNil(t, err, "should fail (dropped)")
 	})
 
-	t.Run("symmetric NAT addr dependent mapping", func(t *testing.T) {
+	t.Run("symmetric NAT addr dependent mapping", func(t *testing.T) { //nolint:dupl
 		nat, err := newNAT(&natConfig{
 			natType: NATType{
 				MappingBehavior:   EndpointAddrDependent,
@@ -365,7 +367,7 @@ func TestNATMappingBehavior(t *testing.T) {
 				Hairpining:        false,
 				MappingLifeTime:   30 * time.Second,
 			},
-			mappedIPs:     []net.IP{net.ParseIP("1.2.3.4")},
+			mappedIPs:     []net.IP{net.ParseIP(demoIP)},
 			loggerFactory: loggerFactory,
 		})
 		assert.NoError(t, err, "should succeed")
@@ -427,7 +429,7 @@ func TestNATMappingBehavior(t *testing.T) {
 		assert.Equal(t, oec1.(*chunkUDP).sourcePort, oec3.(*chunkUDP).sourcePort, "should match")
 	})
 
-	t.Run("symmetric NAT port dependent mapping", func(t *testing.T) {
+	t.Run("symmetric NAT port dependent mapping", func(t *testing.T) { //nolint:dupl
 		nat, err := newNAT(&natConfig{
 			natType: NATType{
 				MappingBehavior:   EndpointAddrPortDependent,
@@ -435,7 +437,7 @@ func TestNATMappingBehavior(t *testing.T) {
 				Hairpining:        false,
 				MappingLifeTime:   30 * time.Second,
 			},
-			mappedIPs:     []net.IP{net.ParseIP("1.2.3.4")},
+			mappedIPs:     []net.IP{net.ParseIP(demoIP)},
 			loggerFactory: loggerFactory,
 		})
 		assert.NoError(t, err, "should succeed")
@@ -510,7 +512,7 @@ func TestNATMappingTimeout(t *testing.T) {
 				Hairpining:        false,
 				MappingLifeTime:   100 * time.Millisecond,
 			},
-			mappedIPs:     []net.IP{net.ParseIP("1.2.3.4")},
+			mappedIPs:     []net.IP{net.ParseIP(demoIP)},
 			loggerFactory: loggerFactory,
 		})
 		assert.NoError(t, err, "should succeed")
@@ -573,7 +575,7 @@ func TestNATMappingTimeout(t *testing.T) {
 				Hairpining:        false,
 				MappingLifeTime:   100 * time.Millisecond,
 			},
-			mappedIPs:     []net.IP{net.ParseIP("1.2.3.4")},
+			mappedIPs:     []net.IP{net.ParseIP(demoIP)},
 			loggerFactory: loggerFactory,
 		})
 		assert.NoError(t, err, "should succeed")
@@ -629,7 +631,7 @@ func TestNAT1To1Bahavior(t *testing.T) {
 			natType: NATType{
 				Mode: NATModeNAT1To1,
 			},
-			mappedIPs:     []net.IP{net.ParseIP("1.2.3.4")},
+			mappedIPs:     []net.IP{net.ParseIP(demoIP)},
 			localIPs:      []net.IP{net.ParseIP("10.0.0.1")},
 			loggerFactory: loggerFactory,
 		})
@@ -688,7 +690,7 @@ func TestNAT1To1Bahavior(t *testing.T) {
 				Mode: NATModeNAT1To1,
 			},
 			mappedIPs: []net.IP{
-				net.ParseIP("1.2.3.4"),
+				net.ParseIP(demoIP),
 				net.ParseIP("1.2.3.5"),
 			},
 			localIPs: []net.IP{
@@ -743,7 +745,7 @@ func TestNAT1To1Bahavior(t *testing.T) {
 				Port: 5678,
 			},
 			&net.UDPAddr{
-				IP:   net.ParseIP("1.2.3.4"),
+				IP:   net.ParseIP(demoIP),
 				Port: 2525,
 			})
 
@@ -786,7 +788,7 @@ func TestNAT1To1Bahavior(t *testing.T) {
 				Mode: NATModeNAT1To1,
 			},
 			mappedIPs: []net.IP{
-				net.ParseIP("1.2.3.4"),
+				net.ParseIP(demoIP),
 				net.ParseIP("1.2.3.5"),
 			},
 			localIPs: []net.IP{
@@ -803,7 +805,7 @@ func TestNAT1To1Bahavior(t *testing.T) {
 				Mode: NATModeNAT1To1,
 			},
 			mappedIPs: []net.IP{
-				net.ParseIP("1.2.3.4"),
+				net.ParseIP(demoIP),
 			},
 			localIPs: []net.IP{
 				net.ParseIP("10.0.0.1"),

@@ -35,9 +35,11 @@ type Buffer struct {
 	readDeadline *deadline.Deadline
 }
 
-const minSize = 2048
-const cutoffSize = 128 * 1024
-const maxSize = 4 * 1024 * 1024
+const (
+	minSize    = 2048
+	cutoffSize = 128 * 1024
+	maxSize    = 4 * 1024 * 1024
+)
 
 // NewBuffer creates a new Buffer.
 func NewBuffer() *Buffer {

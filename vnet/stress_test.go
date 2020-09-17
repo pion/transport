@@ -30,7 +30,7 @@ func TestStressTestUDP(t *testing.T) {
 		assert.NotNil(t, wan, "should succeed")
 
 		net0 := NewNet(&NetConfig{
-			StaticIPs: []string{"1.2.3.4"},
+			StaticIPs: []string{demoIP},
 		})
 
 		err = wan.AddNet(net0)
@@ -52,8 +52,6 @@ func TestStressTestUDP(t *testing.T) {
 
 		err = wan.AddRouter(lan)
 		assert.NoError(t, err, "should succeed")
-
-		//doneCh := make(chan struct{})
 
 		err = wan.Start()
 		assert.NoError(t, err, "should succeed")
@@ -129,7 +127,7 @@ func TestStressTestUDP(t *testing.T) {
 
 		var wg sync.WaitGroup
 
-		var runEchoTest = func() {
+		runEchoTest := func() {
 			// Set up a client
 			var numRecvd int
 			const numToSend int = 400

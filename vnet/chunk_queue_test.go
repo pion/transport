@@ -12,7 +12,7 @@ func TestChunkQueue(t *testing.T) {
 		IP:   net.ParseIP("192.188.0.2"),
 		Port: 1234,
 	}, &net.UDPAddr{
-		IP:   net.ParseIP("1.2.3.4"),
+		IP:   net.ParseIP(demoIP),
 		Port: 5678,
 	})
 

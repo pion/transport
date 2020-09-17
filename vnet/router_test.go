@@ -1,7 +1,7 @@
 package vnet
 
 import (
-	"fmt"
+	"errors"
 	"net"
 	"sync/atomic"
 	"testing"
@@ -10,6 +10,8 @@ import (
 	"github.com/pion/logging"
 	"github.com/stretchr/testify/assert"
 )
+
+var errNoAddress = errors.New("there must be one address")
 
 type dummyNIC struct {
 	Net
@@ -33,7 +35,7 @@ func getIPAddr(n NIC) (string, error) {
 	}
 
 	if len(addrs) != 1 {
-		return "", fmt.Errorf("there must be one address")
+		return "", errNoAddress
 	}
 
 	return addrs[0].(*net.IPNet).IP.String(), nil
@@ -426,7 +428,7 @@ func TestRouterOneChild(t *testing.T) {
 
 func TestRouterStaticIPs(t *testing.T) {
 	loggerFactory := logging.NewDefaultLoggerFactory()
-	//log := loggerFactory.NewLogger("test")
+	// log := loggerFactory.NewLogger("test")
 
 	t.Run("more than one static IP", func(t *testing.T) {
 		lan, err := NewRouter(&RouterConfig{
@@ -455,7 +457,7 @@ func TestRouterStaticIPs(t *testing.T) {
 				"1.2.3.2",
 				"1.2.3.3",
 			},
-			StaticIP:      "1.2.3.4",
+			StaticIP:      demoIP,
 			LoggerFactory: loggerFactory,
 		})
 		assert.Nil(t, err, "should succeed")
@@ -465,7 +467,7 @@ func TestRouterStaticIPs(t *testing.T) {
 		assert.Equal(t, "1.2.3.1", lan.staticIPs[0].String(), "should match")
 		assert.Equal(t, "1.2.3.2", lan.staticIPs[1].String(), "should match")
 		assert.Equal(t, "1.2.3.3", lan.staticIPs[2].String(), "should match")
-		assert.Equal(t, "1.2.3.4", lan.staticIPs[3].String(), "should match")
+		assert.Equal(t, demoIP, lan.staticIPs[3].String(), "should match")
 	})
 
 	t.Run("Static IP and local IP mapping", func(t *testing.T) {
@@ -580,7 +582,7 @@ func TestRouterStaticIPs(t *testing.T) {
 
 func TestRouterFailures(t *testing.T) {
 	loggerFactory := logging.NewDefaultLoggerFactory()
-	//log := loggerFactory.NewLogger("test")
+	// log := loggerFactory.NewLogger("test")
 
 	t.Run("Stop when router is stopped", func(t *testing.T) {
 		r, err := NewRouter(&RouterConfig{
