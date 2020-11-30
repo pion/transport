@@ -14,11 +14,27 @@ import (
 // ErrClosing is returned on Write to closed connection.
 var ErrClosing = errors.New("use of closed network connection")
 
+// Reader is an interface for context controlled reader.
+type Reader interface {
+	ReadContext(context.Context, []byte) (int, error)
+}
+
+// Writer is an interface for context controlled writer.
+type Writer interface {
+	WriteContext(context.Context, []byte) (int, error)
+}
+
+// ReadWriter is a composite of ReadWriter.
+type ReadWriter interface {
+	Reader
+	Writer
+}
+
 // ConnCtx is a wrapper of net.Conn using context.Context.
 type ConnCtx interface {
-	ReadContext(context.Context, []byte) (int, error)
-	WriteContext(context.Context, []byte) (int, error)
-	Close() error
+	Reader
+	Writer
+	io.Closer
 	LocalAddr() net.Addr
 	RemoteAddr() net.Addr
 	Conn() net.Conn
