@@ -511,22 +511,6 @@ func benchmarkBufferWR(b *testing.B, size int64, write bool, grow int) { // noli
 		}
 	}
 
-	b.Run("NoContext", func(b *testing.B) {
-		b.ResetTimer()
-		b.SetBytes(size)
-
-		for i := 0; i < b.N; i++ {
-			_, err := buffer.Write(packet)
-			if err != nil {
-				b.Fatalf("Write: %v", err)
-			}
-			_, err = buffer.Read(packet)
-			if err != nil {
-				b.Fatalf("Read: %v", err)
-			}
-		}
-		b.StopTimer()
-	})
 	b.Run("Context", func(b *testing.B) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -540,6 +524,22 @@ func benchmarkBufferWR(b *testing.B, size int64, write bool, grow int) { // noli
 				b.Fatalf("Write: %v", err)
 			}
 			_, err = buffer.ReadContext(ctx, packet)
+			if err != nil {
+				b.Fatalf("Read: %v", err)
+			}
+		}
+		b.StopTimer()
+	})
+	b.Run("NoContext", func(b *testing.B) {
+		b.ResetTimer()
+		b.SetBytes(size)
+
+		for i := 0; i < b.N; i++ {
+			_, err := buffer.Write(packet)
+			if err != nil {
+				b.Fatalf("Write: %v", err)
+			}
+			_, err = buffer.Read(packet)
 			if err != nil {
 				b.Fatalf("Read: %v", err)
 			}

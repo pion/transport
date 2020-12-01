@@ -190,13 +190,19 @@ func (b *Buffer) WriteContext(ctx context.Context, packet []byte) (int, error) {
 // Returns io.EOF if the buffer is closed.
 func (b *Buffer) Read(packet []byte) (n int, err error) {
 	// Return immediately if the deadline is already exceeded.
-	select {
-	case <-b.readDeadline.Done():
-		return 0, &netError{errTimeout, true, true}
-	default:
+	for {
+		ok, notify, n, err := b.tryRead(packet)
+		if ok {
+			return n, err
+		}
+
+		select {
+		case <-b.readDeadline.Done():
+			return 0, &netError{errTimeout, true, true}
+		case <-notify:
+		}
 	}
 
-	return b.ReadContext(context.Background(), packet)
 }
 
 // ReadContext reads from the buffer with context.
