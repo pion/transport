@@ -460,7 +460,7 @@ func TestNetTest(t *testing.T) {
 		go func() {
 			for {
 				br.Process()
-				if conn0.closed && conn1.closed {
+				if conn0.isClosed() && conn1.isClosed() {
 					wg.Done()
 					return
 				}
@@ -474,6 +474,10 @@ func TestNetTest(t *testing.T) {
 				br.clear()
 				_ = conn0.Close()
 				_ = conn1.Close()
+
+				// Tick the clock to actually close conns.
+				br.Tick()
+
 				wg.Wait()
 			}, nil
 	})
