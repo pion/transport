@@ -42,6 +42,8 @@ type Buffer struct {
 	limitCount, limitSize int
 
 	readDeadline *deadline.Deadline
+
+	strictDeadline bool
 }
 
 const (
@@ -50,10 +52,28 @@ const (
 	maxSize    = 4 * 1024 * 1024
 )
 
+// BufferOption is a functional option type of Buffer.
+type BufferOption func(*Buffer)
+
 // NewBuffer creates a new Buffer.
-func NewBuffer() *Buffer {
-	return &Buffer{
+func NewBuffer(opts ...BufferOption) *Buffer {
+	b := &Buffer{
+		notify:       make(chan struct{}),
 		readDeadline: deadline.New(),
+	}
+	for _, o := range opts {
+		o(b)
+	}
+	return b
+}
+
+// StrictDeadline sets compatibility level of deadline handling.
+// If strictDeadline==false, Read() may return data even if the deadline is exceeded or
+// context is canceled. It may increases the performance.
+// Set true to make Buffer behaves more like net.Conn.
+func StrictDeadline(enable bool) BufferOption {
+	return func(b *Buffer) {
+		b.strictDeadline = enable
 	}
 }
 
@@ -188,12 +208,14 @@ func (b *Buffer) Write(packet []byte) (int, error) {
 // Blocks until data is available or the buffer is closed.
 // Returns io.ErrShortBuffer is the packet is too small to copy the Write.
 // Returns io.EOF if the buffer is closed.
-func (b *Buffer) Read(packet []byte) (n int, err error) { //nolint:gocognit
-	// Return immediately if the deadline is already exceeded.
-	select {
-	case <-b.readDeadline.Done():
-		return 0, &netError{ErrTimeout, true, true}
-	default:
+func (b *Buffer) Read(packet []byte) (n int, err error) { // nolint:gocognit for performance
+	if b.strictDeadline {
+		// Return immediately if the deadline is already exceeded.
+		select {
+		case <-b.readDeadline.Done():
+			return 0, &netError{ErrTimeout, true, true}
+		default:
+		}
 	}
 
 	for {
