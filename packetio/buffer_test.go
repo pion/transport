@@ -14,75 +14,92 @@ import (
 func TestBuffer(t *testing.T) {
 	assert := assert.New(t)
 
-	buffer := NewBuffer()
-	packet := make([]byte, 4)
+	for name, opts := range map[string][]BufferOption{
+		"Default":        nil,
+		"StrictDeadline": {StrictDeadline(true)},
+	} {
+		buffer := NewBuffer(opts...)
+		t.Run(name, func(t *testing.T) {
+			packet := make([]byte, 4)
 
-	// Write once
-	n, err := buffer.Write([]byte{0, 1})
-	assert.NoError(err)
-	assert.Equal(2, n)
+			t.Run("Write and read once", func(t *testing.T) {
+				n, err := buffer.Write([]byte{0, 1})
+				assert.NoError(err)
+				assert.Equal(2, n)
 
-	// Read once
-	n, err = buffer.Read(packet)
-	assert.NoError(err)
-	assert.Equal(2, n)
-	assert.Equal([]byte{0, 1}, packet[:n])
+				n, err = buffer.Read(packet)
+				assert.NoError(err)
+				assert.Equal(2, n)
+				assert.Equal([]byte{0, 1}, packet[:n])
+			})
 
-	// Read deadline
-	err = buffer.SetReadDeadline(time.Unix(0, 1))
-	assert.NoError(err)
-	n, err = buffer.Read(packet)
-	var e net.Error
-	if !errors.As(err, &e) || !e.Timeout() {
-		t.Errorf("Unexpected error: %v", err)
+			t.Run("Read deadline", func(t *testing.T) {
+				err := buffer.SetReadDeadline(time.Unix(0, 1))
+				assert.NoError(err)
+				n, err := buffer.Read(packet)
+
+				var e net.Error
+				if !errors.As(err, &e) || !e.Timeout() {
+					t.Errorf("Unexpected error: %v", err)
+				}
+				assert.Equal(0, n)
+			})
+
+			t.Run("Reset deadline", func(t *testing.T) {
+				err := buffer.SetReadDeadline(time.Time{})
+				assert.NoError(err)
+			})
+
+			t.Run("Write twice", func(t *testing.T) {
+				n, err := buffer.Write([]byte{2, 3, 4})
+				assert.NoError(err)
+				assert.Equal(3, n)
+
+				n, err = buffer.Write([]byte{5, 6, 7})
+				assert.NoError(err)
+				assert.Equal(3, n)
+			})
+
+			t.Run("Read twice", func(t *testing.T) {
+				n, err := buffer.Read(packet)
+				assert.NoError(err)
+				assert.Equal(3, n)
+				assert.Equal([]byte{2, 3, 4}, packet[:n])
+
+				n, err = buffer.Read(packet)
+				assert.NoError(err)
+				assert.Equal(3, n)
+				assert.Equal([]byte{5, 6, 7}, packet[:n])
+			})
+
+			t.Run("Write once prior to close", func(t *testing.T) {
+				_, err := buffer.Write([]byte{3})
+				assert.NoError(err)
+			})
+
+			t.Run("Close", func(t *testing.T) {
+				err := buffer.Close()
+				assert.NoError(err)
+			})
+
+			t.Run("Future writes will error", func(t *testing.T) {
+				_, err := buffer.Write([]byte{4})
+				assert.Error(err)
+			})
+
+			t.Run("But we can read the remaining data", func(t *testing.T) {
+				n, err := buffer.Read(packet)
+				assert.NoError(err)
+				assert.Equal(1, n)
+				assert.Equal([]byte{3}, packet[:n])
+			})
+
+			t.Run("Until EOF", func(t *testing.T) {
+				_, err := buffer.Read(packet)
+				assert.Equal(io.EOF, err)
+			})
+		})
 	}
-	assert.Equal(0, n)
-
-	// Reset deadline
-	err = buffer.SetReadDeadline(time.Time{})
-	assert.NoError(err)
-
-	// Write twice
-	n, err = buffer.Write([]byte{2, 3, 4})
-	assert.NoError(err)
-	assert.Equal(3, n)
-
-	n, err = buffer.Write([]byte{5, 6, 7})
-	assert.NoError(err)
-	assert.Equal(3, n)
-
-	// Read twice
-	n, err = buffer.Read(packet)
-	assert.NoError(err)
-	assert.Equal(3, n)
-	assert.Equal([]byte{2, 3, 4}, packet[:n])
-
-	n, err = buffer.Read(packet)
-	assert.NoError(err)
-	assert.Equal(3, n)
-	assert.Equal([]byte{5, 6, 7}, packet[:n])
-
-	// Write once prior to close.
-	_, err = buffer.Write([]byte{3})
-	assert.NoError(err)
-
-	// Close
-	err = buffer.Close()
-	assert.NoError(err)
-
-	// Future writes will error
-	_, err = buffer.Write([]byte{4})
-	assert.Error(err)
-
-	// But we can read the remaining data.
-	n, err = buffer.Read(packet)
-	assert.NoError(err)
-	assert.Equal(1, n)
-	assert.Equal([]byte{3}, packet[:n])
-
-	// Until EOF
-	_, err = buffer.Read(packet)
-	assert.Equal(io.EOF, err)
 }
 
 func testWraparound(t *testing.T, grow bool) {
@@ -479,8 +496,8 @@ func benchmarkBufferWR(b *testing.B, size int64, write bool, grow int) { // noli
 		}
 	}
 
-	b.SetBytes(size)
 	b.ResetTimer()
+	b.SetBytes(size)
 
 	for i := 0; i < b.N; i++ {
 		_, err := buffer.Write(packet)
