@@ -2,7 +2,6 @@
 package packetio
 
 import (
-	"context"
 	"errors"
 	"io"
 	"sync"
@@ -179,11 +178,6 @@ func (b *Buffer) Write(packet []byte) (int, error) {
 	return len(packet), nil
 }
 
-// WriteContext writes from the buffer with context.
-func (b *Buffer) WriteContext(ctx context.Context, packet []byte) (int, error) {
-	return b.Write(packet)
-}
-
 // Read populates the given byte slice, returning the number of bytes read.
 // Blocks until data is available or the buffer is closed.
 // Returns io.ErrShortBuffer is the packet is too small to copy the Write.
@@ -196,98 +190,75 @@ func (b *Buffer) Read(packet []byte) (n int, err error) {
 	default:
 	}
 
-	return b.ReadContext(context.Background(), packet)
-}
-
-// ReadContext reads from the buffer with context.
-// Deadline timer is ignored in this function.
-func (b *Buffer) ReadContext(ctx context.Context, packet []byte) (n int, err error) {
-	// Return immediately if the deadline is already exceeded.
-	select {
-	case <-ctx.Done():
-		return 0, &netError{ctx.Err(), true, true}
-	default:
-	}
-
 	for {
-		ok, notify, n, err := b.tryRead(packet)
-		if ok {
-			return n, err
+		b.mutex.Lock()
+
+		if b.head != b.tail {
+			// decode the packet size
+			n1 := b.data[b.head]
+			b.head++
+			if b.head >= len(b.data) {
+				b.head = 0
+			}
+			n2 := b.data[b.head]
+			b.head++
+			if b.head >= len(b.data) {
+				b.head = 0
+			}
+			count := int((uint16(n1) << 8) | uint16(n2))
+
+			// determine the number of bytes we'll actually copy
+			copied := count
+			if copied > len(packet) {
+				copied = len(packet)
+			}
+
+			// copy the data
+			if b.head+copied < len(b.data) {
+				copy(packet, b.data[b.head:b.head+copied])
+			} else {
+				k := copy(packet, b.data[b.head:])
+				copy(packet[k:], b.data[:copied-k])
+			}
+
+			// advance head, discarding any data that wasn't copied
+			b.head += count
+			if b.head >= len(b.data) {
+				b.head -= len(b.data)
+			}
+
+			if b.head == b.tail {
+				// the buffer is empty, reset to beginning
+				// in order to improve cache locality.
+				b.head = 0
+				b.tail = 0
+			}
+
+			b.count--
+
+			b.mutex.Unlock()
+
+			if copied < count {
+				return copied, io.ErrShortBuffer
+			}
+			return copied, nil
 		}
+
+		if b.closed {
+			b.mutex.Unlock()
+			return 0, io.EOF
+		}
+
+		notify := b.notify
+		b.subs = true
+		b.mutex.Unlock()
 
 		select {
 		case <-b.readDeadline.Done():
 			return 0, &netError{errTimeout, true, true}
-		case <-ctx.Done():
-			return 0, &netError{ctx.Err(), true, true}
 		case <-notify:
 		}
 	}
-}
-
-func (b *Buffer) tryRead(packet []byte) (ok bool, notify <-chan struct{}, n int, err error) {
-	b.mutex.Lock()
-
-	if b.head != b.tail {
-		// decode the packet size
-		n1 := b.data[b.head]
-		b.head++
-		if b.head >= len(b.data) {
-			b.head = 0
-		}
-		n2 := b.data[b.head]
-		b.head++
-		if b.head >= len(b.data) {
-			b.head = 0
-		}
-		count := int((uint16(n1) << 8) | uint16(n2))
-
-		// determine the number of bytes we'll actually copy
-		copied := count
-		if copied > len(packet) {
-			copied = len(packet)
-		}
-
-		// copy the data
-		if b.head+copied < len(b.data) {
-			copy(packet, b.data[b.head:b.head+copied])
-		} else {
-			k := copy(packet, b.data[b.head:])
-			copy(packet[k:], b.data[:copied-k])
-		}
-
-		// advance head, discarding any data that wasn't copied
-		b.head += count
-		if b.head >= len(b.data) {
-			b.head -= len(b.data)
-		}
-
-		if b.head == b.tail {
-			// the buffer is empty, reset to beginning
-			// in order to improve cache locality.
-			b.head = 0
-			b.tail = 0
-		}
-
-		b.count--
-
-		b.mutex.Unlock()
-
-		if copied < count {
-			return true, nil, copied, io.ErrShortBuffer
-		}
-		return true, nil, copied, nil
-	}
-
-	if b.closed {
-		b.mutex.Unlock()
-		return true, nil, 0, io.EOF
-	}
-
-	notifyCh := b.notify
-	b.subs = true
-	b.mutex.Unlock()
-	return false, notifyCh, 0, nil
 }
 
 // Close the buffer, unblocking any pending reads.
