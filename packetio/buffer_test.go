@@ -87,7 +87,7 @@ func TestBuffer(t *testing.T) {
 func testWraparound(t *testing.T, grow bool) {
 	assert := assert.New(t)
 
-	buffer := NewBuffer()
+	buffer := NewBuffer().(*buffer)
 	err := buffer.grow()
 	assert.NoError(err)
 

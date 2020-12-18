@@ -10,11 +10,31 @@ import (
 	"github.com/pion/transport/deadline"
 )
 
+// BufferPacketType allow the buffer to know which packet protocol is writing.
+type BufferPacketType int
+
+const (
+	// RTPBufferPacket indicates the buffer that is handling RTP packets
+	RTPBufferPacket BufferPacketType = 1
+	// RTCPBufferPacket indicates the buffer that is handling RTCP packets
+	RTCPBufferPacket BufferPacketType = 2
+)
+
 var errPacketTooBig = errors.New("packet too big")
 
-// Buffer allows writing packets to an intermediate buffer, which can then be read form.
+// Buffer is an interface to implement a writing/reading packet buffer.
+type Buffer interface {
+	io.ReadWriteCloser
+	Count() int
+	SetLimitCount(limit int)
+	Size() int
+	SetLimitSize(limit int)
+	SetReadDeadline(t time.Time) error
+}
+
+// buffer allows writing packets to an intermediate buffer, which can then be read form.
 // This is verify similar to bytes.Buffer but avoids combining multiple writes into a single read.
-type Buffer struct {
+type buffer struct {
 	mutex sync.Mutex
 
 	// this is a circular buffer.  If head <= tail, then the useful
@@ -41,9 +61,9 @@ const (
 	maxSize    = 4 * 1024 * 1024
 )
 
-// NewBuffer creates a new Buffer.
-func NewBuffer() *Buffer {
-	return &Buffer{
+// NewBuffer creates a new buffer.
+func NewBuffer() Buffer {
+	return &buffer{
 		notify:       make(chan struct{}),
 		readDeadline: deadline.New(),
 	}
@@ -51,7 +71,7 @@ func NewBuffer() *Buffer {
 
 // available returns true if the buffer is large enough to fit a packet
 // of the given size, taking overhead into account.
-func (b *Buffer) available(size int) bool {
+func (b *buffer) available(size int) bool {
 	available := b.head - b.tail
 	if available <= 0 {
 		available += len(b.data)
@@ -66,7 +86,7 @@ func (b *Buffer) available(size int) bool {
 
 // grow increases the size of the buffer.  If it returns nil, then the
 // buffer has been grown.  It returns ErrFull if hits a limit.
-func (b *Buffer) grow() error {
+func (b *buffer) grow() error {
 	var newsize int
 	if len(b.data) < cutoffSize {
 		newsize = 2 * len(b.data)
@@ -111,7 +131,7 @@ func (b *Buffer) grow() error {
 // Returns ErrFull if the packet doesn't fit.
 //
 // Note that the packet size is limited to 65536 bytes since v0.11.0 due to the internal data structure.
-func (b *Buffer) Write(packet []byte) (int, error) {
+func (b *buffer) Write(packet []byte) (int, error) {
 	if len(packet) >= 0x10000 {
 		return 0, errPacketTooBig
 	}
@@ -182,7 +202,7 @@ func (b *Buffer) Write(packet []byte) (int, error) {
 // Blocks until data is available or the buffer is closed.
 // Returns io.ErrShortBuffer is the packet is too small to copy the Write.
 // Returns io.EOF if the buffer is closed.
-func (b *Buffer) Read(packet []byte) (n int, err error) {
+func (b *buffer) Read(packet []byte) (n int, err error) {
 	// Return immediately if the deadline is already exceeded.
 	select {
 	case <-b.readDeadline.Done():
@@ -263,7 +283,7 @@ func (b *Buffer) Read(packet []byte) (n int, err error) {
 
 // Close the buffer, unblocking any pending reads.
 // Data in the buffer can still be read, Read will return io.EOF only when empty.
-func (b *Buffer) Close() (err error) {
+func (b *buffer) Close() (err error) {
 	b.mutex.Lock()
 
 	if b.closed {
@@ -282,7 +302,7 @@ func (b *Buffer) Close() (err error) {
 }
 
 // Count returns the number of packets in the buffer.
-func (b *Buffer) Count() int {
+func (b *buffer) Count() int {
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
 	return b.count
@@ -291,7 +311,7 @@ func (b *Buffer) Count() int {
 // SetLimitCount controls the maximum number of packets that can be buffered.
 // Causes Write to return ErrFull when this limit is reached.
 // A zero value will disable this limit.
-func (b *Buffer) SetLimitCount(limit int) {
+func (b *buffer) SetLimitCount(limit int) {
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
 
@@ -300,14 +320,14 @@ func (b *Buffer) SetLimitCount(limit int) {
 
 // Size returns the total byte size of packets in the buffer, including
 // a small amount of administrative overhead.
-func (b *Buffer) Size() int {
+func (b *buffer) Size() int {
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
 
 	return b.size()
 }
 
-func (b *Buffer) size() int {
+func (b *buffer) size() int {
 	size := b.tail - b.head
 	if size < 0 {
 		size += len(b.data)
@@ -322,7 +342,7 @@ func (b *Buffer) size() int {
 // User can set packetioSizeHardlimit build tag to enable 4MB hardlimit.
 // When packetioSizeHardlimit build tag is set, SetLimitSize exceeding
 // the hardlimit will be silently discarded.
-func (b *Buffer) SetLimitSize(limit int) {
+func (b *buffer) SetLimitSize(limit int) {
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
 
@@ -331,7 +351,7 @@ func (b *Buffer) SetLimitSize(limit int) {
 
 // SetReadDeadline sets the deadline for the Read operation.
 // Setting to zero means no deadline.
-func (b *Buffer) SetReadDeadline(t time.Time) error {
+func (b *buffer) SetReadDeadline(t time.Time) error {
 	b.readDeadline.Set(t)
 	return nil
 }
