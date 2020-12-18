@@ -87,7 +87,7 @@ func TestBuffer(t *testing.T) {
 func testWraparound(t *testing.T, grow bool) {
 	assert := assert.New(t)
 
-	buffer := NewBuffer().(*buffer)
+	buffer := NewBuffer()
 	err := buffer.grow()
 	assert.NoError(err)
 
@@ -385,7 +385,7 @@ func TestBufferMisc(t *testing.T) {
 	assert.NoError(err)
 	assert.Equal(4, n)
 
-	// Try to read with a short buffer
+	// Try to read with a short Buffer
 	packet := make([]byte, 3)
 	_, err = buffer.Read(packet)
 	assert.Equal(io.ErrShortBuffer, err)
@@ -456,7 +456,7 @@ func benchmarkBufferWR(b *testing.B, size int64, write bool, grow int) { // noli
 	buffer := NewBuffer()
 	packet := make([]byte, size)
 
-	// Grow the buffer first
+	// Grow the Buffer first
 	pad := make([]byte, 1022)
 	for buffer.Size() < grow {
 		_, err := buffer.Write(pad)
@@ -493,7 +493,7 @@ func benchmarkBufferWR(b *testing.B, size int64, write bool, grow int) { // noli
 	}
 }
 
-// In this benchmark, the buffer is often empty, which is hopefully
+// In this benchmark, the Buffer is often empty, which is hopefully
 // typical of real usage.
 func BenchmarkBufferWR14(b *testing.B) {
 	benchmarkBufferWR(b, 14, false, 128000)
@@ -507,7 +507,7 @@ func BenchmarkBufferWR1400(b *testing.B) {
 	benchmarkBufferWR(b, 1400, false, 128000)
 }
 
-// Here, the buffer never becomes empty, which forces wraparound
+// Here, the Buffer never becomes empty, which forces wraparound
 func BenchmarkBufferWWR14(b *testing.B) {
 	benchmarkBufferWR(b, 14, true, 128000)
 }
