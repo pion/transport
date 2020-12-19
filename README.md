@@ -40,6 +40,8 @@ Check out the **[contributing wiki](https://github.com/pion/webrtc/wiki/Contribu
 * [Atsushi Watanabe](https://github.com/at-wat)
 * [Juliusz Chroboczek](https://github.com/jech)
 * [ZHENK](https://github.com/scorpionknifes)
+* [OrlandoCo](https://github.com/OrlandoCo)
+* [Tarrence van As](https://github.com/tarrencev)
 
 ### License
 MIT License - see [LICENSE](LICENSE) for full text

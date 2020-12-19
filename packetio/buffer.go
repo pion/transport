@@ -12,6 +12,16 @@ import (
 
 var errPacketTooBig = errors.New("packet too big")
 
+// BufferPacketType allow the Buffer to know which packet protocol is writing.
+type BufferPacketType int
+
+const (
+	// RTPBufferPacket indicates the Buffer that is handling RTP packets
+	RTPBufferPacket BufferPacketType = 1
+	// RTCPBufferPacket indicates the Buffer that is handling RTCP packets
+	RTCPBufferPacket BufferPacketType = 2
+)
+
 // Buffer allows writing packets to an intermediate buffer, which can then be read form.
 // This is verify similar to bytes.Buffer but avoids combining multiple writes into a single read.
 type Buffer struct {
