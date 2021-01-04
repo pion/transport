@@ -196,7 +196,7 @@ func (b *Buffer) Read(packet []byte) (n int, err error) {
 	// Return immediately if the deadline is already exceeded.
 	select {
 	case <-b.readDeadline.Done():
-		return 0, &netError{errTimeout, true, true}
+		return 0, &netError{ErrTimeout, true, true}
 	default:
 	}
 
@@ -265,7 +265,7 @@ func (b *Buffer) Read(packet []byte) (n int, err error) {
 
 		select {
 		case <-b.readDeadline.Done():
-			return 0, &netError{errTimeout, true, true}
+			return 0, &netError{ErrTimeout, true, true}
 		case <-notify:
 		}
 	}
