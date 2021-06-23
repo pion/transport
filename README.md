@@ -43,6 +43,7 @@ Check out the **[contributing wiki](https://github.com/pion/webrtc/wiki/Contribu
 * [OrlandoCo](https://github.com/OrlandoCo)
 * [Tarrence van As](https://github.com/tarrencev)
 * [Winlin](https://github.com/ossrs/srs) - *UDP proxy to communicate with real servers*
+* [Antoine Baché](https://github.com/Antonito) *Network Conditioner*
 
 ### License
 MIT License - see [LICENSE](LICENSE) for full text

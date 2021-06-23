@@ -26,7 +26,7 @@ var (
 	errNoRouterLinked                     = errors.New("no router linked")
 	errInvalidPortNumber                  = errors.New("invalid port number")
 	errUnexpectedTypeSwitchFailure        = errors.New("unexpected type-switch failure")
-	errBindFailerFor                      = errors.New("bind failed for")
+	errBindFailedFor                      = errors.New("bind failed for")
 	errEndPortLessThanStart               = errors.New("end port is less than the start")
 	errPortSpaceExhausted                 = errors.New("port space exhausted")
 	errVNetDisabled                       = errors.New("vnet is not enabled")
@@ -40,11 +40,12 @@ func newMACAddress() net.HardwareAddr {
 }
 
 type vNet struct {
-	interfaces []*Interface // read-only
-	staticIPs  []net.IP     // read-only
-	router     *Router      // read-only
-	udpConns   *udpConnMap  // read-only
-	mutex      sync.RWMutex
+	interfaces         []*Interface // read-only
+	staticIPs          []net.IP     // read-only
+	router             *Router      // read-only
+	udpConns           *udpConnMap  // read-only
+	networkConditioner NetworkConditioner
+	mutex              sync.RWMutex
 }
 
 func (v *vNet) _getInterfaces() ([]*Interface, error) {
@@ -124,6 +125,11 @@ func (v *vNet) setRouter(r *Router) error {
 }
 
 func (v *vNet) onInboundChunk(c Chunk) {
+	if v.networkConditioner.handleDownLink(c) {
+		// Drop packet if requested.
+		return
+	}
+
 	v.mutex.Lock()
 	defer v.mutex.Unlock()
 
@@ -279,6 +285,11 @@ func (v *vNet) resolveUDPAddr(network, address string) (*net.UDPAddr, error) {
 }
 
 func (v *vNet) write(c Chunk) error {
+	if v.networkConditioner.handleUpLink(c) {
+		// Drop packet if requested.
+		return nil
+	}
+
 	if c.Network() == udpString {
 		if udp, ok := c.(*chunkUDP); ok {
 			if c.getDestinationIP().IsLoopback() {
@@ -407,7 +418,7 @@ func (v *vNet) allocateLocalAddr(ip net.IP, port int) error {
 	}
 
 	if len(ips) == 0 {
-		return fmt.Errorf("%w %s", errBindFailerFor, ip.String())
+		return fmt.Errorf("%w %s", errBindFailedFor, ip.String())
 	}
 
 	// check if all these transport addresses are not in use
@@ -459,9 +470,13 @@ type NetConfig struct {
 
 	// StaticIP is deprecated. Use StaticIPs.
 	StaticIP string
+
+	// NetworkConditioner to apply to the transport layer.
+	// This parameter is applied in supplement of Router-wide settings, such as jitter.
+	NetworkConditioner *NetworkConditioner
 }
 
-// Net represents a local network stack euivalent to a set of layers from NIC
+// Net represents a local network stack equivalent to a set of layers from NIC
 // up to the transport (UDP / TCP) layer.
 type Net struct {
 	v   *vNet
@@ -531,9 +546,13 @@ func NewNet(config *NetConfig) *Net {
 		udpConns:   newUDPConnMap(),
 	}
 
-	return &Net{
+	n := &Net{
 		v: v,
 	}
+
+	n.SetNetworkConditioner(config.NetworkConditioner)
+
+	return n
 }
 
 // Interfaces returns a list of the system's network interfaces.
@@ -654,6 +673,20 @@ func (n *Net) getStaticIPs() []net.IP {
 // IsVirtual tests if the virtual network is enabled.
 func (n *Net) IsVirtual() bool {
 	return n.v != nil
+}
+
+// SetNetworkConditioner sets the current NetworkConditioner.
+// NetworkCondition are applied in supplement of Router-wide settings, such as jitter.
+func (n *Net) SetNetworkConditioner(conditioner *NetworkConditioner) {
+	var networkConditioner *NetworkConditioner
+	if conditioner == nil {
+		networkConditioner = NewNetworkConditioner(NetworkConditionerPresetNone)
+	} else {
+		networkConditioner = conditioner
+	}
+
+	n.v.networkConditioner.DownLink.update(networkConditioner.DownLink)
+	n.v.networkConditioner.UpLink.update(networkConditioner.UpLink)
 }
 
 // Dialer is identical to net.Dialer excepts that its methods
