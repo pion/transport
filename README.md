@@ -31,18 +31,5 @@ If you need commercial support or don't want to use public methods you can conta
 ### Contributing
 Check out the **[contributing wiki](https://github.com/pion/webrtc/wiki/Contributing)** to join the group of amazing people making this project possible:
 
-* [Michiel De Backker](https://github.com/backkem) - *Original Author*
-* [Yutaka Takeda](https://github.com/enobufs) *Bridge, simulates loss and out of order packets*
-* [Sean DuBois](https://github.com/Sean-Der) - *Testing Infra*
-* [Woodrow Douglass](https://github.com/wdouglass) *Fix test flakiness*
-* [Luke Curley](https://github.com/kixelated)
-* [Hugo Arregui](https://github.com/hugoArregui)
-* [Atsushi Watanabe](https://github.com/at-wat)
-* [Juliusz Chroboczek](https://github.com/jech)
-* [ZHENK](https://github.com/scorpionknifes)
-* [OrlandoCo](https://github.com/OrlandoCo)
-* [Tarrence van As](https://github.com/tarrencev)
-* [Winlin](https://github.com/ossrs/srs) - *UDP proxy to communicate with real servers*
-
 ### License
 MIT License - see [LICENSE](LICENSE) for full text
