@@ -8,6 +8,7 @@ backkem <mail@backkem.me>
 Hugo Arregui <hugo.arregui@gmail.com>
 Juliusz Chroboczek <jch@irif.fr>
 Luke Curley <kixelated@gmail.com>
+Mathis Engelbart <mathis.engelbart@gmail.com>
 OrlandoCo <luisorlando.co@gmail.com>
 Sean DuBois <seaduboi@amazon.com>
 Sean DuBois <sean@siobud.com>
