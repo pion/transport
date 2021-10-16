@@ -90,8 +90,14 @@ func TestRouterBandwidth(t *testing.T) {
 			ticker := time.NewTicker(1 * time.Second)
 			start = time.Now()
 			lastLog := start
+			updateCapacity := time.After(duration / 2)
+			currentCapacity := capacity
+			capacityUpdated := false
 			for {
 				select {
+				case <-updateCapacity:
+					capacityUpdated = true
+					tbf.Set(TBFRate(capacity / 2))
 				case <-done:
 					for r := range received {
 						pktReceived += r.packets
@@ -122,6 +128,15 @@ func TestRouterBandwidth(t *testing.T) {
 					rate := bits / d.Seconds()
 					rateInMbit := rate / float64(MBit)
 					log.Infof("sent: %v B / %v P, received %v B / %v P => %.2f Mb/s\n", bytesSent, pktSent, bytesReceived, pktReceived, rateInMbit)
+
+					maxCap := float64(currentCapacity) + 0.1*float64(currentCapacity)
+					assert.Less(t, rate, maxCap)
+
+					if capacityUpdated {
+						currentCapacity /= 2
+						capacityUpdated = false
+					}
+
 					pktReceived = 0
 					bytesReceived = 0
 					pktSent = 0
@@ -135,8 +150,8 @@ func TestRouterBandwidth(t *testing.T) {
 
 		go func() {
 			defer close(received)
+			buf := make([]byte, 1500)
 			for {
-				buf := make([]byte, 1500)
 				n, _, err1 := connLeft.ReadFrom(buf)
 				if err1 != nil {
 					break
@@ -164,13 +179,13 @@ func TestRouterBandwidth(t *testing.T) {
 			defer close(done)
 			defer close(sent)
 			timer := time.NewTicker(duration)
+			buf := make([]byte, 1500)
 			for {
 				select {
 				case <-timer.C:
 					return
 				default:
 				}
-				buf := make([]byte, 1500)
 				n, err1 := connRight.WriteTo(buf, raddr)
 				assert.NoError(t, err1)
 				sent <- metrics{
@@ -188,16 +203,16 @@ func TestRouterBandwidth(t *testing.T) {
 	}
 
 	t.Run("Router bandwidth 500Kbit", func(t *testing.T) {
-		subTest(t, 500*KBit, 5*time.Second)
+		subTest(t, 500*KBit, 10*time.Second)
 	})
 
 	time.Sleep(2 * time.Second)
 	t.Run("Router bandwidth 1Mbit", func(t *testing.T) {
-		subTest(t, 1*MBit, 5*time.Second)
+		subTest(t, 1*MBit, 10*time.Second)
 	})
 
 	time.Sleep(2 * time.Second)
 	t.Run("Router bandwidth 2Mbit", func(t *testing.T) {
-		subTest(t, 2*MBit, 5*time.Second)
+		subTest(t, 2*MBit, 10*time.Second)
 	})
 }

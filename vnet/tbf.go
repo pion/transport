@@ -2,6 +2,7 @@ package vnet
 
 import (
 	"context"
+	"sync"
 	"time"
 )
 
@@ -20,28 +21,43 @@ type TokenBucketFilter struct {
 	currentTokensInBucket int
 	c                     chan Chunk
 
+	mutex    sync.Mutex
 	rate     int
 	maxBurst int
 }
 
 // TBFOption is the option type to configure a TokenBucketFilter
-type TBFOption func(*TokenBucketFilter) error
+type TBFOption func(*TokenBucketFilter) TBFOption
 
 // TBFRate sets the bitrate of a TokenBucketFilter
 func TBFRate(rate int) TBFOption {
-	return func(t *TokenBucketFilter) error {
+	return func(t *TokenBucketFilter) TBFOption {
+		t.mutex.Lock()
+		defer t.mutex.Unlock()
+		previous := t.rate
 		t.rate = rate
-		return nil
+		return TBFRate(previous)
 	}
 }
 
 // TBFMaxBurst sets the bucket size of the token bucket filter. This is the
 // maximum size that can instantly leave the filter, if the bucket is full.
 func TBFMaxBurst(size int) TBFOption {
-	return func(t *TokenBucketFilter) error {
+	return func(t *TokenBucketFilter) TBFOption {
+		t.mutex.Lock()
+		defer t.mutex.Unlock()
+		previous := t.maxBurst
 		t.maxBurst = size
-		return nil
+		return TBFMaxBurst(previous)
 	}
+}
+
+// Set updates a setting on the token bucket filter
+func (t *TokenBucketFilter) Set(opts ...TBFOption) (previous TBFOption) {
+	for _, opt := range opts {
+		previous = opt(t)
+	}
+	return previous
 }
 
 // NewTokenBucketFilter creates and starts a new TokenBucketFilter
@@ -53,12 +69,7 @@ func NewTokenBucketFilter(ctx context.Context, n NIC, opts ...TBFOption) (*Token
 		rate:     1 * MBit,
 		maxBurst: 2 * KBit,
 	}
-	for _, opt := range opts {
-		err := opt(tbf)
-		if err != nil {
-			return nil, err
-		}
-	}
+	tbf.Set(opts...)
 	go tbf.run(ctx)
 	return tbf, nil
 }
@@ -68,9 +79,6 @@ func (t *TokenBucketFilter) onInboundChunk(c Chunk) {
 }
 
 func (t *TokenBucketFilter) run(ctx context.Context) {
-	// (bitrate * S) / 1000 converted to bytes (divide by 8)
-	// S is the update interval in milliseconds
-	add := (t.rate / 1000) / 8
 	ticker := time.NewTicker(1 * time.Millisecond)
 
 	for {
@@ -79,15 +87,21 @@ func (t *TokenBucketFilter) run(ctx context.Context) {
 			ticker.Stop()
 			return
 		case <-ticker.C:
+			t.mutex.Lock()
 			if t.currentTokensInBucket < t.maxBurst {
-				t.currentTokensInBucket += add
+				// add (bitrate * S) / 1000 converted to bytes (divide by 8) S
+				// is the update interval in milliseconds
+				t.currentTokensInBucket += (t.rate / 1000) / 8
 			}
+			t.mutex.Unlock()
 		case chunk := <-t.c:
+			t.mutex.Lock()
 			tokens := len(chunk.UserData())
 			if t.currentTokensInBucket > tokens {
 				t.NIC.onInboundChunk(chunk)
 				t.currentTokensInBucket -= tokens
 			}
+			t.mutex.Unlock()
 		}
 	}
 }
