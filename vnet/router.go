@@ -351,6 +351,21 @@ func (r *Router) AddRouter(router *Router) error {
 	return nil
 }
 
+// AddChildRouter is like AddRouter, but does not add the child routers NIC to
+// the parent. This has to be done manually by calling AddNet, which allows to
+// use a wrapper around the subrouters NIC.
+// AddNet MUST be called before AddChildRouter.
+func (r *Router) AddChildRouter(router *Router) error {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	if err := router.setRouter(r); err != nil {
+		return err
+	}
+
+	r.children = append(r.children, router)
+	return nil
+}
+
 // AddNet ...
 func (r *Router) AddNet(nic NIC) error {
 	r.mutex.Lock()

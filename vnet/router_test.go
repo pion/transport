@@ -100,6 +100,30 @@ func TestRouterStandalone(t *testing.T) {
 		assert.Equal(t, "1.2.3.1", addrs[0].(*net.IPNet).IP.String(), "should match")
 	})
 
+	t.Run("AddChildRouter", func(t *testing.T) {
+		r1, err := NewRouter(&RouterConfig{
+			CIDR:          "0.0.0.0/0",
+			LoggerFactory: loggerFactory,
+		})
+		assert.Nil(t, err, "should succeed")
+
+		r2, err := NewRouter(&RouterConfig{
+			CIDR: "192.168.0.0/24",
+			StaticIPs: []string{
+				"192.168.0.1",
+			},
+
+			LoggerFactory: loggerFactory,
+		})
+		assert.Nil(t, err, "should succeed")
+
+		err = r1.AddNet(r2)
+		assert.Nil(t, err, "should succeed")
+
+		err = r1.AddChildRouter(r2)
+		assert.Nil(t, err, "should succeed")
+	})
+
 	t.Run("routing", func(t *testing.T) {
 		var nCbs0 int32
 		doneCh := make(chan struct{})
@@ -631,6 +655,27 @@ func TestRouterFailures(t *testing.T) {
 		assert.Nil(t, err, "should succeed")
 
 		err = r1.AddRouter(r2)
+		assert.Error(t, err, "should fail")
+	})
+
+	t.Run("AddChildRouterWithoutAddNet", func(t *testing.T) {
+		r1, err := NewRouter(&RouterConfig{
+			CIDR:          "1.2.3.0/24",
+			LoggerFactory: loggerFactory,
+		})
+		assert.Nil(t, err, "should succeed")
+
+		r2, err := NewRouter(&RouterConfig{
+			CIDR: "192.168.0.0/24",
+			StaticIPs: []string{
+				"5.6.7.8", // out of parent router'c CIDR
+			},
+
+			LoggerFactory: loggerFactory,
+		})
+		assert.Nil(t, err, "should succeed")
+
+		err = r1.AddChildRouter(r2)
 		assert.Error(t, err, "should fail")
 	})
 }
