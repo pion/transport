@@ -82,6 +82,7 @@ func TestRouterBandwidth(t *testing.T) {
 				rate := bits / d.Seconds()
 
 				assert.Less(t, rate, float64(capacity))
+				assert.Greater(t, rate, float64(0))
 
 				mBitPerSecond := rate / float64(MBit)
 				log.Infof("total packets received: %v / %v, lossrate=%.2f%%, throughput=%.2f Mb/s\n", totalPktReceived, totalPktSent, lossRate, mBitPerSecond)
