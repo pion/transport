@@ -20,6 +20,8 @@ type TokenBucketFilter struct {
 	NIC
 	currentTokensInBucket int
 	c                     chan Chunk
+	queue                 *chunkQueue
+	queueSize             int // in bytes
 
 	mutex    sync.Mutex
 	rate     int
@@ -28,6 +30,16 @@ type TokenBucketFilter struct {
 
 // TBFOption is the option type to configure a TokenBucketFilter
 type TBFOption func(*TokenBucketFilter) TBFOption
+
+// TBFQueueSizeInBytes sets the max number of bytes waiting in the queue. Can
+// only be set in constructor before using the TBF.
+func TBFQueueSizeInBytes(bytes int) TBFOption {
+	return func(t *TokenBucketFilter) TBFOption {
+		prev := t.queueSize
+		t.queueSize = bytes
+		return TBFQueueSizeInBytes(prev)
+	}
+}
 
 // TBFRate sets the bitrate of a TokenBucketFilter
 func TBFRate(rate int) TBFOption {
@@ -63,13 +75,17 @@ func (t *TokenBucketFilter) Set(opts ...TBFOption) (previous TBFOption) {
 // NewTokenBucketFilter creates and starts a new TokenBucketFilter
 func NewTokenBucketFilter(ctx context.Context, n NIC, opts ...TBFOption) (*TokenBucketFilter, error) {
 	tbf := &TokenBucketFilter{
-		NIC: n,
-		c:   make(chan Chunk),
-
-		rate:     1 * MBit,
-		maxBurst: 2 * KBit,
+		NIC:                   n,
+		currentTokensInBucket: 0,
+		c:                     make(chan Chunk),
+		queue:                 nil,
+		queueSize:             50000,
+		mutex:                 sync.Mutex{},
+		rate:                  1 * MBit,
+		maxBurst:              2 * KBit,
 	}
 	tbf.Set(opts...)
+	tbf.queue = newChunkQueue(0, tbf.queueSize)
 	go tbf.run(ctx)
 	return tbf, nil
 }
@@ -94,14 +110,23 @@ func (t *TokenBucketFilter) run(ctx context.Context) {
 				t.currentTokensInBucket += (t.rate / 1000) / 8
 			}
 			t.mutex.Unlock()
+			t.drainQueue()
 		case chunk := <-t.c:
-			t.mutex.Lock()
-			tokens := len(chunk.UserData())
-			if t.currentTokensInBucket > tokens {
-				t.NIC.onInboundChunk(chunk)
-				t.currentTokensInBucket -= tokens
-			}
-			t.mutex.Unlock()
+			t.queue.push(chunk)
+			t.drainQueue()
 		}
+	}
+}
+
+func (t *TokenBucketFilter) drainQueue() {
+	for {
+		next := t.queue.peek()
+		tokens := len(next.UserData())
+		if t.currentTokensInBucket < tokens {
+			break
+		}
+		t.queue.pop()
+		t.NIC.onInboundChunk(next)
+		t.currentTokensInBucket -= tokens
 	}
 }

@@ -15,12 +15,13 @@ func TestChunkQueue(t *testing.T) {
 		IP:   net.ParseIP(demoIP),
 		Port: 5678,
 	})
+	c.userData = make([]byte, 1200)
 
 	var ok bool
 	var q *chunkQueue
 	var d Chunk
 
-	q = newChunkQueue(0)
+	q = newChunkQueue(0, 0)
 
 	d = q.peek()
 	assert.Nil(t, d, "should return nil")
@@ -36,7 +37,17 @@ func TestChunkQueue(t *testing.T) {
 	assert.False(t, ok, "should fail")
 	assert.Nil(t, d, "should be nil")
 
-	q = newChunkQueue(1)
+	q = newChunkQueue(1, 0)
+	ok = q.push(c)
+	assert.True(t, ok, "should succeed")
+
+	ok = q.push(c)
+	assert.False(t, ok, "should fail")
+
+	d = q.peek()
+	assert.Equal(t, c, d, "should be the same")
+
+	q = newChunkQueue(0, 1500)
 	ok = q.push(c)
 	assert.True(t, ok, "should succeed")
 

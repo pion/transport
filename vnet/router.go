@@ -181,7 +181,7 @@ func NewRouter(config *RouterConfig) (*Router, error) {
 		ipv4Net:        ipv4Net,
 		staticIPs:      staticIPs,
 		staticLocalIPs: staticLocalIPs,
-		queue:          newChunkQueue(queueSize),
+		queue:          newChunkQueue(queueSize, 0),
 		natType:        config.NATType,
 		nics:           map[string]NIC{},
 		resolver:       resolver,

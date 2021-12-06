@@ -25,7 +25,7 @@ func NewDelayFilter(nic NIC, delay time.Duration) (*DelayFilter, error) {
 		NIC:   nic,
 		delay: delay,
 		push:  make(chan struct{}),
-		queue: newChunkQueue(0),
+		queue: newChunkQueue(0, 0),
 	}, nil
 }
 
