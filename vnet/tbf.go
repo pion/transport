@@ -1,7 +1,6 @@
 package vnet
 
 import (
-	"context"
 	"sync"
 	"time"
 )
@@ -26,6 +25,9 @@ type TokenBucketFilter struct {
 	mutex    sync.Mutex
 	rate     int
 	maxBurst int
+
+	wg   sync.WaitGroup
+	done chan struct{}
 }
 
 // TBFOption is the option type to configure a TokenBucketFilter
@@ -73,7 +75,7 @@ func (t *TokenBucketFilter) Set(opts ...TBFOption) (previous TBFOption) {
 }
 
 // NewTokenBucketFilter creates and starts a new TokenBucketFilter
-func NewTokenBucketFilter(ctx context.Context, n NIC, opts ...TBFOption) (*TokenBucketFilter, error) {
+func NewTokenBucketFilter(n NIC, opts ...TBFOption) (*TokenBucketFilter, error) {
 	tbf := &TokenBucketFilter{
 		NIC:                   n,
 		currentTokensInBucket: 0,
@@ -83,10 +85,13 @@ func NewTokenBucketFilter(ctx context.Context, n NIC, opts ...TBFOption) (*Token
 		mutex:                 sync.Mutex{},
 		rate:                  1 * MBit,
 		maxBurst:              2 * KBit,
+		wg:                    sync.WaitGroup{},
+		done:                  make(chan struct{}),
 	}
 	tbf.Set(opts...)
 	tbf.queue = newChunkQueue(0, tbf.queueSize)
-	go tbf.run(ctx)
+	tbf.wg.Add(1)
+	go tbf.run()
 	return tbf, nil
 }
 
@@ -94,13 +99,15 @@ func (t *TokenBucketFilter) onInboundChunk(c Chunk) {
 	t.c <- c
 }
 
-func (t *TokenBucketFilter) run(ctx context.Context) {
+func (t *TokenBucketFilter) run() {
+	defer t.wg.Done()
 	ticker := time.NewTicker(1 * time.Millisecond)
 
 	for {
 		select {
-		case <-ctx.Done():
+		case <-t.done:
 			ticker.Stop()
+			t.drainQueue()
 			return
 		case <-ticker.C:
 			t.mutex.Lock()
@@ -121,6 +128,9 @@ func (t *TokenBucketFilter) run(ctx context.Context) {
 func (t *TokenBucketFilter) drainQueue() {
 	for {
 		next := t.queue.peek()
+		if next == nil {
+			break
+		}
 		tokens := len(next.UserData())
 		if t.currentTokensInBucket < tokens {
 			break
@@ -129,4 +139,11 @@ func (t *TokenBucketFilter) drainQueue() {
 		t.NIC.onInboundChunk(next)
 		t.currentTokensInBucket -= tokens
 	}
+}
+
+// Close closes and stops the token bucket filter queue
+func (t *TokenBucketFilter) Close() error {
+	close(t.done)
+	t.wg.Wait()
+	return nil
 }
