@@ -6,6 +6,7 @@
 Atsushi Watanabe <atsushi.w@ieee.org>
 backkem <mail@backkem.me>
 Hugo Arregui <hugo.arregui@gmail.com>
+Jozef Kralik <jojo.lwin@gmail.com>
 Juliusz Chroboczek <jch@irif.fr>
 Luke Curley <kixelated@gmail.com>
 Mathis Engelbart <mathis.engelbart@gmail.com>
