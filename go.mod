@@ -5,5 +5,5 @@ go 1.12
 require (
 	github.com/pion/logging v0.2.2
 	github.com/stretchr/testify v1.7.0
-	golang.org/x/net v0.0.0-20211216030914-fe4d6282115f
+	golang.org/x/net v0.0.0-20220127200216-cd36cc0744dd
 )
