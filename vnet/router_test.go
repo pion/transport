@@ -38,7 +38,7 @@ func getIPAddr(n NIC) (string, error) {
 		return "", errNoAddress
 	}
 
-	return addrs[0].(*net.IPNet).IP.String(), nil
+	return addrs[0].(*net.IPNet).IP.String(), nil //nolint:forcetypeassert
 }
 
 func TestRouterStandalone(t *testing.T) {
@@ -97,7 +97,7 @@ func TestRouterStandalone(t *testing.T) {
 		assert.Equal(t, 1, len(addrs), "should match")
 		assert.Equal(t, "ip+net", addrs[0].Network(), "should match")
 		assert.Equal(t, "1.2.3.1/24", addrs[0].String(), "should match")
-		assert.Equal(t, "1.2.3.1", addrs[0].(*net.IPNet).IP.String(), "should match")
+		assert.Equal(t, "1.2.3.1", addrs[0].(*net.IPNet).IP.String(), "should match") //nolint:forcetypeassert
 	})
 
 	t.Run("AddChildRouter", func(t *testing.T) {
@@ -153,6 +153,7 @@ func TestRouterStandalone(t *testing.T) {
 			addrs, err2 := eth0.Addrs()
 			assert.Nil(t, err2, "should succeed")
 			assert.Equal(t, 1, len(addrs), "should match")
+			//nolint:forcetypeassert
 			ip[i] = &net.UDPAddr{
 				IP:   addrs[0].(*net.IPNet).IP,
 				Port: 1111 * (i + 1),
@@ -210,6 +211,7 @@ func TestRouterStandalone(t *testing.T) {
 			addrs, err2 := eth0.Addrs()
 			assert.Nil(t, err2, "should succeed")
 			assert.Equal(t, 1, len(addrs), "should match")
+			//nolint:forcetypeassert
 			ip[i] = &net.UDPAddr{
 				IP:   addrs[0].(*net.IPNet).IP,
 				Port: 1111 * (i + 1),
@@ -307,6 +309,7 @@ func TestRouterDelay(t *testing.T) {
 				addrs, err2 := eth0.Addrs()
 				assert.Nil(t, err2, "should succeed")
 				assert.Equal(t, 1, len(addrs), "should match")
+				//nolint:forcetypeassert
 				ip[i] = &net.UDPAddr{
 					IP:   addrs[0].(*net.IPNet).IP,
 					Port: 1111 * (i + 1),
@@ -383,6 +386,7 @@ func TestRouterOneChild(t *testing.T) {
 
 		// Now, eth0 must have one address assigned
 		wanIP, err := getIPAddr(wanNet)
+		assert.Nil(t, err, "should succeed")
 		log.Debugf("wanIP: %s", wanIP)
 
 		// LAN
@@ -401,6 +405,7 @@ func TestRouterOneChild(t *testing.T) {
 
 		// Now, eth0 must have one address assigned
 		lanIP, err := getIPAddr(lanNet)
+		assert.Nil(t, err, "should succeed")
 		log.Debugf("lanIP: %s", lanIP)
 
 		err = wan.AddRouter(lan)
@@ -415,10 +420,10 @@ func TestRouterOneChild(t *testing.T) {
 			log.Debugf("wanNet received: %s", c.String())
 
 			// echo the chunk
-			echo := c.Clone().(*chunkUDP)
-			err = echo.setSourceAddr(c.(*chunkUDP).DestinationAddr().String())
+			echo := c.Clone().(*chunkUDP)                                      //nolint:forcetypeassert
+			err = echo.setSourceAddr(c.(*chunkUDP).DestinationAddr().String()) //nolint:forcetypeassert
 			assert.NoError(t, err, "should succeed")
-			err = echo.setDestinationAddr(c.(*chunkUDP).SourceAddr().String())
+			err = echo.setDestinationAddr(c.(*chunkUDP).SourceAddr().String()) //nolint:forcetypeassert
 			assert.NoError(t, err, "should succeed")
 
 			log.Debug("wan.push being called..")

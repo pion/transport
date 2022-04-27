@@ -68,6 +68,7 @@ func TestNATMappingBehavior(t *testing.T) {
 		log.Debugf("o-original  : %s\n", oic.String())
 		log.Debugf("o-translated: %s\n", oec.String())
 
+		//nolint:forcetypeassert
 		iec := newChunkUDP(
 			&net.UDPAddr{
 				IP:   dst.IP,
@@ -86,6 +87,7 @@ func TestNATMappingBehavior(t *testing.T) {
 
 		log.Debugf("i-translated: %s\n", iic.String())
 
+		//nolint:forcetypeassert
 		assert.Equal(t,
 			oic.SourceAddr().String(),
 			iic.(*chunkUDP).DestinationAddr().String(),
@@ -93,6 +95,7 @@ func TestNATMappingBehavior(t *testing.T) {
 
 		// packet with dest addr that does not exist in the mapping table
 		// will be dropped
+		//nolint:forcetypeassert
 		iec = newChunkUDP(
 			&net.UDPAddr{
 				IP:   dst.IP,
@@ -109,6 +112,7 @@ func TestNATMappingBehavior(t *testing.T) {
 		assert.NotNil(t, err, "should fail (dropped)")
 
 		// packet from any addr will be accepted (full-cone)
+		//nolint:forcetypeassert
 		iec = newChunkUDP(
 			&net.UDPAddr{
 				IP:   dst.IP,
@@ -169,6 +173,7 @@ func TestNATMappingBehavior(t *testing.T) {
 		assert.Equal(t, 1, len(nat.inboundMap), "should match")
 		log.Debugf("o-translated: %s\n", oec2.String())
 
+		//nolint:forcetypeassert
 		iec := newChunkUDP(
 			&net.UDPAddr{
 				IP:   dst.IP,
@@ -189,6 +194,7 @@ func TestNATMappingBehavior(t *testing.T) {
 
 		log.Debugf("i-translated: %s\n", iic.String())
 
+		//nolint:forcetypeassert
 		assert.Equal(t,
 			oic.SourceAddr().String(),
 			iic.(*chunkUDP).DestinationAddr().String(),
@@ -196,6 +202,7 @@ func TestNATMappingBehavior(t *testing.T) {
 
 		// packet with dest addr that does not exist in the mapping table
 		// will be dropped
+		//nolint:forcetypeassert
 		iec = newChunkUDP(
 			&net.UDPAddr{
 				IP:   dst.IP,
@@ -212,6 +219,7 @@ func TestNATMappingBehavior(t *testing.T) {
 		assert.NotNil(t, err, "should fail (dropped)")
 
 		// packet from any port will be accepted (restricted-cone)
+		//nolint:forcetypeassert
 		iec = newChunkUDP(
 			&net.UDPAddr{
 				IP:   dst.IP,
@@ -227,6 +235,7 @@ func TestNATMappingBehavior(t *testing.T) {
 		assert.Nil(t, err, "should succeed")
 
 		// packet from different addr will be droped (restricted-cone)
+		//nolint:forcetypeassert
 		iec = newChunkUDP(
 			&net.UDPAddr{
 				IP:   net.ParseIP("6.6.6.6"),
@@ -289,6 +298,7 @@ func TestNATMappingBehavior(t *testing.T) {
 		assert.Equal(t, 1, len(nat.inboundMap), "should match")
 		log.Debugf("o-translated: %s\n", oec2.String())
 
+		//nolint:forcetypeassert
 		iec := newChunkUDP(
 			&net.UDPAddr{
 				IP:   dst.IP,
@@ -307,6 +317,7 @@ func TestNATMappingBehavior(t *testing.T) {
 
 		log.Debugf("i-translated: %s\n", iic.String())
 
+		//nolint:forcetypeassert
 		assert.Equal(t,
 			oic.SourceAddr().String(),
 			iic.(*chunkUDP).DestinationAddr().String(),
@@ -314,6 +325,7 @@ func TestNATMappingBehavior(t *testing.T) {
 
 		// packet with dest addr that does not exist in the mapping table
 		// will be dropped
+		//nolint:forcetypeassert
 		iec = newChunkUDP(
 			&net.UDPAddr{
 				IP:   dst.IP,
@@ -329,6 +341,7 @@ func TestNATMappingBehavior(t *testing.T) {
 		assert.NotNil(t, err, "should fail (dropped)")
 
 		// packet from different port will be dropped (port-restricted-cone)
+		//nolint:forcetypeassert
 		iec = newChunkUDP(
 			&net.UDPAddr{
 				IP:   dst.IP,
@@ -344,6 +357,7 @@ func TestNATMappingBehavior(t *testing.T) {
 		assert.NotNil(t, err, "should fail (dropped)")
 
 		// packet from different addr will be droped (restricted-cone)
+		//nolint:forcetypeassert
 		iec = newChunkUDP(
 			&net.UDPAddr{
 				IP:   net.ParseIP("6.6.6.6"),
@@ -425,8 +439,8 @@ func TestNATMappingBehavior(t *testing.T) {
 		log.Debugf("o-translated: %s\n", oec2.String())
 		log.Debugf("o-translated: %s\n", oec3.String())
 
-		assert.NotEqual(t, oec1.(*chunkUDP).sourcePort, oec2.(*chunkUDP).sourcePort, "should not match")
-		assert.Equal(t, oec1.(*chunkUDP).sourcePort, oec3.(*chunkUDP).sourcePort, "should match")
+		assert.NotEqual(t, oec1.(*chunkUDP).sourcePort, oec2.(*chunkUDP).sourcePort, "should not match") //nolint:forcetypeassert
+		assert.Equal(t, oec1.(*chunkUDP).sourcePort, oec3.(*chunkUDP).sourcePort, "should match")        //nolint:forcetypeassert
 	})
 
 	t.Run("symmetric NAT port dependent mapping", func(t *testing.T) { //nolint:dupl
@@ -495,8 +509,8 @@ func TestNATMappingBehavior(t *testing.T) {
 		log.Debugf("o-translated: %s\n", oec2.String())
 		log.Debugf("o-translated: %s\n", oec3.String())
 
-		assert.NotEqual(t, oec1.(*chunkUDP).sourcePort, oec2.(*chunkUDP).sourcePort, "should not match")
-		assert.NotEqual(t, oec1.(*chunkUDP).sourcePort, oec3.(*chunkUDP).sourcePort, "should match")
+		assert.NotEqual(t, oec1.(*chunkUDP).sourcePort, oec2.(*chunkUDP).sourcePort, "should not match") //nolint:forcetypeassert
+		assert.NotEqual(t, oec1.(*chunkUDP).sourcePort, oec3.(*chunkUDP).sourcePort, "should match")     //nolint:forcetypeassert
 	})
 }
 
@@ -537,7 +551,7 @@ func TestNATMappingTimeout(t *testing.T) {
 		log.Debugf("o-translated: %s\n", oec.String())
 
 		// record mapped addr
-		mapped := oec.(*chunkUDP).SourceAddr().String()
+		mapped := oec.(*chunkUDP).SourceAddr().String() //nolint:forcetypeassert
 
 		time.Sleep(75 * time.Millisecond)
 
@@ -550,7 +564,7 @@ func TestNATMappingTimeout(t *testing.T) {
 		log.Debugf("o-original  : %s\n", oic.String())
 		log.Debugf("o-translated: %s\n", oec.String())
 
-		assert.Equal(t, mapped, oec.(*chunkUDP).SourceAddr().String(), "mapped addr should match")
+		assert.Equal(t, mapped, oec.(*chunkUDP).SourceAddr().String(), "mapped addr should match") //nolint:forcetypeassert
 
 		// sleep long enough for the mapping to expire
 		time.Sleep(125 * time.Millisecond)
@@ -564,7 +578,7 @@ func TestNATMappingTimeout(t *testing.T) {
 		log.Debugf("o-original  : %s\n", oic.String())
 		log.Debugf("o-translated: %s\n", oec.String())
 
-		assert.NotEqual(t, mapped, oec.(*chunkUDP).SourceAddr().String(), "mapped addr should not match")
+		assert.NotEqual(t, mapped, oec.(*chunkUDP).SourceAddr().String(), "mapped addr should not match") //nolint:forcetypeassert
 	})
 
 	t.Run("outbound detects timeout", func(t *testing.T) {
@@ -602,6 +616,7 @@ func TestNATMappingTimeout(t *testing.T) {
 		// sleep long enough for the mapping to expire
 		time.Sleep(125 * time.Millisecond)
 
+		//nolint:forcetypeassert
 		iec := newChunkUDP(
 			&net.UDPAddr{
 				IP:   dst.IP,
@@ -660,6 +675,7 @@ func TestNAT1To1Bahavior(t *testing.T) {
 
 		assert.Equal(t, "1.2.3.4:1234", oec.SourceAddr().String(), "should match")
 
+		//nolint:forcetypeassert
 		iec := newChunkUDP(
 			&net.UDPAddr{
 				IP:   dst.IP,

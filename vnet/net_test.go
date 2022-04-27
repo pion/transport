@@ -274,7 +274,7 @@ func TestNetVirtual(t *testing.T) {
 		assert.NoError(t, err, "should succeed")
 		assert.Equal(t, len(msg), n, "should match")
 		assert.Equal(t, msg, string(buf[:n]), "should match")
-		assert.Equal(t, laddr.(*net.UDPAddr).String(), addr.(*net.UDPAddr).String(), "should match")
+		assert.Equal(t, laddr.(*net.UDPAddr).String(), addr.(*net.UDPAddr).String(), "should match") //nolint:forcetypeassert
 
 		assert.Equal(t, 1, nw.v.udpConns.size(), "should match")
 		assert.NoError(t, conn.Close(), "should succeed")
@@ -356,8 +356,8 @@ func TestNetVirtual(t *testing.T) {
 		raddr := conn.RemoteAddr()
 		log.Debugf("raddr: %s", raddr.String())
 
-		assert.Equal(t, "127.0.0.1", laddr.(*net.UDPAddr).IP.String(), "should match")
-		assert.True(t, laddr.(*net.UDPAddr).Port != 0, "should match")
+		assert.Equal(t, "127.0.0.1", laddr.(*net.UDPAddr).IP.String(), "should match") //nolint:forcetypeassert
+		assert.True(t, laddr.(*net.UDPAddr).Port != 0, "should match")                 //nolint:forcetypeassert
 		assert.Equal(t, "127.0.0.1:1234", raddr.String(), "should match")
 		assert.Equal(t, 1, nw.v.udpConns.size(), "should match")
 		assert.NoError(t, conn.Close(), "should succeed")
@@ -385,8 +385,8 @@ func TestNetVirtual(t *testing.T) {
 		raddr := conn.RemoteAddr()
 		log.Debugf("raddr: %s", raddr.String())
 
-		assert.Equal(t, "1.2.3.1", laddr.(*net.UDPAddr).IP.String(), "should match")
-		assert.True(t, laddr.(*net.UDPAddr).Port != 0, "should match")
+		assert.Equal(t, "1.2.3.1", laddr.(*net.UDPAddr).IP.String(), "should match") //nolint:forcetypeassert
+		assert.True(t, laddr.(*net.UDPAddr).Port != 0, "should match")               //nolint:forcetypeassert
 		assert.Equal(t, "27.3.4.5:1234", raddr.String(), "should match")
 		assert.Equal(t, 1, nw.v.udpConns.size(), "should match")
 		assert.NoError(t, conn.Close(), "should succeed")
@@ -415,8 +415,8 @@ func TestNetVirtual(t *testing.T) {
 		raddr := conn.RemoteAddr()
 		log.Debugf("raddr: %s", raddr.String())
 
-		assert.Equal(t, "127.0.0.1", laddr.(*net.UDPAddr).IP.String(), "should match")
-		assert.True(t, laddr.(*net.UDPAddr).Port != 0, "should match")
+		assert.Equal(t, "127.0.0.1", laddr.(*net.UDPAddr).IP.String(), "should match") //nolint:forcetypeassert
+		assert.True(t, laddr.(*net.UDPAddr).Port != 0, "should match")                 //nolint:forcetypeassert
 		assert.Equal(t, "127.0.0.1:1234", raddr.String(), "should match")
 		assert.Equal(t, 1, nw.v.udpConns.size(), "should match")
 		assert.NoError(t, conn.Close(), "should succeed")
@@ -447,8 +447,8 @@ func TestNetVirtual(t *testing.T) {
 		raddr := conn.RemoteAddr()
 		log.Debugf("raddr: %s", raddr.String())
 
-		assert.Equal(t, "1.2.3.1", laddr.(*net.UDPAddr).IP.String(), "should match")
-		assert.True(t, laddr.(*net.UDPAddr).Port != 0, "should match")
+		assert.Equal(t, "1.2.3.1", laddr.(*net.UDPAddr).IP.String(), "should match") //nolint:forcetypeassert
+		assert.True(t, laddr.(*net.UDPAddr).Port != 0, "should match")               //nolint:forcetypeassert
 		assert.Equal(t, "30.31.32.33:1234", raddr.String(), "should match")
 		assert.Equal(t, 1, nw.v.udpConns.size(), "should match")
 		assert.NoError(t, conn.Close(), "should succeed")
@@ -637,8 +637,8 @@ func TestNetVirtual(t *testing.T) {
 		raddr := conn.RemoteAddr()
 		log.Debugf("raddr: %s", raddr.String())
 
-		assert.Equal(t, "127.0.0.1", laddr.(*net.UDPAddr).IP.String(), "should match")
-		assert.True(t, laddr.(*net.UDPAddr).Port != 0, "should match")
+		assert.Equal(t, "127.0.0.1", laddr.(*net.UDPAddr).IP.String(), "should match") //nolint:forcetypeassert
+		assert.True(t, laddr.(*net.UDPAddr).Port != 0, "should match")                 //nolint:forcetypeassert
 		assert.Equal(t, "127.0.0.1:1234", raddr.String(), "should match")
 		assert.Equal(t, 1, nw.v.udpConns.size(), "should match")
 		assert.NoError(t, conn.Close(), "should succeed")

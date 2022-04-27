@@ -453,8 +453,8 @@ func (c *closePropagator) Close() error {
 func TestNetTest(t *testing.T) {
 	nettest.TestConn(t, func() (net.Conn, net.Conn, func(), error) {
 		br := NewBridge()
-		conn0 := br.GetConn0().(*bridgeConn)
-		conn1 := br.GetConn1().(*bridgeConn)
+		conn0 := br.GetConn0().(*bridgeConn) //nolint:forcetypeassert
+		conn1 := br.GetConn1().(*bridgeConn) //nolint:forcetypeassert
 		var wg sync.WaitGroup
 		wg.Add(1)
 		go func() {

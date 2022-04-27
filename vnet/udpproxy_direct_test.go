@@ -1,3 +1,4 @@
+//go:build !wasm
 // +build !wasm
 
 package vnet
@@ -106,7 +107,7 @@ func TestUDPProxyDirectDeliverTypical(t *testing.T) {
 				return err
 			}
 
-			if err = proxy.Proxy(clientNetwork, serverAddr); err != nil {
+			if err = proxy.Proxy(clientNetwork, serverAddr); err != nil { //nolint:contextcheck
 				return err
 			}
 
@@ -255,7 +256,7 @@ func TestUDPProxyDirectDeliverBadcase(t *testing.T) {
 				return err
 			}
 
-			if err = proxy.Proxy(clientNetwork, serverAddr); err != nil {
+			if err = proxy.Proxy(clientNetwork, serverAddr); err != nil { //nolint:contextcheck
 				return err
 			}
 
@@ -314,8 +315,9 @@ func TestUDPProxyDirectDeliverBadcase(t *testing.T) {
 
 			// BadCase: Write on closed socket, error and ignore.
 			proxy.workers.Range(func(key, value interface{}) bool {
+				//nolint:forcetypeassert
 				value.(*aUDPProxyWorker).endpoints.Range(func(key, value interface{}) bool {
-					_ = value.(*net.UDPConn).Close()
+					_ = value.(*net.UDPConn).Close() //nolint:forcetypeassert
 					return true
 				})
 				return true

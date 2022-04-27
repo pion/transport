@@ -7,8 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type myConnObserver struct {
-}
+type myConnObserver struct{}
 
 func (obs *myConnObserver) write(c Chunk) error {
 	return nil

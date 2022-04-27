@@ -1,3 +1,4 @@
+//go:build !wasm
 // +build !wasm
 
 package vnet
@@ -40,7 +41,7 @@ func (v *MockUDPEchoServer) doMockUDPServer(ctx context.Context) error {
 		return err
 	}
 
-	v.realServerAddr = conn.LocalAddr().(*net.UDPAddr)
+	v.realServerAddr = conn.LocalAddr().(*net.UDPAddr) //nolint:forcetypeassert
 	v.realServerReadyCancel()
 
 	// When system quit, interrupt client.
@@ -180,7 +181,7 @@ func TestUDPProxyOne2One(t *testing.T) {
 				return err
 			}
 
-			if err = proxy.Proxy(clientNetwork, serverAddr); err != nil {
+			if err = proxy.Proxy(clientNetwork, serverAddr); err != nil { //nolint:contextcheck
 				return err
 			}
 
@@ -326,7 +327,7 @@ func TestUDPProxyTwo2One(t *testing.T) {
 				return err
 			}
 
-			if err = proxy.Proxy(clientNetwork, serverAddr); err != nil {
+			if err = proxy.Proxy(clientNetwork, serverAddr); err != nil { //nolint:contextcheck
 				return err
 			}
 
@@ -379,8 +380,8 @@ func TestUDPProxyTwo2One(t *testing.T) {
 			go func() {
 				defer client0Cancel()
 				address := "10.0.0.11:5787"
-				if err := handClient(address, "Hello"); err != nil { // nolint:govet
-					r3 = fmt.Errorf("client %v err %v", address, err) // nolint:goerr113
+				if err = handClient(address, "Hello"); err != nil {
+					r3 = fmt.Errorf("client %v err %w", address, err)
 				}
 			}()
 
@@ -388,8 +389,8 @@ func TestUDPProxyTwo2One(t *testing.T) {
 			go func() {
 				defer client1Cancel()
 				address := "10.0.0.11:5788"
-				if err := handClient(address, "World"); err != nil { // nolint:govet
-					r3 = fmt.Errorf("client %v err %v", address, err) // nolint:goerr113
+				if err = handClient(address, "World"); err != nil {
+					r3 = fmt.Errorf("client %v err %w", address, err)
 				}
 			}()
 
@@ -507,7 +508,7 @@ func TestUDPProxyProxyTwice(t *testing.T) {
 			handClient := func(address, echoData string) error {
 				// We proxy multiple times, for example, in publisher and player, both call
 				// the proxy when got answer.
-				if err := proxy.Proxy(clientNetwork, serverAddr); err != nil { // nolint:govet
+				if err = proxy.Proxy(clientNetwork, serverAddr); err != nil { //nolint:contextcheck
 					return err
 				}
 
@@ -558,7 +559,7 @@ func TestUDPProxyProxyTwice(t *testing.T) {
 				defer client0Cancel()
 				address := "10.0.0.11:5787"
 				if err = handClient(address, "Hello"); err != nil {
-					r3 = fmt.Errorf("client %v err %v", address, err) // nolint:goerr113
+					r3 = fmt.Errorf("client %v err %w", address, err)
 				}
 			}()
 
@@ -576,7 +577,7 @@ func TestUDPProxyProxyTwice(t *testing.T) {
 
 				address := "10.0.0.11:5788"
 				if err = handClient(address, "World"); err != nil {
-					r3 = fmt.Errorf("client %v err %v", address, err) // nolint:goerr113
+					r3 = fmt.Errorf("client %v err %w", address, err) // nolint:goerr113
 				}
 			}()
 
