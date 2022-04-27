@@ -52,10 +52,10 @@ func TestChunk(t *testing.T) {
 		ts := c.setTimestamp()
 		assert.Equal(t, ts, c.getTimestamp(), "timestamp should match")
 
-		uc := c.(*chunkUDP)
+		uc := c.(*chunkUDP) //nolint:forcetypeassert
 		uc.userData = []byte("Hello")
 
-		cloned := c.Clone().(*chunkUDP)
+		cloned := c.Clone().(*chunkUDP) //nolint:forcetypeassert
 
 		// Test setSourceAddr
 		err := uc.setSourceAddr("2.3.4.5:4000")
@@ -102,10 +102,10 @@ func TestChunk(t *testing.T) {
 		ts := c.setTimestamp()
 		assert.Equal(t, ts, c.getTimestamp(), "timestamp should match")
 
-		tc := c.(*chunkTCP)
+		tc := c.(*chunkTCP) //nolint:forcetypeassert
 		tc.userData = []byte("Hello")
 
-		cloned := c.Clone().(*chunkTCP)
+		cloned := c.Clone().(*chunkTCP) //nolint:forcetypeassert
 
 		// Test setSourceAddr
 		err := tc.setSourceAddr("2.3.4.5:4000")

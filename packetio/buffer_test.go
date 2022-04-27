@@ -32,7 +32,8 @@ func TestBuffer(t *testing.T) {
 	err = buffer.SetReadDeadline(time.Unix(0, 1))
 	assert.NoError(err)
 	n, err = buffer.Read(packet)
-	if e, ok := err.(net.Error); !ok || !e.Timeout() {
+	var e net.Error
+	if !errors.As(err, &e) || !e.Timeout() {
 		t.Errorf("Unexpected error: %v", err)
 	}
 	assert.Equal(0, n)
@@ -530,7 +531,7 @@ func benchmarkBuffer(b *testing.B, size int64) {
 
 		for {
 			_, err := buffer.Read(packet)
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				break
 			} else if err != nil {
 				b.Error(err)

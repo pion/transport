@@ -53,10 +53,7 @@ func TestUDPConn(t *testing.T) {
 				if !ok {
 					return errFailedToCovertToChuckUDP
 				}
-				chunk := newChunkUDP(
-					uc.DestinationAddr().(*net.UDPAddr),
-					uc.SourceAddr().(*net.UDPAddr),
-				)
+				chunk := newChunkUDP(uc.DestinationAddr().(*net.UDPAddr), uc.SourceAddr().(*net.UDPAddr)) //nolint:forcetypeassert
 				chunk.userData = make([]byte, len(uc.userData))
 				copy(chunk.userData, uc.userData)
 				conn.readCh <- chunk // echo back
@@ -133,6 +130,7 @@ func TestUDPConn(t *testing.T) {
 				if !ok {
 					return errFailedToCovertToChuckUDP
 				}
+				//nolint:forcetypeassert
 				chunk := newChunkUDP(
 					uc.DestinationAddr().(*net.UDPAddr),
 					uc.SourceAddr().(*net.UDPAddr),
@@ -220,9 +218,12 @@ func TestUDPConn(t *testing.T) {
 			buf := make([]byte, 1500)
 			_, _, err := conn.ReadFrom(buf)
 			assert.NotNil(t, err, "should return error")
-			ne, ok := err.(*net.OpError)
-			assert.True(t, ok, "should be an net.OpError")
-			assert.True(t, ne.Timeout(), "should be a timeout")
+			var ne *net.OpError
+			if errors.As(err, &ne) {
+				assert.True(t, ne.Timeout(), "should be a timeout")
+			} else {
+				assert.True(t, false, "should be an net.OpError")
+			}
 
 			assert.Nil(t, conn.Close(), "should succeed")
 			close(doneCh)

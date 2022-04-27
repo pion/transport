@@ -94,7 +94,7 @@ func TestReadClosed(t *testing.T) {
 
 	b := make([]byte, 100)
 	n, err := c.ReadContext(context.Background(), b)
-	if err != io.EOF {
+	if !errors.Is(err, io.EOF) {
 		t.Errorf("Expected error '%v', got '%v'", io.EOF, err)
 	}
 	if n != 0 {
