@@ -206,16 +206,16 @@ func (n *networkAddressTranslator) translateOutbound(from Chunk) (Chunk, error) 
 
 				iKey := fmt.Sprintf("udp:%s", m.mapped)
 
-				n.log.Debugf("[%s] created a new NAT binding oKey=%s iKey=%s\n",
+				n.log.Debugf("[%s] created a new NAT binding oKey=%s iKey=%s",
 					n.name,
 					oKey,
 					iKey)
 
 				m.filters[filterKey] = struct{}{}
-				n.log.Debugf("[%s] permit access from %s to %s\n", n.name, filterKey, m.mapped)
+				n.log.Debugf("[%s] permit access from %s to %s", n.name, filterKey, m.mapped)
 				n.inboundMap[iKey] = m
 			} else if _, ok := m.filters[filterKey]; !ok {
-				n.log.Debugf("[%s] permit access from %s to %s\n", n.name, filterKey, m.mapped)
+				n.log.Debugf("[%s] permit access from %s to %s", n.name, filterKey, m.mapped)
 				m.filters[filterKey] = struct{}{}
 			}
 

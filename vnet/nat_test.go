@@ -65,8 +65,8 @@ func TestNATMappingBehavior(t *testing.T) {
 		assert.Equal(t, 1, len(nat.outboundMap), "should match")
 		assert.Equal(t, 1, len(nat.inboundMap), "should match")
 
-		log.Debugf("o-original  : %s\n", oic.String())
-		log.Debugf("o-translated: %s\n", oec.String())
+		log.Debugf("o-original  : %s", oic.String())
+		log.Debugf("o-translated: %s", oec.String())
 
 		//nolint:forcetypeassert
 		iec := newChunkUDP(
@@ -80,12 +80,12 @@ func TestNATMappingBehavior(t *testing.T) {
 			},
 		)
 
-		log.Debugf("i-original  : %s\n", iec.String())
+		log.Debugf("i-original  : %s", iec.String())
 
 		iic, err := nat.translateInbound(iec)
 		assert.Nil(t, err, "should succeed")
 
-		log.Debugf("i-translated: %s\n", iic.String())
+		log.Debugf("i-translated: %s", iic.String())
 
 		//nolint:forcetypeassert
 		assert.Equal(t,
@@ -151,13 +151,13 @@ func TestNATMappingBehavior(t *testing.T) {
 		}
 
 		oic := newChunkUDP(src, dst)
-		log.Debugf("o-original  : %s\n", oic.String())
+		log.Debugf("o-original  : %s", oic.String())
 
 		oec, err := nat.translateOutbound(oic)
 		assert.Nil(t, err, "should succeed")
 		assert.Equal(t, 1, len(nat.outboundMap), "should match")
 		assert.Equal(t, 1, len(nat.inboundMap), "should match")
-		log.Debugf("o-translated: %s\n", oec.String())
+		log.Debugf("o-translated: %s", oec.String())
 
 		// sending different (IP: 5.6.7.9) won't create a new mapping
 		oic2 := newChunkUDP(&net.UDPAddr{
@@ -171,7 +171,7 @@ func TestNATMappingBehavior(t *testing.T) {
 		assert.Nil(t, err, "should succeed")
 		assert.Equal(t, 1, len(nat.outboundMap), "should match")
 		assert.Equal(t, 1, len(nat.inboundMap), "should match")
-		log.Debugf("o-translated: %s\n", oec2.String())
+		log.Debugf("o-translated: %s", oec2.String())
 
 		//nolint:forcetypeassert
 		iec := newChunkUDP(
@@ -185,14 +185,14 @@ func TestNATMappingBehavior(t *testing.T) {
 			},
 		)
 
-		log.Debugf("i-original  : %s\n", iec.String())
+		log.Debugf("i-original  : %s", iec.String())
 
 		iic, err := nat.translateInbound(iec)
 		if !assert.NoError(t, err, "should succeed") {
 			return
 		}
 
-		log.Debugf("i-translated: %s\n", iic.String())
+		log.Debugf("i-translated: %s", iic.String())
 
 		//nolint:forcetypeassert
 		assert.Equal(t,
@@ -275,14 +275,14 @@ func TestNATMappingBehavior(t *testing.T) {
 		}
 
 		oic := newChunkUDP(src, dst)
-		log.Debugf("o-original  : %s\n", oic.String())
+		log.Debugf("o-original  : %s", oic.String())
 
 		oec, err := nat.translateOutbound(oic)
 		assert.Nil(t, err, "should succeed")
 		assert.Equal(t, 1, len(nat.outboundMap), "should match")
 		assert.Equal(t, 1, len(nat.inboundMap), "should match")
 
-		log.Debugf("o-translated: %s\n", oec.String())
+		log.Debugf("o-translated: %s", oec.String())
 
 		// sending different (IP: 5.6.7.9) won't create a new mapping
 		oic2 := newChunkUDP(&net.UDPAddr{
@@ -296,7 +296,7 @@ func TestNATMappingBehavior(t *testing.T) {
 		assert.Nil(t, err, "should succeed")
 		assert.Equal(t, 1, len(nat.outboundMap), "should match")
 		assert.Equal(t, 1, len(nat.inboundMap), "should match")
-		log.Debugf("o-translated: %s\n", oec2.String())
+		log.Debugf("o-translated: %s", oec2.String())
 
 		//nolint:forcetypeassert
 		iec := newChunkUDP(
@@ -310,12 +310,12 @@ func TestNATMappingBehavior(t *testing.T) {
 			},
 		)
 
-		log.Debugf("i-original  : %s\n", iec.String())
+		log.Debugf("i-original  : %s", iec.String())
 
 		iic, err := nat.translateInbound(iec)
 		assert.Nil(t, err, "should succeed")
 
-		log.Debugf("i-translated: %s\n", iic.String())
+		log.Debugf("i-translated: %s", iic.String())
 
 		//nolint:forcetypeassert
 		assert.Equal(t,
@@ -419,9 +419,9 @@ func TestNATMappingBehavior(t *testing.T) {
 			},
 		)
 
-		log.Debugf("o-original  : %s\n", oic1.String())
-		log.Debugf("o-original  : %s\n", oic2.String())
-		log.Debugf("o-original  : %s\n", oic3.String())
+		log.Debugf("o-original  : %s", oic1.String())
+		log.Debugf("o-original  : %s", oic2.String())
+		log.Debugf("o-original  : %s", oic3.String())
 
 		oec1, err := nat.translateOutbound(oic1)
 		assert.Nil(t, err, "should succeed")
@@ -435,9 +435,9 @@ func TestNATMappingBehavior(t *testing.T) {
 		assert.Equal(t, 2, len(nat.outboundMap), "should match")
 		assert.Equal(t, 2, len(nat.inboundMap), "should match")
 
-		log.Debugf("o-translated: %s\n", oec1.String())
-		log.Debugf("o-translated: %s\n", oec2.String())
-		log.Debugf("o-translated: %s\n", oec3.String())
+		log.Debugf("o-translated: %s", oec1.String())
+		log.Debugf("o-translated: %s", oec2.String())
+		log.Debugf("o-translated: %s", oec3.String())
 
 		assert.NotEqual(t, oec1.(*chunkUDP).sourcePort, oec2.(*chunkUDP).sourcePort, "should not match") //nolint:forcetypeassert
 		assert.Equal(t, oec1.(*chunkUDP).sourcePort, oec3.(*chunkUDP).sourcePort, "should match")        //nolint:forcetypeassert
@@ -489,9 +489,9 @@ func TestNATMappingBehavior(t *testing.T) {
 			},
 		)
 
-		log.Debugf("o-original  : %s\n", oic1.String())
-		log.Debugf("o-original  : %s\n", oic2.String())
-		log.Debugf("o-original  : %s\n", oic3.String())
+		log.Debugf("o-original  : %s", oic1.String())
+		log.Debugf("o-original  : %s", oic2.String())
+		log.Debugf("o-original  : %s", oic3.String())
 
 		oec1, err := nat.translateOutbound(oic1)
 		assert.Nil(t, err, "should succeed")
@@ -505,9 +505,9 @@ func TestNATMappingBehavior(t *testing.T) {
 		assert.Equal(t, 3, len(nat.outboundMap), "should match")
 		assert.Equal(t, 3, len(nat.inboundMap), "should match")
 
-		log.Debugf("o-translated: %s\n", oec1.String())
-		log.Debugf("o-translated: %s\n", oec2.String())
-		log.Debugf("o-translated: %s\n", oec3.String())
+		log.Debugf("o-translated: %s", oec1.String())
+		log.Debugf("o-translated: %s", oec2.String())
+		log.Debugf("o-translated: %s", oec3.String())
 
 		assert.NotEqual(t, oec1.(*chunkUDP).sourcePort, oec2.(*chunkUDP).sourcePort, "should not match") //nolint:forcetypeassert
 		assert.NotEqual(t, oec1.(*chunkUDP).sourcePort, oec3.(*chunkUDP).sourcePort, "should match")     //nolint:forcetypeassert
@@ -547,8 +547,8 @@ func TestNATMappingTimeout(t *testing.T) {
 		assert.Equal(t, 1, len(nat.outboundMap), "should match")
 		assert.Equal(t, 1, len(nat.inboundMap), "should match")
 
-		log.Debugf("o-original  : %s\n", oic.String())
-		log.Debugf("o-translated: %s\n", oec.String())
+		log.Debugf("o-original  : %s", oic.String())
+		log.Debugf("o-translated: %s", oec.String())
 
 		// record mapped addr
 		mapped := oec.(*chunkUDP).SourceAddr().String() //nolint:forcetypeassert
@@ -561,8 +561,8 @@ func TestNATMappingTimeout(t *testing.T) {
 		assert.Equal(t, 1, len(nat.outboundMap), "should match")
 		assert.Equal(t, 1, len(nat.inboundMap), "should match")
 
-		log.Debugf("o-original  : %s\n", oic.String())
-		log.Debugf("o-translated: %s\n", oec.String())
+		log.Debugf("o-original  : %s", oic.String())
+		log.Debugf("o-translated: %s", oec.String())
 
 		assert.Equal(t, mapped, oec.(*chunkUDP).SourceAddr().String(), "mapped addr should match") //nolint:forcetypeassert
 
@@ -575,8 +575,8 @@ func TestNATMappingTimeout(t *testing.T) {
 		assert.Equal(t, 1, len(nat.outboundMap), "should match")
 		assert.Equal(t, 1, len(nat.inboundMap), "should match")
 
-		log.Debugf("o-original  : %s\n", oic.String())
-		log.Debugf("o-translated: %s\n", oec.String())
+		log.Debugf("o-original  : %s", oic.String())
+		log.Debugf("o-translated: %s", oec.String())
 
 		assert.NotEqual(t, mapped, oec.(*chunkUDP).SourceAddr().String(), "mapped addr should not match") //nolint:forcetypeassert
 	})
@@ -610,8 +610,8 @@ func TestNATMappingTimeout(t *testing.T) {
 		assert.Equal(t, 1, len(nat.outboundMap), "should match")
 		assert.Equal(t, 1, len(nat.inboundMap), "should match")
 
-		log.Debugf("o-original  : %s\n", oic.String())
-		log.Debugf("o-translated: %s\n", oec.String())
+		log.Debugf("o-original  : %s", oic.String())
+		log.Debugf("o-translated: %s", oec.String())
 
 		// sleep long enough for the mapping to expire
 		time.Sleep(125 * time.Millisecond)
@@ -628,7 +628,7 @@ func TestNATMappingTimeout(t *testing.T) {
 			},
 		)
 
-		log.Debugf("i-original  : %s\n", iec.String())
+		log.Debugf("i-original  : %s", iec.String())
 
 		_, err = nat.translateInbound(iec)
 		assert.NotNil(t, err, "should drop")
@@ -670,8 +670,8 @@ func TestNAT1To1Bahavior(t *testing.T) {
 		assert.Equal(t, 0, len(nat.outboundMap), "should match")
 		assert.Equal(t, 0, len(nat.inboundMap), "should match")
 
-		log.Debugf("o-original  : %s\n", oic.String())
-		log.Debugf("o-translated: %s\n", oec.String())
+		log.Debugf("o-original  : %s", oic.String())
+		log.Debugf("o-translated: %s", oec.String())
 
 		assert.Equal(t, "1.2.3.4:1234", oec.SourceAddr().String(), "should match")
 
@@ -687,12 +687,12 @@ func TestNAT1To1Bahavior(t *testing.T) {
 			},
 		)
 
-		log.Debugf("i-original  : %s\n", iec.String())
+		log.Debugf("i-original  : %s", iec.String())
 
 		iic, err := nat.translateInbound(iec)
 		assert.Nil(t, err, "should succeed")
 
-		log.Debugf("i-translated: %s\n", iic.String())
+		log.Debugf("i-translated: %s", iic.String())
 
 		assert.Equal(t,
 			oic.SourceAddr().String(),

@@ -19,7 +19,7 @@ func TestNetNative(t *testing.T) {
 		assert.False(t, nw.IsVirtual(), "should be false")
 		interfaces, err := nw.Interfaces()
 		assert.NoError(t, err, "should succeed")
-		log.Debugf("interfaces: %+v\n", interfaces)
+		log.Debugf("interfaces: %+v", interfaces)
 		for _, ifc := range interfaces {
 			if ifc.Name == lo0String {
 				_, err := ifc.Addrs()

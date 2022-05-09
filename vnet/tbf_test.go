@@ -71,7 +71,7 @@ func TestTokenBucketFilter(t *testing.T) {
 					assert.Less(t, rate, 1.05*float64(capacity))
 					assert.Greater(t, rate, float64(0))
 
-					log.Infof("duration=%v, bytesReceived=%v, packetsReceived=%v throughput=%.2f Mb/s\n", time.Since(start), bytesReceived, packetsReceived, mBitPerSecond)
+					log.Infof("duration=%v, bytesReceived=%v, packetsReceived=%v throughput=%.2f Mb/s", time.Since(start), bytesReceived, packetsReceived, mBitPerSecond)
 					return
 
 				case c := <-chunkChan:
@@ -98,7 +98,7 @@ func TestTokenBucketFilter(t *testing.T) {
 			bits := float64(bytesSent) * 8.0
 			rate := bits / time.Since(start).Seconds()
 			mBitPerSecond := rate / float64(MBit)
-			log.Infof("duration=%v, bytesSent=%v, pacetsSent=%v throughput=%.2f Mb/s\n", time.Since(start), bytesSent, packetsSent, mBitPerSecond)
+			log.Infof("duration=%v, bytesSent=%v, pacetsSent=%v throughput=%.2f Mb/s", time.Since(start), bytesSent, packetsSent, mBitPerSecond)
 
 			assert.NoError(t, tbf.Close())
 		}()
