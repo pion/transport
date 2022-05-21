@@ -61,10 +61,7 @@ jobs:
           if [ -f .github/.ci.conf ]; then . .github/.ci.conf; fi
 
           set -euo pipefail
-          go-acc -o cover.out ./... -- \
-            ${TEST_BENCH_OPTION} \
-            -json \
-            -v -race 2>&1 | tee /tmp/gotest.log | gotestfmt
+          go test -json -v ./... 2>&1 | tee /tmp/gotest.log | gotestfmt
 
       - name: Upload test log
         uses: actions/upload-artifact@v2
