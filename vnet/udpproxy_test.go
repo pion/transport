@@ -380,8 +380,8 @@ func TestUDPProxyTwo2One(t *testing.T) {
 			go func() {
 				defer client0Cancel()
 				address := "10.0.0.11:5787"
-				if err = handClient(address, "Hello"); err != nil {
-					r3 = fmt.Errorf("client %v err %w", address, err)
+				if handClientErr := handClient(address, "Hello"); handClientErr != nil {
+					r3 = fmt.Errorf("client %v err %w", address, handClientErr)
 				}
 			}()
 
@@ -508,14 +508,14 @@ func TestUDPProxyProxyTwice(t *testing.T) {
 			handClient := func(address, echoData string) error {
 				// We proxy multiple times, for example, in publisher and player, both call
 				// the proxy when got answer.
-				if err = proxy.Proxy(clientNetwork, serverAddr); err != nil { //nolint:contextcheck
-					return err
+				if handClientErr := proxy.Proxy(clientNetwork, serverAddr); handClientErr != nil { //nolint:contextcheck
+					return handClientErr
 				}
 
 				// Now, all packets from client, will be proxy to real server, vice versa.
-				client, err := clientNetwork.ListenPacket("udp4", address) // nolint:govet
-				if err != nil {
-					return err
+				client, handClientErr := clientNetwork.ListenPacket("udp4", address) // nolint:govet
+				if handClientErr != nil {
+					return handClientErr
 				}
 
 				// When system quit, interrupt client.
@@ -527,16 +527,16 @@ func TestUDPProxyProxyTwice(t *testing.T) {
 				}()
 
 				for i := 0; i < 10; i++ {
-					if _, err = client.WriteTo([]byte(echoData), serverAddr); err != nil {
-						return err
+					if _, handClientErr = client.WriteTo([]byte(echoData), serverAddr); handClientErr != nil {
+						return handClientErr
 					}
 
 					buf := make([]byte, 1500)
-					if n, addr, err := client.ReadFrom(buf); err != nil { // nolint:gocritic,govet
+					if n, addr, handClientErr := client.ReadFrom(buf); handClientErr != nil { // nolint:gocritic,govet
 						if errors.Is(selfKill.Err(), context.Canceled) {
 							return nil
 						}
-						return err
+						return handClientErr
 					} else if n != len(echoData) || addr == nil {
 						return fmt.Errorf("n=%v, addr=%v", n, addr) // nolint:goerr113
 					} else if string(buf[:n]) != echoData {
