@@ -389,8 +389,8 @@ func TestUDPProxyTwo2One(t *testing.T) {
 			go func() {
 				defer client1Cancel()
 				address := "10.0.0.11:5788"
-				if err = handClient(address, "World"); err != nil {
-					r3 = fmt.Errorf("client %v err %w", address, err)
+				if handClientErr := handClient(address, "World"); handClientErr != nil {
+					r3 = fmt.Errorf("client %v err %w", address, handClientErr)
 				}
 			}()
 
