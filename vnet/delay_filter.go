@@ -16,7 +16,7 @@ type DelayFilter struct {
 
 type timedChunk struct {
 	Chunk
-	deadline time.Time
+	ts time.Time
 }
 
 // NewDelayFilter creates a new DelayFilter with the given nic and delay.
@@ -31,8 +31,8 @@ func NewDelayFilter(nic NIC, delay time.Duration) (*DelayFilter, error) {
 
 func (f *DelayFilter) onInboundChunk(c Chunk) {
 	f.queue.push(timedChunk{
-		Chunk:    c,
-		deadline: time.Now().Add(f.delay),
+		Chunk: c,
+		ts:    time.Now().Add(f.delay),
 	})
 	f.push <- struct{}{}
 }
@@ -51,14 +51,14 @@ func (f *DelayFilter) Run(ctx context.Context) {
 			if !timer.Stop() {
 				<-timer.C
 			}
-			timer.Reset(time.Until(next.deadline))
+			timer.Reset(time.Until(next.ts))
 		case now := <-timer.C:
 			next := f.queue.peek()
 			if next == nil {
 				timer.Reset(time.Minute)
 				continue
 			}
-			if n, ok := next.(timedChunk); ok && n.deadline.Before(now) {
+			if n, ok := next.(timedChunk); ok && n.ts.Before(now) {
 				f.queue.pop() // ignore result because we already got and casted it from peek
 				f.NIC.onInboundChunk(n.Chunk)
 			}
@@ -68,7 +68,7 @@ func (f *DelayFilter) Run(ctx context.Context) {
 				continue
 			}
 			if n, ok := next.(timedChunk); ok {
-				timer.Reset(time.Until(n.deadline))
+				timer.Reset(time.Until(n.ts))
 			}
 		}
 	}

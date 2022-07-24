@@ -21,7 +21,7 @@ const (
 type TokenBucketFilter struct {
 	NIC
 	currentTokensInBucket float64
-	c                     chan Chunk
+	c                     chan timedChunk
 	queue                 *chunkQueue
 	queueSize             int // in bytes
 
@@ -85,7 +85,7 @@ func NewTokenBucketFilter(n NIC, opts ...TBFOption) (*TokenBucketFilter, error) 
 	tbf := &TokenBucketFilter{
 		NIC:                   n,
 		currentTokensInBucket: 0,
-		c:                     make(chan Chunk),
+		c:                     make(chan timedChunk),
 		queue:                 nil,
 		queueSize:             50000,
 		mutex:                 sync.Mutex{},
@@ -104,7 +104,10 @@ func NewTokenBucketFilter(n NIC, opts ...TBFOption) (*TokenBucketFilter, error) 
 }
 
 func (t *TokenBucketFilter) onInboundChunk(c Chunk) {
-	t.c <- c
+	t.c <- timedChunk{
+		Chunk: c,
+		ts:    time.Now(),
+	}
 }
 
 func (t *TokenBucketFilter) run() {
@@ -152,6 +155,7 @@ func (t *TokenBucketFilter) drainQueue() {
 		t.log.Tracef("currentTokensInBucket=%v, tokens=%v, pop chunk", t.currentTokensInBucket, tokens)
 		t.queue.pop()
 		t.NIC.onInboundChunk(next)
+		t.log.Tracef("delayed chunk by %v\n", time.Since(next.(timedChunk).ts))
 		t.currentTokensInBucket -= tokens
 	}
 }
