@@ -6,6 +6,7 @@
 // the MIT license.
 
 //go:build !amd64 && !ppc64 && !ppc64le && !arm64 && !arm
+// +build !amd64,!ppc64,!ppc64le,!arm64,!arm
 
 // Package xor provides utility functions used by other Pion
 // packages. Generic arch.

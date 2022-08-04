@@ -3,6 +3,7 @@
 // license that can be found in the LICENSE file.
 
 //go:build ppc64 || ppc64le
+// +build ppc64 ppc64le
 
 // Package xor provides utility functions used by other Pion
 // packages. PPC64 arch.
