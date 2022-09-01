@@ -4,17 +4,18 @@ import (
 	"net"
 	"testing"
 
+	"github.com/pion/transport"
 	"github.com/stretchr/testify/assert"
 )
 
 type mockNIC struct {
-	mockGetInterface   func(ifName string) (*Interface, error)
+	mockGetInterface   func(ifName string) (*transport.Interface, error)
 	mockOnInboundChunk func(c Chunk)
 	mockGetStaticIPs   func() []net.IP
 	mockSetRouter      func(r *Router) error
 }
 
-func (n *mockNIC) getInterface(ifName string) (*Interface, error) {
+func (n *mockNIC) getInterface(ifName string) (*transport.Interface, error) {
 	return n.mockGetInterface(ifName)
 }
 
@@ -32,19 +33,19 @@ func (n *mockNIC) setRouter(r *Router) error {
 
 func newMockNIC(t *testing.T) *mockNIC {
 	return &mockNIC{
-		mockGetInterface: func(string) (*Interface, error) {
-			assert.Fail(t, "unexpceted call to mockGetInterface")
+		mockGetInterface: func(string) (*transport.Interface, error) {
+			assert.Fail(t, "unexpected call to mockGetInterface")
 			return nil, nil
 		},
 		mockOnInboundChunk: func(Chunk) {
-			assert.Fail(t, "unexpceted call to mockOnInboundChunk")
+			assert.Fail(t, "unexpected call to mockOnInboundChunk")
 		},
 		mockGetStaticIPs: func() []net.IP {
-			assert.Fail(t, "unexpceted call to mockGetStaticIPs")
+			assert.Fail(t, "unexpected call to mockGetStaticIPs")
 			return nil
 		},
 		mockSetRouter: func(*Router) error {
-			assert.Fail(t, "unexpceted call to mockSetRouter")
+			assert.Fail(t, "unexpected call to mockSetRouter")
 			return nil
 		},
 	}

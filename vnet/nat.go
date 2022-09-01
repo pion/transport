@@ -22,8 +22,9 @@ var (
 // EndpointDependencyType defines a type of behavioral dependendency on the
 // remote endpoint's IP address or port number. This is used for the two
 // kinds of behaviors:
-//  - Port mapping behavior
-//  - Filtering behavior
+//   - Port mapping behavior
+//   - Filtering behavior
+//
 // See: https://tools.ietf.org/html/rfc4787
 type EndpointDependencyType uint8
 
@@ -58,7 +59,7 @@ type NATType struct {
 	Mode              NATMode
 	MappingBehavior   EndpointDependencyType
 	FilteringBehavior EndpointDependencyType
-	Hairpining        bool // Not implemented yet
+	Hairpinning       bool // Not implemented yet
 	PortPreservation  bool // Not implemented yet
 	MappingLifeTime   time.Duration
 }
@@ -151,7 +152,7 @@ func (n *networkAddressTranslator) translateOutbound(from Chunk) (Chunk, error) 
 
 	to := from.Clone()
 
-	if from.Network() == udpString {
+	if from.Network() == udp {
 		if n.natType.Mode == NATModeNAT1To1 {
 			// 1:1 NAT behavior
 			srcAddr := from.SourceAddr().(*net.UDPAddr) //nolint:forcetypeassert
@@ -238,7 +239,7 @@ func (n *networkAddressTranslator) translateInbound(from Chunk) (Chunk, error) {
 
 	to := from.Clone()
 
-	if from.Network() == udpString {
+	if from.Network() == udp {
 		if n.natType.Mode == NATModeNAT1To1 {
 			// 1:1 NAT behavior
 			dstAddr := from.DestinationAddr().(*net.UDPAddr) //nolint:forcetypeassert

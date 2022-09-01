@@ -14,7 +14,7 @@ import (
 var errNoAddress = errors.New("there must be one address")
 
 type dummyNIC struct {
-	Net
+	*Net
 	onInboundChunkHandler func(Chunk)
 }
 
@@ -29,7 +29,7 @@ func getIPAddr(n NIC) (string, error) {
 		return "", err
 	}
 
-	addrs, err := eth0.Addrs()
+	addrs, err := eth0.Addresses()
 	if err != nil {
 		return "", err
 	}
@@ -90,9 +90,9 @@ func TestRouterStandalone(t *testing.T) {
 		assert.Nil(t, err, "should succeed")
 
 		// Now, eth0 must have one address assigned
-		eth0, err := nic.v.getInterface("eth0")
+		eth0, err := nic.getInterface("eth0")
 		assert.Nil(t, err, "should succeed")
-		addrs, err := eth0.Addrs()
+		addrs, err := eth0.Addresses()
 		assert.Nil(t, err, "should succeed")
 		assert.Equal(t, 1, len(addrs), "should match")
 		assert.Equal(t, "ip+net", addrs[0].Network(), "should match")
@@ -141,7 +141,7 @@ func TestRouterStandalone(t *testing.T) {
 			assert.NotNil(t, anic, "should succeed")
 
 			nic[i] = &dummyNIC{
-				Net: *anic,
+				Net: anic,
 			}
 
 			err2 := r.AddNet(nic[i])
@@ -150,7 +150,7 @@ func TestRouterStandalone(t *testing.T) {
 			// Now, eth0 must have one address assigned
 			eth0, err2 := nic[i].getInterface("eth0")
 			assert.Nil(t, err2, "should succeed")
-			addrs, err2 := eth0.Addrs()
+			addrs, err2 := eth0.Addresses()
 			assert.Nil(t, err2, "should succeed")
 			assert.Equal(t, 1, len(addrs), "should match")
 			//nolint:forcetypeassert
@@ -199,7 +199,7 @@ func TestRouterStandalone(t *testing.T) {
 			assert.NotNil(t, anic, "should succeed")
 
 			nic[i] = &dummyNIC{
-				Net: *anic,
+				Net: anic,
 			}
 
 			err2 := r.AddNet(nic[i])
@@ -208,7 +208,7 @@ func TestRouterStandalone(t *testing.T) {
 			// Now, eth0 must have one address assigned
 			eth0, err2 := nic[i].getInterface("eth0")
 			assert.Nil(t, err2, "should succeed")
-			addrs, err2 := eth0.Addrs()
+			addrs, err2 := eth0.Addresses()
 			assert.Nil(t, err2, "should succeed")
 			assert.Equal(t, 1, len(addrs), "should match")
 			//nolint:forcetypeassert
@@ -297,7 +297,7 @@ func TestRouterDelay(t *testing.T) {
 				assert.NotNil(t, anic, "should succeed")
 
 				nic[i] = &dummyNIC{
-					Net: *anic,
+					Net: anic,
 				}
 
 				err2 := r.AddNet(nic[i])
@@ -306,7 +306,7 @@ func TestRouterDelay(t *testing.T) {
 				// Now, eth0 must have one address assigned
 				eth0, err2 := nic[i].getInterface("eth0")
 				assert.Nil(t, err2, "should succeed")
-				addrs, err2 := eth0.Addrs()
+				addrs, err2 := eth0.Addresses()
 				assert.Nil(t, err2, "should succeed")
 				assert.Equal(t, 1, len(addrs), "should match")
 				//nolint:forcetypeassert
@@ -378,7 +378,7 @@ func TestRouterOneChild(t *testing.T) {
 		assert.NotNil(t, wan, "should succeed")
 
 		wanNet := &dummyNIC{
-			Net: *NewNet(&NetConfig{}),
+			Net: NewNet(&NetConfig{}),
 		}
 
 		err = wan.AddNet(wanNet)
@@ -398,7 +398,7 @@ func TestRouterOneChild(t *testing.T) {
 		assert.NotNil(t, lan, "should succeed")
 
 		lanNet := &dummyNIC{
-			Net: *NewNet(&NetConfig{}),
+			Net: NewNet(&NetConfig{}),
 		}
 		err = lan.AddNet(lanNet)
 		assert.Nil(t, err, "should succeed")

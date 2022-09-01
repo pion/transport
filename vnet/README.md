@@ -38,8 +38,8 @@ A virtual network layer for pion.
                            :      +-------+                     :
                            ......................................
     Note:
-        o: NIC (Netork Interface Controller)
-      [1]: Net implments NIC interface.
+        o: NIC (Network Interface Controller)
+      [1]: Net implements NIC interface.
       [2]: Root router has no NAT. All child routers have a NAT always.
       [3]: Router implements NIC interface for accesses from the
            parent router.
@@ -61,12 +61,12 @@ Net provides 3 interfaces:
    +---------+ 1           * +-----------+ 1    * +-----------+ 1    * +------+
  ..| :Router |----+------>o--|   :Net    |<>------|:Interface |<>------|:Addr |
    +---------+    |      NIC +-----------+        +-----------+        +------+
-                  | <<interface>>               (vnet.Interface)      (net.Addr)
+                  | <<interface>>             (transport.Interface)   (net.Addr)
                   |
                   |        * +-----------+ 1    * +-----------+ 1    * +------+
                   +------>o--|  :Router  |<>------|:Interface |<>------|:Addr |
                          NIC +-----------+        +-----------+        +------+
-                    <<interface>>               (vnet.Interface)      (net.Addr)
+                    <<interface>>            (transport.Interface)    (net.Addr)
 ```
 
 > The instance of `Net` will be the one passed around the project.
@@ -76,8 +76,8 @@ Net provides 3 interfaces:
 ## Implementation
 
 ### Design Policy
-* Each pion package should have config object which has `Net` (of type vnet.Net) property. (just like how
-        we distribute `LoggerFactory` throughout the pion project.
+* Each pion package should have config object which has `Net` (of type `transport.Net`) property.
+    - Just like how we distribute `LoggerFactory` throughout the pion project.
 * DNS => a simple dictionary (global)?
 * Each Net has routing capability (a goroutine)
 * Use interface provided net package as much as possible
@@ -86,10 +86,8 @@ Net provides 3 interfaces:
    - Easy to control / monitor (stats, etc)
 * Root router has no NAT (== Internet / WAN)
 * Non-root router has a NAT always
-* When a Net is instantiated, it will automatically add `lo0` and `eth0` interface, and `lo0` will
-have one IP address, 127.0.0.1. (this is not used in pion/ice, however)
-* When a Net is added to a router, the router automatically assign an IP address for `eth0`
-interface.
+* When a Net is instantiated, it will automatically add `lo0` and `eth0` interface, and `lo0` will have one IP address, 127.0.0.1. (this is not used in pion/ice, however)
+* When a Net is added to a router, the router automatically assign an IP address for `eth0` interface.
    - For simplicity
 * User data won't fragment, but optionally drop chunk larger than MTU
 * IPv6 is not supported
@@ -98,13 +96,14 @@ interface.
 1. Create a root router (WAN)
 1. Create child routers and add to its parent (forms a tree, don't create a loop!)
 1. Add instances of Net to each routers
-1. Call Stop(), or Stop(), on the top router, which propages all other routers
+1. Call Stop(), or Stop(), on the top router, which propagates all other routers
 
 #### Example: WAN with one endpoint (vnet)
 ```go
 import (
 	"net"
 
+    "github.com/pion/transport"
 	"github.com/pion/transport/vnet"
 	"github.com/pion/logging"
 )
@@ -141,7 +140,7 @@ if err = wan.Start(); err != nil {
 //
 
 // Stop the router.
-// This will stop all internal goroutines in the router tree.
+// This will stop all internal Go routines in the router tree.
 // (No need to call Stop() on child routers)
 if err = wan.Stop(); err != nil {
     // handle error
@@ -158,17 +157,17 @@ instance (`nw` in the above example) like this:
 ```go
 type AgentConfig struct {
     :
-    Net:  *vnet.Net,
+    Net:  transport.Net,
 }
 
 type Agent struct {
      :
-    net:  *vnet.Net,
+    net:  transport.Net,
 }
 
 func NetAgent(config *AgentConfig) *Agent {
     if config.Net == nil {
-        config.Net = vnet.NewNet(nil) // defaults to native operation
+        config.Net = vnet.NewNet()
     }
     
     return &Agent {
@@ -189,26 +188,25 @@ func (a *Agent) listenUDP(...) error {
 }
 ```
 
-
 ### Compatibility and Support Status
 
-|`net`<br>(built-in)|`vnet`|Note|
-|---|---|---|
-|net.Interfaces()|a.net.Interfaces()||
-|net.InterfaceByName()|a.net.InterfaceByName()||
-|net.ResolveUDPAddr()|a.net.ResolveUDPAddr()||
-|net.ListenPacket()|a.net.ListenPacket()||
-|net.ListenUDP()|a.net.ListenUDP()|(ListenPacket() is recommended)|
-|net.Listen()|a.net.Listen()|(TODO)|
-|net.ListenTCP()|(not supported)|(Listen() would be recommended)|
-|net.Dial()|a.net.Dial()||
-|net.DialUDP()|a.net.DialUDP()||
-|net.DialTCP()|(not supported)||
-|net.Interface|vnet.Interface||
-|net.PacketConn|(use it as-is)||
-|net.UDPConn|vnet.UDPConn|Use vnet.UDPPacketConn in your code|
-|net.TCPConn|vnet.TCPConn|(TODO)|Use net.Conn in your code|
-|net.Dialer|vnet.Dialer|Use a.net.CreateDialer() to create it.<br>The use of vnet.Dialer is currently experimental.|
+|`net`<br>(built-in)    |`vnet`                     |Note                               |
+|:---                   |:---                       |:---                               |
+| net.Interfaces()      | a.net.Interfaces()        |                                   |
+| net.InterfaceByName() | a.net.InterfaceByName()   |                                   |
+| net.ResolveUDPAddr()  | a.net.ResolveUDPAddr()    |                                   |
+| net.ListenPacket()    | a.net.ListenPacket()      |                                   |
+| net.ListenUDP()       | a.net.ListenUDP()         | ListenPacket() is recommended     |
+| net.Listen()          | a.net.Listen()            | TODO)                             |
+| net.ListenTCP()       | (not supported)           | Listen() would be recommended     |
+| net.Dial()            | a.net.Dial()              |                                   |
+| net.DialUDP()         | a.net.DialUDP()           |                                   |
+| net.DialTCP()         | (not supported)           |                                   |
+| net.Interface         | transport.Interface       |                                   |
+| net.PacketConn        | (use it as-is)            |                                   |
+| net.UDPConn           | transport.UDPConn         |                                   |
+| net.TCPConn           | transport.TCPConn         | TODO: Use net.Conn in your code   |
+| net.Dialer            | transport.Dialer          | Use a.net.CreateDialer() to create it.<br>The use of vnet.Dialer is currently experimental. |
 
 > `a.net` is an instance of Net class, and types are defined under the package name `vnet`
 
@@ -221,7 +219,7 @@ func (a *Agent) listenUDP(...) error {
 * Support of IPv6
 * Write a bunch of examples for building virtual networks.
 * Add network impairment features (on Router)
-  - Introduce lantecy / jitter
+  - Introduce latency / jitter
   - Packet filtering handler (allow selectively drop packets, etc.)
 * Add statistics data retrieval
   - Total number of packets forward by each router
@@ -230,10 +228,4 @@ func (a *Agent) listenUDP(...) error {
 
 ## References
 * [Comparing Simulated Packet Loss and RealWorld Network Congestion](https://www.riverbed.com/document/fpo/WhitePaper-Riverbed-SimulatedPacketLoss.pdf)
-
-### Code experiments
-* [CIDR and IPMask](https://play.golang.org/p/B7OBhkZqjmj)
-* [Test with net.IP](https://play.golang.org/p/AgXd23wKY4W)
-* [ListenPacket](https://play.golang.org/p/d4vasbnRimQ)
-* [isDottedIP()](https://play.golang.org/p/t4aZ47TgJfO)
-* [SplitHostPort](https://play.golang.org/p/JtvurlcMbhn)
+* [wireguard-go using GVisor's netstack](https://github.com/WireGuard/wireguard-go/tree/master/tun/netstack)
