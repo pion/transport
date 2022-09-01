@@ -9,27 +9,28 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/pion/transport"
 )
 
 const (
 	lo0String = "lo0String"
-	udpString = "udp"
+	udp       = "udp"
+	udp4      = "udp4"
 )
 
 var (
 	macAddrCounter                 uint64 = 0xBEEFED910200 //nolint:gochecknoglobals
 	errNoInterface                        = errors.New("no interface is available")
-	errNotFound                           = errors.New("not found")
 	errUnexpectedNetwork                  = errors.New("unexpected network")
 	errCantAssignRequestedAddr            = errors.New("can't assign requested address")
 	errUnknownNetwork                     = errors.New("unknown network")
 	errNoRouterLinked                     = errors.New("no router linked")
 	errInvalidPortNumber                  = errors.New("invalid port number")
 	errUnexpectedTypeSwitchFailure        = errors.New("unexpected type-switch failure")
-	errBindFailerFor                      = errors.New("bind failed for")
+	errBindFailedFor                      = errors.New("bind failed for")
 	errEndPortLessThanStart               = errors.New("end port is less than the start")
 	errPortSpaceExhausted                 = errors.New("port space exhausted")
-	errVNetDisabled                       = errors.New("vnet is not enabled")
 )
 
 func newMACAddress() net.HardwareAddr {
@@ -39,15 +40,20 @@ func newMACAddress() net.HardwareAddr {
 	return b[2:]
 }
 
-type vNet struct {
-	interfaces []*Interface // read-only
-	staticIPs  []net.IP     // read-only
-	router     *Router      // read-only
-	udpConns   *udpConnMap  // read-only
+// Net represents a local network stack equivalent to a set of layers from NIC
+// up to the transport (UDP / TCP) layer.
+type Net struct {
+	interfaces []*transport.Interface // read-only
+	staticIPs  []net.IP               // read-only
+	router     *Router                // read-only
+	udpConns   *udpConnMap            // read-only
 	mutex      sync.RWMutex
 }
 
-func (v *vNet) _getInterfaces() ([]*Interface, error) {
+// Compile-time assertion
+var _ transport.Net = &Net{}
+
+func (v *Net) _getInterfaces() ([]*transport.Interface, error) {
 	if len(v.interfaces) == 0 {
 		return nil, errNoInterface
 	}
@@ -55,7 +61,8 @@ func (v *vNet) _getInterfaces() ([]*Interface, error) {
 	return v.interfaces, nil
 }
 
-func (v *vNet) getInterfaces() ([]*Interface, error) {
+// Interfaces returns a list of the system's network interfaces.
+func (v *Net) Interfaces() ([]*transport.Interface, error) {
 	v.mutex.RLock()
 	defer v.mutex.RUnlock()
 
@@ -63,7 +70,7 @@ func (v *vNet) getInterfaces() ([]*Interface, error) {
 }
 
 // caller must hold the mutex (read)
-func (v *vNet) _getInterface(ifName string) (*Interface, error) {
+func (v *Net) _getInterface(ifName string) (*transport.Interface, error) {
 	ifs, err := v._getInterfaces()
 	if err != nil {
 		return nil, err
@@ -74,22 +81,27 @@ func (v *vNet) _getInterface(ifName string) (*Interface, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("interface %s %w", ifName, errNotFound)
+	return nil, fmt.Errorf("%w: %s", transport.ErrInterfaceNotFound, ifName)
 }
 
-func (v *vNet) getInterface(ifName string) (*Interface, error) {
+func (v *Net) getInterface(ifName string) (*transport.Interface, error) {
 	v.mutex.RLock()
 	defer v.mutex.RUnlock()
 
 	return v._getInterface(ifName)
 }
 
+// InterfaceByName returns the interface specified by name.
+func (v *Net) InterfaceByName(ifName string) (*transport.Interface, error) {
+	return v.getInterface(ifName)
+}
+
 // caller must hold the mutex
-func (v *vNet) getAllIPAddrs(ipv6 bool) []net.IP {
+func (v *Net) getAllIPAddrs(ipv6 bool) []net.IP {
 	ips := []net.IP{}
 
 	for _, ifc := range v.interfaces {
-		addrs, err := ifc.Addrs()
+		addrs, err := ifc.Addresses()
 		if err != nil {
 			continue
 		}
@@ -115,7 +127,7 @@ func (v *vNet) getAllIPAddrs(ipv6 bool) []net.IP {
 	return ips
 }
 
-func (v *vNet) setRouter(r *Router) error {
+func (v *Net) setRouter(r *Router) error {
 	v.mutex.Lock()
 	defer v.mutex.Unlock()
 
@@ -123,11 +135,11 @@ func (v *vNet) setRouter(r *Router) error {
 	return nil
 }
 
-func (v *vNet) onInboundChunk(c Chunk) {
+func (v *Net) onInboundChunk(c Chunk) {
 	v.mutex.Lock()
 	defer v.mutex.Unlock()
 
-	if c.Network() == udpString {
+	if c.Network() == udp {
 		if conn, ok := v.udpConns.find(c.DestinationAddr()); ok {
 			conn.onInboundChunk(c)
 		}
@@ -135,9 +147,9 @@ func (v *vNet) onInboundChunk(c Chunk) {
 }
 
 // caller must hold the mutex
-func (v *vNet) _dialUDP(network string, locAddr, remAddr *net.UDPAddr) (UDPPacketConn, error) {
+func (v *Net) _dialUDP(network string, locAddr, remAddr *net.UDPAddr) (transport.UDPConn, error) {
 	// validate network
-	if network != udpString && network != "udp4" {
+	if network != udp && network != udp4 {
 		return nil, fmt.Errorf("%w: %s", errUnexpectedNetwork, network)
 	}
 
@@ -193,11 +205,12 @@ func (v *vNet) _dialUDP(network string, locAddr, remAddr *net.UDPAddr) (UDPPacke
 	return conn, nil
 }
 
-func (v *vNet) listenPacket(network string, address string) (UDPPacketConn, error) {
+// ListenPacket announces on the local network address.
+func (v *Net) ListenPacket(network string, address string) (net.PacketConn, error) {
 	v.mutex.Lock()
 	defer v.mutex.Unlock()
 
-	locAddr, err := v.resolveUDPAddr(network, address)
+	locAddr, err := v.ResolveUDPAddr(network, address)
 	if err != nil {
 		return nil, err
 	}
@@ -205,25 +218,28 @@ func (v *vNet) listenPacket(network string, address string) (UDPPacketConn, erro
 	return v._dialUDP(network, locAddr, nil)
 }
 
-func (v *vNet) listenUDP(network string, locAddr *net.UDPAddr) (UDPPacketConn, error) {
+// ListenUDP acts like ListenPacket for UDP networks.
+func (v *Net) ListenUDP(network string, locAddr *net.UDPAddr) (transport.UDPConn, error) {
 	v.mutex.Lock()
 	defer v.mutex.Unlock()
 
 	return v._dialUDP(network, locAddr, nil)
 }
 
-func (v *vNet) dialUDP(network string, locAddr, remAddr *net.UDPAddr) (UDPPacketConn, error) {
+// DialUDP acts like Dial for UDP networks.
+func (v *Net) DialUDP(network string, locAddr, remAddr *net.UDPAddr) (transport.UDPConn, error) {
 	v.mutex.Lock()
 	defer v.mutex.Unlock()
 
 	return v._dialUDP(network, locAddr, remAddr)
 }
 
-func (v *vNet) dial(network string, address string) (UDPPacketConn, error) {
+// Dial connects to the address on the named network.
+func (v *Net) Dial(network string, address string) (net.Conn, error) {
 	v.mutex.Lock()
 	defer v.mutex.Unlock()
 
-	remAddr, err := v.resolveUDPAddr(network, address)
+	remAddr, err := v.ResolveUDPAddr(network, address)
 	if err != nil {
 		return nil, err
 	}
@@ -236,8 +252,37 @@ func (v *vNet) dial(network string, address string) (UDPPacketConn, error) {
 	return v._dialUDP(network, locAddr, remAddr)
 }
 
-func (v *vNet) resolveUDPAddr(network, address string) (*net.UDPAddr, error) {
-	if network != udpString && network != "udp4" {
+// ResolveIPAddr returns an address of IP end point.
+func (v *Net) ResolveIPAddr(network, address string) (*net.IPAddr, error) {
+	var err error
+
+	// Check if host is a domain name
+	ip := net.ParseIP(address)
+	if ip == nil {
+		address = strings.ToLower(address)
+		if address == "localhost" {
+			ip = net.IPv4(127, 0, 0, 1)
+		} else {
+			// host is a domain name. resolve IP address by the name
+			if v.router == nil {
+				return nil, errNoRouterLinked
+			}
+
+			ip, err = v.router.resolver.lookUp(address)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return &net.IPAddr{
+		IP: ip,
+	}, nil
+}
+
+// ResolveUDPAddr returns an address of UDP end point.
+func (v *Net) ResolveUDPAddr(network, address string) (*net.UDPAddr, error) {
+	if network != udp && network != udp4 {
 		return nil, fmt.Errorf("%w %s", errUnknownNetwork, network)
 	}
 
@@ -246,23 +291,9 @@ func (v *vNet) resolveUDPAddr(network, address string) (*net.UDPAddr, error) {
 		return nil, err
 	}
 
-	// Check if host is a domain name
-	ip := net.ParseIP(host)
-	if ip == nil {
-		host = strings.ToLower(host)
-		if host == "localhost" {
-			ip = net.IPv4(127, 0, 0, 1)
-		} else {
-			// host is a domain name. resolve IP address by the name
-			if v.router == nil {
-				return nil, errNoRouterLinked
-			}
-
-			ip, err = v.router.resolver.lookUp(host)
-			if err != nil {
-				return nil, err
-			}
-		}
+	ipAddress, err := v.ResolveIPAddr("ip", host)
+	if err != nil {
+		return nil, err
 	}
 
 	port, err := strconv.Atoi(sPort)
@@ -271,15 +302,16 @@ func (v *vNet) resolveUDPAddr(network, address string) (*net.UDPAddr, error) {
 	}
 
 	udpAddr := &net.UDPAddr{
-		IP:   ip,
+		IP:   ipAddress.IP,
+		Zone: ipAddress.Zone,
 		Port: port,
 	}
 
 	return udpAddr, nil
 }
 
-func (v *vNet) write(c Chunk) error {
-	if c.Network() == udpString {
+func (v *Net) write(c Chunk) error {
+	if c.Network() == udp {
 		if udp, ok := c.(*chunkUDP); ok {
 			if c.getDestinationIP().IsLoopback() {
 				if conn, ok := v.udpConns.find(udp.DestinationAddr()); ok {
@@ -300,8 +332,8 @@ func (v *vNet) write(c Chunk) error {
 	return nil
 }
 
-func (v *vNet) onClosed(addr net.Addr) {
-	if addr.Network() == udpString {
+func (v *Net) onClosed(addr net.Addr) {
+	if addr.Network() == udp {
 		//nolint:errcheck
 		v.udpConns.delete(addr) // #nosec
 	}
@@ -311,7 +343,7 @@ func (v *vNet) onClosed(addr net.Addr) {
 // is any IP address ("0.0.0.0" or "::"). If locIP is a non-any addr,
 // this method simply returns locIP.
 // caller must hold the mutex
-func (v *vNet) determineSourceIP(locIP, dstIP net.IP) net.IP {
+func (v *Net) determineSourceIP(locIP, dstIP net.IP) net.IP {
 	if locIP != nil && !locIP.IsUnspecified() {
 		return locIP
 	}
@@ -326,7 +358,7 @@ func (v *vNet) determineSourceIP(locIP, dstIP net.IP) net.IP {
 			return nil
 		}
 
-		addrs, err2 := ifc.Addrs()
+		addrs, err2 := ifc.Addresses()
 		if err2 != nil {
 			return nil
 		}
@@ -362,9 +394,9 @@ func (v *vNet) determineSourceIP(locIP, dstIP net.IP) net.IP {
 }
 
 // caller must hold the mutex
-func (v *vNet) hasIPAddr(ip net.IP) bool { //nolint:gocognit
+func (v *Net) hasIPAddr(ip net.IP) bool { //nolint:gocognit
 	for _, ifc := range v.interfaces {
-		if addrs, err := ifc.Addrs(); err == nil {
+		if addrs, err := ifc.Addresses(); err == nil {
 			for _, addr := range addrs {
 				var locIP net.IP
 				if ipNet, ok := addr.(*net.IPNet); ok {
@@ -397,7 +429,7 @@ func (v *vNet) hasIPAddr(ip net.IP) bool { //nolint:gocognit
 }
 
 // caller must hold the mutex
-func (v *vNet) allocateLocalAddr(ip net.IP, port int) error {
+func (v *Net) allocateLocalAddr(ip net.IP, port int) error {
 	// gather local IP addresses to bind
 	var ips []net.IP
 	if ip.IsUnspecified() {
@@ -407,7 +439,7 @@ func (v *vNet) allocateLocalAddr(ip net.IP, port int) error {
 	}
 
 	if len(ips) == 0 {
-		return fmt.Errorf("%w %s", errBindFailerFor, ip.String())
+		return fmt.Errorf("%w %s", errBindFailedFor, ip.String())
 	}
 
 	// check if all these transport addresses are not in use
@@ -419,7 +451,7 @@ func (v *vNet) allocateLocalAddr(ip net.IP, port int) error {
 		if _, ok := v.udpConns.find(addr); ok {
 			return &net.OpError{
 				Op:   "bind",
-				Net:  udpString,
+				Net:  udp,
 				Addr: addr,
 				Err:  fmt.Errorf("bind: %w", errAddressAlreadyInUse),
 			}
@@ -430,7 +462,7 @@ func (v *vNet) allocateLocalAddr(ip net.IP, port int) error {
 }
 
 // caller must hold the mutex
-func (v *vNet) assignPort(ip net.IP, start, end int) (int, error) {
+func (v *Net) assignPort(ip net.IP, start, end int) (int, error) {
 	// choose randomly from the range between start and end (inclusive)
 	if end < start {
 		return -1, errEndPortLessThanStart
@@ -450,6 +482,10 @@ func (v *vNet) assignPort(ip net.IP, start, end int) (int, error) {
 	return -1, errPortSpaceExhausted
 }
 
+func (v *Net) getStaticIPs() []net.IP {
+	return v.staticIPs
+}
+
 // NetConfig is a bag of configuration parameters passed to NewNet().
 type NetConfig struct {
 	// StaticIPs is an array of static IP addresses to be assigned for this Net.
@@ -461,51 +497,25 @@ type NetConfig struct {
 	StaticIP string
 }
 
-// Net represents a local network stack euivalent to a set of layers from NIC
-// up to the transport (UDP / TCP) layer.
-type Net struct {
-	v   *vNet
-	ifs []*Interface
-}
-
-// NewNet creates an instance of Net.
-// If config is nil, the virtual network is disabled. (uses corresponding
-// net.Xxxx() operations.
+// NewNet creates an instance of a virtual network.
+//
 // By design, it always have lo0 and eth0 interfaces.
 // The lo0 has the address 127.0.0.1 assigned by default.
 // IP address for eth0 will be assigned when this Net is added to a router.
 func NewNet(config *NetConfig) *Net {
-	if config == nil {
-		ifs := []*Interface{}
-		if orgIfs, err := net.Interfaces(); err == nil {
-			for _, orgIfc := range orgIfs {
-				ifc := NewInterface(orgIfc)
-				if addrs, err := orgIfc.Addrs(); err == nil {
-					for _, addr := range addrs {
-						ifc.AddAddr(addr)
-					}
-				}
-
-				ifs = append(ifs, ifc)
-			}
-		}
-
-		return &Net{ifs: ifs}
-	}
-
-	lo0 := NewInterface(net.Interface{
+	lo0 := transport.NewInterface(net.Interface{
 		Index:        1,
 		MTU:          16384,
 		Name:         lo0String,
 		HardwareAddr: nil,
 		Flags:        net.FlagUp | net.FlagLoopback | net.FlagMulticast,
 	})
-	lo0.AddAddr(&net.IPNet{
+	lo0.AddAddress(&net.IPNet{
 		IP:   net.ParseIP("127.0.0.1"),
 		Mask: net.CIDRMask(8, 32),
 	})
 
-	eth0 := NewInterface(net.Interface{
+	eth0 := transport.NewInterface(net.Interface{
 		Index:        2,
 		MTU:          1500,
 		Name:         "eth0",
@@ -525,153 +535,26 @@ func NewNet(config *NetConfig) *Net {
 		}
 	}
 
-	v := &vNet{
-		interfaces: []*Interface{lo0, eth0},
+	return &Net{
+		interfaces: []*transport.Interface{lo0, eth0},
 		staticIPs:  staticIPs,
 		udpConns:   newUDPConnMap(),
 	}
-
-	return &Net{
-		v: v,
-	}
-}
-
-// Interfaces returns a list of the system's network interfaces.
-func (n *Net) Interfaces() ([]*Interface, error) {
-	if n.v == nil {
-		return n.ifs, nil
-	}
-
-	return n.v.getInterfaces()
-}
-
-// InterfaceByName returns the interface specified by name.
-func (n *Net) InterfaceByName(name string) (*Interface, error) {
-	if n.v == nil {
-		for _, ifc := range n.ifs {
-			if ifc.Name == name {
-				return ifc, nil
-			}
-		}
-
-		return nil, fmt.Errorf("interface %s %w", name, errNotFound)
-	}
-
-	return n.v.getInterface(name)
-}
-
-// ListenPacket announces on the local network address.
-func (n *Net) ListenPacket(network string, address string) (net.PacketConn, error) {
-	if n.v == nil {
-		return net.ListenPacket(network, address)
-	}
-
-	return n.v.listenPacket(network, address)
-}
-
-// ListenUDP acts like ListenPacket for UDP networks.
-func (n *Net) ListenUDP(network string, locAddr *net.UDPAddr) (UDPPacketConn, error) {
-	if n.v == nil {
-		return net.ListenUDP(network, locAddr)
-	}
-
-	return n.v.listenUDP(network, locAddr)
-}
-
-// Dial connects to the address on the named network.
-func (n *Net) Dial(network, address string) (net.Conn, error) {
-	if n.v == nil {
-		return net.Dial(network, address)
-	}
-
-	return n.v.dial(network, address)
 }
 
 // CreateDialer creates an instance of vnet.Dialer
-func (n *Net) CreateDialer(dialer *net.Dialer) Dialer {
-	if n.v == nil {
-		return &vDialer{
-			dialer: dialer,
-		}
-	}
-
-	return &vDialer{
-		dialer: dialer,
-		v:      n.v,
+func (v *Net) CreateDialer(d *net.Dialer) transport.Dialer {
+	return &dialer{
+		dialer: d,
+		net:    v,
 	}
 }
 
-// DialUDP acts like Dial for UDP networks.
-func (n *Net) DialUDP(network string, laddr, raddr *net.UDPAddr) (UDPPacketConn, error) {
-	if n.v == nil {
-		return net.DialUDP(network, laddr, raddr)
-	}
-
-	return n.v.dialUDP(network, laddr, raddr)
-}
-
-// ResolveUDPAddr returns an address of UDP end point.
-func (n *Net) ResolveUDPAddr(network, address string) (*net.UDPAddr, error) {
-	if n.v == nil {
-		return net.ResolveUDPAddr(network, address)
-	}
-
-	return n.v.resolveUDPAddr(network, address)
-}
-
-func (n *Net) getInterface(ifName string) (*Interface, error) {
-	if n.v == nil {
-		return nil, errVNetDisabled
-	}
-
-	return n.v.getInterface(ifName)
-}
-
-func (n *Net) setRouter(r *Router) error {
-	if n.v == nil {
-		return errVNetDisabled
-	}
-
-	return n.v.setRouter(r)
-}
-
-func (n *Net) onInboundChunk(c Chunk) {
-	if n.v == nil {
-		return
-	}
-
-	n.v.onInboundChunk(c)
-}
-
-func (n *Net) getStaticIPs() []net.IP {
-	if n.v == nil {
-		return nil
-	}
-
-	return n.v.staticIPs
-}
-
-// IsVirtual tests if the virtual network is enabled.
-func (n *Net) IsVirtual() bool {
-	return n.v != nil
-}
-
-// Dialer is identical to net.Dialer excepts that its methods
-// (Dial, DialContext) are overridden to use virtual network.
-// Use vnet.CreateDialer() to create an instance of this Dialer.
-type Dialer interface {
-	Dial(network, address string) (net.Conn, error)
-}
-
-type vDialer struct {
+type dialer struct {
 	dialer *net.Dialer
-	v      *vNet
+	net    *Net
 }
 
-func (d *vDialer) Dial(network, address string) (net.Conn, error) {
-	if d.v == nil {
-		return d.dialer.Dial(network, address)
-	}
-
-	return d.v.dial(network, address)
+func (d *dialer) Dial(network, address string) (net.Conn, error) {
+	return d.net.Dial(network, address)
 }

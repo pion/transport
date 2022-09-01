@@ -27,7 +27,7 @@ func TestNATTypeDefaults(t *testing.T) {
 
 	assert.Equal(t, EndpointIndependent, nat.natType.MappingBehavior, "should match")
 	assert.Equal(t, EndpointIndependent, nat.natType.FilteringBehavior, "should match")
-	assert.False(t, nat.natType.Hairpining, "should be false")
+	assert.False(t, nat.natType.Hairpinning, "should be false")
 	assert.False(t, nat.natType.PortPreservation, "should be false")
 	assert.Equal(t, defaultNATMappingLifeTime, nat.natType.MappingLifeTime, "should be false")
 }
@@ -41,7 +41,7 @@ func TestNATMappingBehavior(t *testing.T) {
 			natType: NATType{
 				MappingBehavior:   EndpointIndependent,
 				FilteringBehavior: EndpointIndependent,
-				Hairpining:        false,
+				Hairpinning:       false,
 				MappingLifeTime:   30 * time.Second,
 			},
 			mappedIPs:     []net.IP{net.ParseIP(demoIP)},
@@ -133,7 +133,7 @@ func TestNATMappingBehavior(t *testing.T) {
 			natType: NATType{
 				MappingBehavior:   EndpointIndependent,
 				FilteringBehavior: EndpointAddrDependent,
-				Hairpining:        false,
+				Hairpinning:       false,
 				MappingLifeTime:   30 * time.Second,
 			},
 			mappedIPs:     []net.IP{net.ParseIP(demoIP)},
@@ -257,7 +257,7 @@ func TestNATMappingBehavior(t *testing.T) {
 			natType: NATType{
 				MappingBehavior:   EndpointIndependent,
 				FilteringBehavior: EndpointAddrPortDependent,
-				Hairpining:        false,
+				Hairpinning:       false,
 				MappingLifeTime:   30 * time.Second,
 			},
 			mappedIPs:     []net.IP{net.ParseIP(demoIP)},
@@ -378,7 +378,7 @@ func TestNATMappingBehavior(t *testing.T) {
 			natType: NATType{
 				MappingBehavior:   EndpointAddrDependent,
 				FilteringBehavior: EndpointAddrDependent,
-				Hairpining:        false,
+				Hairpinning:       false,
 				MappingLifeTime:   30 * time.Second,
 			},
 			mappedIPs:     []net.IP{net.ParseIP(demoIP)},
@@ -448,7 +448,7 @@ func TestNATMappingBehavior(t *testing.T) {
 			natType: NATType{
 				MappingBehavior:   EndpointAddrPortDependent,
 				FilteringBehavior: EndpointAddrPortDependent,
-				Hairpining:        false,
+				Hairpinning:       false,
 				MappingLifeTime:   30 * time.Second,
 			},
 			mappedIPs:     []net.IP{net.ParseIP(demoIP)},
@@ -523,7 +523,7 @@ func TestNATMappingTimeout(t *testing.T) {
 			natType: NATType{
 				MappingBehavior:   EndpointIndependent,
 				FilteringBehavior: EndpointIndependent,
-				Hairpining:        false,
+				Hairpinning:       false,
 				MappingLifeTime:   100 * time.Millisecond,
 			},
 			mappedIPs:     []net.IP{net.ParseIP(demoIP)},
@@ -586,7 +586,7 @@ func TestNATMappingTimeout(t *testing.T) {
 			natType: NATType{
 				MappingBehavior:   EndpointIndependent,
 				FilteringBehavior: EndpointIndependent,
-				Hairpining:        false,
+				Hairpinning:       false,
 				MappingLifeTime:   100 * time.Millisecond,
 			},
 			mappedIPs:     []net.IP{net.ParseIP(demoIP)},
