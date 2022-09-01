@@ -41,7 +41,7 @@ func TestChunk(t *testing.T) {
 		var c Chunk = newChunkUDP(src, dst)
 		str := c.String()
 		log.Debugf("chunk: %s", str)
-		assert.Equal(t, udpString, c.Network(), "should match")
+		assert.Equal(t, udp, c.Network(), "should match")
 		assert.True(t, strings.Contains(str, src.Network()), "should include network type")
 		assert.True(t, strings.Contains(str, src.String()), "should include address")
 		assert.True(t, strings.Contains(str, dst.String()), "should include address")
