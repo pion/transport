@@ -310,6 +310,36 @@ func (v *Net) ResolveUDPAddr(network, address string) (*net.UDPAddr, error) {
 	return udpAddr, nil
 }
 
+// ResolveTCPAddr returns an address of TCP end point.
+func (v *Net) ResolveTCPAddr(network, address string) (*net.TCPAddr, error) {
+	if network != udp && network != "udp4" {
+		return nil, fmt.Errorf("%w %s", errUnknownNetwork, network)
+	}
+
+	host, sPort, err := net.SplitHostPort(address)
+	if err != nil {
+		return nil, err
+	}
+
+	ipAddr, err := v.ResolveIPAddr("ip", host)
+	if err != nil {
+		return nil, err
+	}
+
+	port, err := strconv.Atoi(sPort)
+	if err != nil {
+		return nil, errInvalidPortNumber
+	}
+
+	udpAddr := &net.TCPAddr{
+		IP:   ipAddr.IP,
+		Zone: ipAddr.Zone,
+		Port: port,
+	}
+
+	return udpAddr, nil
+}
+
 func (v *Net) write(c Chunk) error {
 	if c.Network() == udp {
 		if udp, ok := c.(*chunkUDP); ok {
@@ -540,6 +570,16 @@ func NewNet(config *NetConfig) *Net {
 		staticIPs:  staticIPs,
 		udpConns:   newUDPConnMap(),
 	}
+}
+
+// DialTCP acts like Dial for TCP networks.
+func (v *Net) DialTCP(network string, laddr, raddr *net.TCPAddr) (transport.TCPConn, error) {
+	return nil, transport.ErrNotSupported
+}
+
+// ListenTCP acts like Listen for TCP networks.
+func (v *Net) ListenTCP(network string, laddr *net.TCPAddr) (transport.TCPListener, error) {
+	return nil, transport.ErrNotSupported
 }
 
 // CreateDialer creates an instance of vnet.Dialer
