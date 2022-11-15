@@ -107,6 +107,34 @@ func (n *Net) ResolveUDPAddr(network, address string) (*net.UDPAddr, error) {
 	return net.ResolveUDPAddr(network, address)
 }
 
+// ResolveTCPAddr returns an address of TCP end point.
+func (n *Net) ResolveTCPAddr(network, address string) (*net.TCPAddr, error) {
+	return net.ResolveTCPAddr(network, address)
+}
+
+// DialTCP acts like Dial for TCP networks.
+func (n *Net) DialTCP(network string, laddr, raddr *net.TCPAddr) (transport.TCPConn, error) {
+	return net.DialTCP(network, laddr, raddr)
+}
+
+// ListenTCP acts like Listen for TCP networks.
+func (n *Net) ListenTCP(network string, laddr *net.TCPAddr) (transport.TCPListener, error) {
+	l, err := net.ListenTCP(network, laddr)
+	if err != nil {
+		return nil, err
+	}
+
+	return tcpListener{l}, nil
+}
+
+type tcpListener struct {
+	*net.TCPListener
+}
+
+func (l tcpListener) AcceptTCP() (transport.TCPConn, error) {
+	return l.TCPListener.AcceptTCP()
+}
+
 type stdDialer struct {
 	*net.Dialer
 }

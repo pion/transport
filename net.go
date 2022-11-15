@@ -4,6 +4,7 @@ package transport
 
 import (
 	"errors"
+	"io"
 	"net"
 	"time"
 )
@@ -59,6 +60,17 @@ type Net interface {
 	// If the Port field of laddr is 0, a port number is automatically
 	// chosen.
 	ListenUDP(network string, locAddr *net.UDPAddr) (UDPConn, error)
+
+	// ListenTCP acts like Listen for TCP networks.
+	//
+	// The network must be a TCP network name; see func Dial for details.
+	//
+	// If the IP field of laddr is nil or an unspecified IP address,
+	// ListenTCP listens on all available unicast and anycast IP addresses
+	// of the local system.
+	// If the Port field of laddr is 0, a port number is automatically
+	// chosen.
+	ListenTCP(network string, laddr *net.TCPAddr) (TCPListener, error)
 
 	// Dial connects to the address on the named network.
 	//
@@ -119,6 +131,15 @@ type Net interface {
 	// local system is assumed.
 	DialUDP(network string, laddr, raddr *net.UDPAddr) (UDPConn, error)
 
+	// DialTCP acts like Dial for TCP networks.
+	//
+	// The network must be a TCP network name; see func Dial for details.
+	//
+	// If laddr is nil, a local address is automatically chosen.
+	// If the IP field of raddr is nil or an unspecified IP address, the
+	// local system is assumed.
+	DialTCP(network string, laddr, raddr *net.TCPAddr) (TCPConn, error)
+
 	// ResolveIPAddr returns an address of IP end point.
 	//
 	// The network must be an IP network name.
@@ -150,6 +171,23 @@ type Net interface {
 	// See func Dial for a description of the network and address
 	// parameters.
 	ResolveUDPAddr(network, address string) (*net.UDPAddr, error)
+
+	// ResolveTCPAddr returns an address of TCP end point.
+	//
+	// The network must be a TCP network name.
+	//
+	// If the host in the address parameter is not a literal IP address or
+	// the port is not a literal port number, ResolveTCPAddr resolves the
+	// address to an address of TCP end point.
+	// Otherwise, it parses the address as a pair of literal IP address
+	// and port number.
+	// The address parameter can use a host name, but this is not
+	// recommended, because it will return at most one of the host name's
+	// IP addresses.
+	//
+	// See func Dial for a description of the network and address
+	// parameters.
+	ResolveTCPAddr(network, address string) (*net.TCPAddr, error)
 
 	// Interfaces returns a list of the system's network interfaces.
 	Interfaces() ([]*Interface, error)
@@ -272,6 +310,71 @@ type UDPConn interface {
 	// The packages golang.org/x/net/ipv4 and golang.org/x/net/ipv6 can be
 	// used to manipulate IP-level socket options in oob.
 	WriteMsgUDP(b, oob []byte, addr *net.UDPAddr) (n, oobn int, err error)
+}
+
+// TCPConn is an interface for TCP network connections.
+type TCPConn interface {
+	net.Conn
+
+	// CloseRead shuts down the reading side of the TCP connection.
+	// Most callers should just use Close.
+	CloseRead() error
+
+	// CloseWrite shuts down the writing side of the TCP connection.
+	// Most callers should just use Close.
+	CloseWrite() error
+
+	// ReadFrom implements the io.ReaderFrom ReadFrom method.
+	ReadFrom(r io.Reader) (int64, error)
+
+	// SetLinger sets the behavior of Close on a connection which still
+	// has data waiting to be sent or to be acknowledged.
+	//
+	// If sec < 0 (the default), the operating system finishes sending the
+	// data in the background.
+	//
+	// If sec == 0, the operating system discards any unsent or
+	// unacknowledged data.
+	//
+	// If sec > 0, the data is sent in the background as with sec < 0. On
+	// some operating systems after sec seconds have elapsed any remaining
+	// unsent data may be discarded.
+	SetLinger(sec int) error
+
+	// SetKeepAlive sets whether the operating system should send
+	// keep-alive messages on the connection.
+	SetKeepAlive(keepalive bool) error
+
+	// SetKeepAlivePeriod sets period between keep-alives.
+	SetKeepAlivePeriod(d time.Duration) error
+
+	// SetNoDelay controls whether the operating system should delay
+	// packet transmission in hopes of sending fewer packets (Nagle's
+	// algorithm).  The default is true (no delay), meaning that data is
+	// sent as soon as possible after a Write.
+	SetNoDelay(noDelay bool) error
+
+	// SetWriteBuffer sets the size of the operating system's
+	// transmit buffer associated with the connection.
+	SetWriteBuffer(bytes int) error
+
+	// SetReadBuffer sets the size of the operating system's
+	// receive buffer associated with the connection.
+	SetReadBuffer(bytes int) error
+}
+
+// TCPListener is a TCP network listener. Clients should typically
+// use variables of type Listener instead of assuming TCP.
+type TCPListener interface {
+	net.Listener
+
+	// AcceptTCP accepts the next incoming call and returns the new
+	// connection.
+	AcceptTCP() (TCPConn, error)
+
+	// SetDeadline sets the deadline associated with the listener.
+	// A zero time value disables the deadline.
+	SetDeadline(t time.Time) error
 }
 
 // Interface wraps a standard net.Interfaces and its assigned addresses
