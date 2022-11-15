@@ -1,3 +1,5 @@
+// Package main implements an example for the virtual Net
+// UDP proxy.
 package main
 
 import (
