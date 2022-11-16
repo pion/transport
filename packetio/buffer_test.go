@@ -321,8 +321,8 @@ func TestBufferLimitSize(t *testing.T) {
 }
 
 func TestBufferLimitSizes(t *testing.T) {
-	if sizeHardlimit {
-		t.Skip("skipping since packetioSizeHardlimit is enabled")
+	if sizeHardLimit {
+		t.Skip("skipping since packetioSizeHardLimit is enabled")
 	}
 	sizes := []int{
 		128 * 1024,
@@ -337,7 +337,7 @@ func TestBufferLimitSizes(t *testing.T) {
 		size := size
 		name := "default"
 		if size > 0 {
-			name = fmt.Sprintf("%dkbytes", size/1024)
+			name = fmt.Sprintf("%dkBytes", size/1024)
 		}
 
 		t.Run(name, func(t *testing.T) {

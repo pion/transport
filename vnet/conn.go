@@ -38,7 +38,7 @@ type connObserver interface {
 }
 
 // UDPConn is the implementation of the Conn and PacketConn interfaces for UDP network connections.
-// comatible with net.PacketConn and net.Conn
+// compatible with net.PacketConn and net.Conn
 type UDPConn struct {
 	locAddr   *net.UDPAddr // read-only
 	remAddr   *net.UDPAddr // read-only
