@@ -16,14 +16,22 @@ func TestStdNet(t *testing.T) {
 
 	t.Run("Interfaces", func(t *testing.T) {
 		nw, err := NewNet()
-		assert.Nil(t, err, "should succeed")
+		if !assert.Nil(t, err, "should succeed") {
+			return
+		}
+
 		interfaces, err := nw.Interfaces()
-		assert.NoError(t, err, "should succeed")
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+
 		log.Debugf("interfaces: %+v", interfaces)
 		for _, ifc := range interfaces {
 			if ifc.Name == lo0String {
 				_, err := ifc.Addresses()
-				assert.NoError(t, err, "should succeed")
+				if !assert.NoError(t, err, "should succeed") {
+					return
+				}
 			}
 
 			if addrs, err := ifc.Addresses(); err == nil {
@@ -39,7 +47,9 @@ func TestStdNet(t *testing.T) {
 
 	t.Run("ResolveUDPAddr", func(t *testing.T) {
 		nw, err := NewNet()
-		assert.Nil(t, err, "should succeed")
+		if !assert.Nil(t, err, "should succeed") {
+			return
+		}
 
 		udpAddr, err := nw.ResolveUDPAddr(udpString, "localhost:1234")
 		if !assert.NoError(t, err, "should succeed") {
@@ -51,7 +61,9 @@ func TestStdNet(t *testing.T) {
 
 	t.Run("ListenPacket", func(t *testing.T) {
 		nw, err := NewNet()
-		assert.Nil(t, err, "should succeed")
+		if !assert.Nil(t, err, "should succeed") {
+			return
+		}
 
 		conn, err := nw.ListenPacket(udpString, "127.0.0.1:0")
 		if !assert.NoError(t, err, "should succeed") {
@@ -68,7 +80,9 @@ func TestStdNet(t *testing.T) {
 
 	t.Run("ListenUDP random port", func(t *testing.T) {
 		nw, err := NewNet()
-		assert.Nil(t, err, "should succeed")
+		if !assert.Nil(t, err, "should succeed") {
+			return
+		}
 
 		srcAddr := &net.UDPAddr{
 			IP: net.ParseIP("127.0.0.1"),
