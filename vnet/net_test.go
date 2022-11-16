@@ -472,8 +472,9 @@ func TestNetVirtual(t *testing.T) {
 			CIDR:          "1.2.3.0/24",
 			LoggerFactory: loggerFactory,
 		})
-		assert.NoError(t, err, "should succeed")
-		assert.NotNil(t, wan, "should succeed")
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
 
 		err = wan.AddHost("test.pion.ly", "30.31.32.33")
 		assert.NoError(t, err, "should succeed")
@@ -711,8 +712,9 @@ func TestNetVirtual(t *testing.T) {
 			CIDR:          "1.2.3.0/24",
 			LoggerFactory: loggerFactory,
 		})
-		assert.NoError(t, err, "should succeed")
-		assert.NotNil(t, wan, "should succeed")
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
 
 		net1, err := NewNet(&NetConfig{
 			StaticIPs: []string{
