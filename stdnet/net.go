@@ -66,6 +66,21 @@ func (n *Net) Interfaces() ([]*transport.Interface, error) {
 	return n.interfaces, nil
 }
 
+// InterfaceByIndex returns the interface specified by index.
+//
+// On Solaris, it returns one of the logical network interfaces
+// sharing the logical data link; for more precision use
+// InterfaceByName.
+func (n *Net) InterfaceByIndex(index int) (*transport.Interface, error) {
+	for _, ifc := range n.interfaces {
+		if ifc.Index == index {
+			return ifc, nil
+		}
+	}
+
+	return nil, fmt.Errorf("%w: index=%d", transport.ErrInterfaceNotFound, index)
+}
+
 // InterfaceByName returns the interface specified by name.
 func (n *Net) InterfaceByName(name string) (*transport.Interface, error) {
 	for _, ifc := range n.interfaces {

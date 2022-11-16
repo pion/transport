@@ -192,6 +192,16 @@ type Net interface {
 	// Interfaces returns a list of the system's network interfaces.
 	Interfaces() ([]*Interface, error)
 
+	// InterfaceByIndex returns the interface specified by index.
+	//
+	// On Solaris, it returns one of the logical network interfaces
+	// sharing the logical data link; for more precision use
+	// InterfaceByName.
+	InterfaceByIndex(index int) (*Interface, error)
+
+	// InterfaceByName returns the interface specified by name.
+	InterfaceByName(name string) (*Interface, error)
+
 	// The following functions are extensions to Go's standard net package
 
 	CreateDialer(dialer *net.Dialer) Dialer
