@@ -67,7 +67,7 @@ func TestChunk(t *testing.T) {
 		assert.Equal(t, uc.tag, uc.Tag(), "should match")
 
 		// Verify cloned chunk was not affected by the changes to original chunk
-		uc.userData[0] = []byte("!")[0] // oroginal: "Hello" -> "Hell!"
+		uc.userData[0] = []byte("!")[0] // original: "Hello" -> "Hell!"
 		assert.Equal(t, "Hello", string(cloned.userData), "should match")
 		assert.Equal(t, "192.168.0.2:1234", cloned.SourceAddr().String())
 		assert.True(t, cloned.getSourceIP().Equal(src.IP), "ip should match")
@@ -117,7 +117,7 @@ func TestChunk(t *testing.T) {
 		assert.Equal(t, tc.tag, tc.Tag(), "should match")
 
 		// Verify cloned chunk was not affected by the changes to original chunk
-		tc.userData[0] = []byte("!")[0] // oroginal: "Hello" -> "Hell!"
+		tc.userData[0] = []byte("!")[0] // original: "Hello" -> "Hell!"
 		assert.Equal(t, "Hello", string(cloned.userData), "should match")
 		assert.Equal(t, "192.168.0.2:1234", cloned.SourceAddr().String())
 		assert.True(t, cloned.getSourceIP().Equal(src.IP), "ip should match")

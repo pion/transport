@@ -73,7 +73,7 @@ func TestDelayFilter(t *testing.T) {
 			}
 		}
 
-		// schedula 100 chunks
+		// schedule 100 chunks
 		sent := time.Now()
 		for i := 0; i < 100; i++ {
 			df.onInboundChunk(&chunkUDP{
@@ -82,7 +82,7 @@ func TestDelayFilter(t *testing.T) {
 			})
 		}
 
-		// receive 100 chunks with deay>10ms
+		// receive 100 chunks with delay>10ms
 		for i := 0; i < 100; i++ {
 			select {
 			case c := <-receiveCh:

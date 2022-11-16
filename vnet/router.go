@@ -331,7 +331,7 @@ func (r *Router) addNIC(nic NIC) error {
 	return nil
 }
 
-// AddRouter adds a chile Router.
+// AddRouter adds a child Router.
 func (r *Router) AddRouter(router *Router) error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()

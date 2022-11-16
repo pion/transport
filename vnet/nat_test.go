@@ -16,7 +16,7 @@ import (
 
 const demoIP = "1.2.3.4"
 
-func TestNATTypeDefauts(t *testing.T) {
+func TestNATTypeDefaults(t *testing.T) {
 	loggerFactory := logging.NewDefaultLoggerFactory()
 	nat, err := newNAT(&natConfig{
 		natType:       NATType{},
@@ -234,7 +234,7 @@ func TestNATMappingBehavior(t *testing.T) {
 		_, err = nat.translateInbound(iec)
 		assert.Nil(t, err, "should succeed")
 
-		// packet from different addr will be droped (restricted-cone)
+		// packet from different addr will be dropped (restricted-cone)
 		//nolint:forcetypeassert
 		iec = newChunkUDP(
 			&net.UDPAddr{
@@ -356,7 +356,7 @@ func TestNATMappingBehavior(t *testing.T) {
 		_, err = nat.translateInbound(iec)
 		assert.NotNil(t, err, "should fail (dropped)")
 
-		// packet from different addr will be droped (restricted-cone)
+		// packet from different addr will be dropped (restricted-cone)
 		//nolint:forcetypeassert
 		iec = newChunkUDP(
 			&net.UDPAddr{
@@ -637,7 +637,7 @@ func TestNATMappingTimeout(t *testing.T) {
 	})
 }
 
-func TestNAT1To1Bahavior(t *testing.T) {
+func TestNAT1To1Behavior(t *testing.T) {
 	loggerFactory := logging.NewDefaultLoggerFactory()
 	log := loggerFactory.NewLogger("test")
 
