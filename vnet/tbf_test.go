@@ -98,7 +98,7 @@ func TestTokenBucketFilter(t *testing.T) {
 			bits := float64(bytesSent) * 8.0
 			rate := bits / time.Since(start).Seconds()
 			mBitPerSecond := rate / float64(MBit)
-			log.Infof("duration=%v, bytesSent=%v, pacetsSent=%v throughput=%.2f Mb/s", time.Since(start), bytesSent, packetsSent, mBitPerSecond)
+			log.Infof("duration=%v, bytesSent=%v, packetsSent=%v throughput=%.2f Mb/s", time.Since(start), bytesSent, packetsSent, mBitPerSecond)
 
 			assert.NoError(t, tbf.Close())
 		}()

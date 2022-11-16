@@ -169,7 +169,7 @@ func TestUDPProxyDirectDeliverTypical(t *testing.T) {
 }
 
 // Error if deliver to invalid address.
-func TestUDPProxyDirectDeliverBadcase(t *testing.T) {
+func TestUDPProxyDirectDeliverBadCase(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	var r0, r1, r2 error

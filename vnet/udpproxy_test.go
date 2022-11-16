@@ -72,7 +72,7 @@ func (v *MockUDPEchoServer) doMockUDPServer(ctx context.Context) error {
 			return fmt.Errorf("nn=%v, n=%v", nn, n) // nolint:goerr113
 		}
 
-		// Check the address, shold not change, use content as ID.
+		// Check the address, should not change, use content as ID.
 		clientID := string(buf[:n])
 		if oldAddr, ok := addrs[clientID]; ok && oldAddr.String() != addr.String() {
 			return fmt.Errorf("address change %v to %v", oldAddr.String(), addr.String()) // nolint:goerr113
