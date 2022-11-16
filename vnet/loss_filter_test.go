@@ -56,7 +56,9 @@ func TestLossFilter(t *testing.T) {
 		mnic := newMockNIC(t)
 
 		f, err := NewLossFilter(mnic, 100)
-		assert.NoError(t, err)
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
 
 		f.onInboundChunk(&chunkUDP{})
 	})
@@ -65,7 +67,9 @@ func TestLossFilter(t *testing.T) {
 		mnic := newMockNIC(t)
 
 		f, err := NewLossFilter(mnic, 0)
-		assert.NoError(t, err)
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
 
 		packets := 100
 		received := 0
@@ -84,7 +88,9 @@ func TestLossFilter(t *testing.T) {
 		mnic := newMockNIC(t)
 
 		f, err := NewLossFilter(mnic, 50)
-		assert.NoError(t, err)
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
 
 		packets := 1000
 		received := 0

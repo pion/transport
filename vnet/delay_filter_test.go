@@ -12,7 +12,10 @@ func TestDelayFilter(t *testing.T) {
 	t.Run("schedulesOnePacketAtATime", func(t *testing.T) {
 		nic := newMockNIC(t)
 		df, err := NewDelayFilter(nic, 10*time.Millisecond)
-		assert.NoError(t, err)
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		go df.Run(ctx)
@@ -55,7 +58,10 @@ func TestDelayFilter(t *testing.T) {
 	t.Run("schedulesSubsequentManyPackets", func(t *testing.T) {
 		nic := newMockNIC(t)
 		df, err := NewDelayFilter(nic, 10*time.Millisecond)
-		assert.NoError(t, err)
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		go df.Run(ctx)
