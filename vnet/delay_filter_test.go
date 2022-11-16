@@ -17,14 +17,14 @@ func TestDelayFilter(t *testing.T) {
 		defer cancel()
 		go df.Run(ctx)
 
-		type cchunk struct {
+		type TimestampedChunk struct {
 			ts time.Time
 			c  Chunk
 		}
-		receiveCh := make(chan cchunk)
+		receiveCh := make(chan TimestampedChunk)
 		nic.mockOnInboundChunk = func(c Chunk) {
 			receivedAt := time.Now()
-			receiveCh <- cchunk{
+			receiveCh <- TimestampedChunk{
 				ts: receivedAt,
 				c:  c,
 			}
@@ -60,14 +60,14 @@ func TestDelayFilter(t *testing.T) {
 		defer cancel()
 		go df.Run(ctx)
 
-		type cchunk struct {
+		type TimestampedChunk struct {
 			ts time.Time
 			c  Chunk
 		}
-		receiveCh := make(chan cchunk)
+		receiveCh := make(chan TimestampedChunk)
 		nic.mockOnInboundChunk = func(c Chunk) {
 			receivedAt := time.Now()
-			receiveCh <- cchunk{
+			receiveCh <- TimestampedChunk{
 				ts: receivedAt,
 				c:  c,
 			}
