@@ -50,8 +50,10 @@ func TestRouterStandalone(t *testing.T) {
 			CIDR:          "1.2.3.0/24",
 			LoggerFactory: loggerFactory,
 		})
+		if !assert.Nil(t, err, "should succeed") {
+			return
+		}
 
-		assert.Nil(t, err, "should succeed")
 		assert.Equal(t, "1.2.3.0", r.ipv4Net.IP.String(), "ip should match")
 		assert.Equal(t, "ffffff00", r.ipv4Net.Mask.String(), "mask should match")
 	})
@@ -61,7 +63,9 @@ func TestRouterStandalone(t *testing.T) {
 			CIDR:          "1.2.3.0/24",
 			LoggerFactory: loggerFactory,
 		})
-		assert.Nil(t, err, "should succeed")
+		if !assert.Nil(t, err, "should succeed") {
+			return
+		}
 
 		for i := 1; i < 255; i++ {
 			ip, err2 := r.assignIPAddress()
@@ -81,7 +85,9 @@ func TestRouterStandalone(t *testing.T) {
 			CIDR:          "1.2.3.0/24",
 			LoggerFactory: loggerFactory,
 		})
-		assert.Nil(t, err, "should succeed")
+		if !assert.Nil(t, err, "should succeed") {
+			return
+		}
 
 		nic, err := NewNet(&NetConfig{})
 		if !assert.NoError(t, err, "should succeed") {
@@ -94,6 +100,7 @@ func TestRouterStandalone(t *testing.T) {
 		// Now, eth0 must have one address assigned
 		eth0, err := nic.getInterface("eth0")
 		assert.Nil(t, err, "should succeed")
+
 		addrs, err := eth0.Addresses()
 		assert.Nil(t, err, "should succeed")
 		assert.Equal(t, 1, len(addrs), "should match")
@@ -107,7 +114,9 @@ func TestRouterStandalone(t *testing.T) {
 			CIDR:          "0.0.0.0/0",
 			LoggerFactory: loggerFactory,
 		})
-		assert.Nil(t, err, "should succeed")
+		if !assert.Nil(t, err, "should succeed") {
+			return
+		}
 
 		r2, err := NewRouter(&RouterConfig{
 			CIDR: "192.168.0.0/24",
@@ -117,7 +126,9 @@ func TestRouterStandalone(t *testing.T) {
 
 			LoggerFactory: loggerFactory,
 		})
-		assert.Nil(t, err, "should succeed")
+		if !assert.Nil(t, err, "should succeed") {
+			return
+		}
 
 		err = r1.AddNet(r2)
 		assert.Nil(t, err, "should succeed")
@@ -133,7 +144,9 @@ func TestRouterStandalone(t *testing.T) {
 			CIDR:          "1.2.3.0/24",
 			LoggerFactory: loggerFactory,
 		})
-		assert.Nil(t, err, "should succeed")
+		if !assert.Nil(t, err, "should succeed") {
+			return
+		}
 
 		nic := make([]*dummyNIC, 2)
 		ip := make([]*net.UDPAddr, 2)
@@ -193,7 +206,9 @@ func TestRouterStandalone(t *testing.T) {
 			CIDR:          "1.2.3.0/24",
 			LoggerFactory: loggerFactory,
 		})
-		assert.Nil(t, err, "should succeed")
+		if !assert.Nil(t, err, "should succeed") {
+			return
+		}
 
 		nic := make([]*dummyNIC, 2)
 		ip := make([]*net.UDPAddr, 2)
@@ -272,6 +287,7 @@ func TestRouterStandalone(t *testing.T) {
 
 		err = r.Stop()
 		assert.Nil(t, err, "should succeed")
+
 		assert.Equal(t, int32(0), atomic.LoadInt32(&nCbs0), "should be zero")
 		assert.Equal(t, int32(1), atomic.LoadInt32(&nCbs1), "should be zero")
 		assert.Equal(t, byte(2), seq, "should be the last chunk")
@@ -293,7 +309,9 @@ func TestRouterDelay(t *testing.T) {
 				MaxJitter:     maxJitter,
 				LoggerFactory: loggerFactory,
 			})
-			assert.Nil(t, err, "should succeed")
+			if !assert.Nil(t, err, "should succeed") {
+				return
+			}
 
 			nic := make([]*dummyNIC, 2)
 			ip := make([]*net.UDPAddr, 2)
@@ -382,6 +400,10 @@ func TestRouterOneChild(t *testing.T) {
 			CIDR:          "1.2.3.0/24",
 			LoggerFactory: loggerFactory,
 		})
+		if !assert.Nil(t, err, "should succeed") {
+			return
+		}
+
 		nw, err := NewNet(&NetConfig{})
 		if !assert.NoError(t, err, "should succeed") {
 			return
@@ -397,6 +419,7 @@ func TestRouterOneChild(t *testing.T) {
 		// Now, eth0 must have one address assigned
 		wanIP, err := getIPAddr(wanNet)
 		assert.Nil(t, err, "should succeed")
+
 		log.Debugf("wanIP: %s", wanIP)
 
 		// LAN
@@ -404,6 +427,10 @@ func TestRouterOneChild(t *testing.T) {
 			CIDR:          "192.168.0.0/24",
 			LoggerFactory: loggerFactory,
 		})
+		if !assert.Nil(t, err, "should succeed") {
+			return
+		}
+
 		lnw, err := NewNet(&NetConfig{})
 		if !assert.NoError(t, err, "should succeed") {
 			return
@@ -421,7 +448,9 @@ func TestRouterOneChild(t *testing.T) {
 		log.Debugf("lanIP: %s", lanIP)
 
 		err = wan.AddRouter(lan)
-		assert.Nil(t, err, "should succeed")
+		if !assert.Nil(t, err, "should succeed") {
+			return
+		}
 
 		lanNet.onInboundChunkHandler = func(c Chunk) {
 			log.Debugf("lanNet received: %s", c.String())
@@ -481,8 +510,9 @@ func TestRouterStaticIPs(t *testing.T) {
 			},
 			LoggerFactory: loggerFactory,
 		})
-		assert.Nil(t, err, "should succeed")
-		assert.NotNil(t, lan, "should succeed")
+		if !assert.Nil(t, err, "should succeed") {
+			return
+		}
 
 		assert.Equal(t, 3, len(lan.staticIPs), "should be 3")
 		assert.Equal(t, "1.2.3.1", lan.staticIPs[0].String(), "should match")
@@ -501,8 +531,9 @@ func TestRouterStaticIPs(t *testing.T) {
 			StaticIP:      demoIP,
 			LoggerFactory: loggerFactory,
 		})
-		assert.Nil(t, err, "should succeed")
-		assert.NotNil(t, lan, "should succeed")
+		if !assert.Nil(t, err, "should succeed") {
+			return
+		}
 
 		assert.Equal(t, 4, len(lan.staticIPs), "should be 4")
 		assert.Equal(t, "1.2.3.1", lan.staticIPs[0].String(), "should match")
@@ -522,7 +553,6 @@ func TestRouterStaticIPs(t *testing.T) {
 			LoggerFactory: loggerFactory,
 		})
 		assert.NoError(t, err, "should succeed")
-		assert.NotNil(t, lan, "should succeed")
 
 		assert.Equal(t, 3, len(lan.staticIPs), "should be 3")
 		assert.Equal(t, "1.2.3.1", lan.staticIPs[0].String(), "should match")
@@ -575,12 +605,7 @@ func TestRouterStaticIPs(t *testing.T) {
 			CIDR:          "0.0.0.0/0",
 			LoggerFactory: loggerFactory,
 		})
-		if !assert.NoError(t, err, "should succeed") {
-			return
-		}
-		if !assert.NotNil(t, wan, "should succeed") {
-			return
-		}
+		assert.NoError(t, err, "should succeed")
 
 		lan, err := NewRouter(&RouterConfig{
 			CIDR: "192.168.0.0/24",
@@ -594,12 +619,7 @@ func TestRouterStaticIPs(t *testing.T) {
 			},
 			LoggerFactory: loggerFactory,
 		})
-		if !assert.NoError(t, err, "should succeed") {
-			return
-		}
-		if !assert.NotNil(t, lan, "should succeed") {
-			return
-		}
+		assert.NoError(t, err, "should succeed")
 
 		err = wan.AddRouter(lan)
 		if !assert.NoError(t, err, "should succeed") {
@@ -630,7 +650,9 @@ func TestRouterFailures(t *testing.T) {
 			CIDR:          "1.2.3.0/24",
 			LoggerFactory: loggerFactory,
 		})
-		assert.Nil(t, err, "should succeed")
+		if !assert.Nil(t, err, "should succeed") {
+			return
+		}
 
 		err = r.Stop()
 		assert.Error(t, err, "should fail")
@@ -641,7 +663,9 @@ func TestRouterFailures(t *testing.T) {
 			CIDR:          "1.2.3.0/24",
 			LoggerFactory: loggerFactory,
 		})
-		assert.Nil(t, err, "should succeed")
+		if !assert.Nil(t, err, "should succeed") {
+			return
+		}
 
 		nic, err := NewNet(&NetConfig{
 			StaticIPs: []string{
@@ -661,7 +685,9 @@ func TestRouterFailures(t *testing.T) {
 			CIDR:          "1.2.3.0/24",
 			LoggerFactory: loggerFactory,
 		})
-		assert.Nil(t, err, "should succeed")
+		if !assert.Nil(t, err, "should succeed") {
+			return
+		}
 
 		r2, err := NewRouter(&RouterConfig{
 			CIDR: "192.168.0.0/24",
@@ -671,7 +697,9 @@ func TestRouterFailures(t *testing.T) {
 
 			LoggerFactory: loggerFactory,
 		})
-		assert.Nil(t, err, "should succeed")
+		if !assert.Nil(t, err, "should succeed") {
+			return
+		}
 
 		err = r1.AddRouter(r2)
 		assert.Error(t, err, "should fail")
@@ -682,7 +710,9 @@ func TestRouterFailures(t *testing.T) {
 			CIDR:          "1.2.3.0/24",
 			LoggerFactory: loggerFactory,
 		})
-		assert.Nil(t, err, "should succeed")
+		if !assert.Nil(t, err, "should succeed") {
+			return
+		}
 
 		r2, err := NewRouter(&RouterConfig{
 			CIDR: "192.168.0.0/24",
@@ -692,7 +722,9 @@ func TestRouterFailures(t *testing.T) {
 
 			LoggerFactory: loggerFactory,
 		})
-		assert.Nil(t, err, "should succeed")
+		if !assert.Nil(t, err, "should succeed") {
+			return
+		}
 
 		err = r1.AddChildRouter(r2)
 		assert.Error(t, err, "should fail")

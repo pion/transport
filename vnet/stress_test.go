@@ -27,7 +27,6 @@ func TestStressTestUDP(t *testing.T) {
 			LoggerFactory: loggerFactory,
 		})
 		assert.NoError(t, err, "should succeed")
-		assert.NotNil(t, wan, "should succeed")
 
 		net0, err := NewNet(&NetConfig{
 			StaticIPs: []string{demoIP},
@@ -46,7 +45,6 @@ func TestStressTestUDP(t *testing.T) {
 			LoggerFactory: loggerFactory,
 		})
 		assert.NoError(t, err, "should succeed")
-		assert.NotNil(t, lan, "should succeed")
 
 		net1, err := NewNet(&NetConfig{})
 		if !assert.NoError(t, err, "should succeed") {
