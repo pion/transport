@@ -156,9 +156,13 @@ func TestUDPProxyOne2One(t *testing.T) {
 				return err
 			}
 
-			clientNetwork := NewNet(&NetConfig{
+			clientNetwork, err := NewNet(&NetConfig{
 				StaticIP: "10.0.0.11",
 			})
+			if err != nil {
+				return err
+			}
+
 			if err = router.AddNet(clientNetwork); err != nil {
 				return err
 			}
@@ -305,9 +309,13 @@ func TestUDPProxyTwo2One(t *testing.T) {
 				return err
 			}
 
-			clientNetwork := NewNet(&NetConfig{
+			clientNetwork, err := NewNet(&NetConfig{
 				StaticIP: "10.0.0.11",
 			})
+			if err != nil {
+				return err
+			}
+
 			if err = router.AddNet(clientNetwork); err != nil {
 				return err
 			}
@@ -489,9 +497,13 @@ func TestUDPProxyProxyTwice(t *testing.T) {
 				return err
 			}
 
-			clientNetwork := NewNet(&NetConfig{
+			clientNetwork, err := NewNet(&NetConfig{
 				StaticIP: "10.0.0.11",
 			})
+			if err != nil {
+				return err
+			}
+
 			if err = router.AddNet(clientNetwork); err != nil {
 				return err
 			}

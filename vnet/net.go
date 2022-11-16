@@ -547,7 +547,7 @@ type NetConfig struct {
 // By design, it always have lo0 and eth0 interfaces.
 // The lo0 has the address 127.0.0.1 assigned by default.
 // IP address for eth0 will be assigned when this Net is added to a router.
-func NewNet(config *NetConfig) *Net {
+func NewNet(config *NetConfig) (*Net, error) {
 	lo0 := transport.NewInterface(net.Interface{
 		Index:        1,
 		MTU:          16384,
@@ -584,7 +584,7 @@ func NewNet(config *NetConfig) *Net {
 		interfaces: []*transport.Interface{lo0, eth0},
 		staticIPs:  staticIPs,
 		udpConns:   newUDPConnMap(),
-	}
+	}, nil
 }
 
 // DialTCP acts like Dial for TCP networks.
