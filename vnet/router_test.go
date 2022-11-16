@@ -83,8 +83,10 @@ func TestRouterStandalone(t *testing.T) {
 		})
 		assert.Nil(t, err, "should succeed")
 
-		nic := NewNet(&NetConfig{})
-		assert.NotNil(t, nic, "should succeed")
+		nic, err := NewNet(&NetConfig{})
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
 
 		err = r.AddNet(nic)
 		assert.Nil(t, err, "should succeed")
@@ -137,8 +139,10 @@ func TestRouterStandalone(t *testing.T) {
 		ip := make([]*net.UDPAddr, 2)
 
 		for i := 0; i < 2; i++ {
-			anic := NewNet(&NetConfig{})
-			assert.NotNil(t, anic, "should succeed")
+			anic, netErr := NewNet(&NetConfig{})
+			if !assert.NoError(t, netErr, "should succeed") {
+				return
+			}
 
 			nic[i] = &dummyNIC{
 				Net: anic,
@@ -195,8 +199,10 @@ func TestRouterStandalone(t *testing.T) {
 		ip := make([]*net.UDPAddr, 2)
 
 		for i := 0; i < 2; i++ {
-			anic := NewNet(&NetConfig{})
-			assert.NotNil(t, anic, "should succeed")
+			anic, netErr := NewNet(&NetConfig{})
+			if !assert.NoError(t, netErr, "should succeed") {
+				return
+			}
 
 			nic[i] = &dummyNIC{
 				Net: anic,
@@ -293,8 +299,10 @@ func TestRouterDelay(t *testing.T) {
 			ip := make([]*net.UDPAddr, 2)
 
 			for i := 0; i < 2; i++ {
-				anic := NewNet(&NetConfig{})
-				assert.NotNil(t, anic, "should succeed")
+				anic, netErr := NewNet(&NetConfig{})
+				if !assert.NoError(t, netErr, "should succeed") {
+					return
+				}
 
 				nic[i] = &dummyNIC{
 					Net: anic,
@@ -374,11 +382,13 @@ func TestRouterOneChild(t *testing.T) {
 			CIDR:          "1.2.3.0/24",
 			LoggerFactory: loggerFactory,
 		})
-		assert.Nil(t, err, "should succeed")
-		assert.NotNil(t, wan, "should succeed")
+		nw, err := NewNet(&NetConfig{})
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
 
 		wanNet := &dummyNIC{
-			Net: NewNet(&NetConfig{}),
+			Net: nw,
 		}
 
 		err = wan.AddNet(wanNet)
@@ -394,11 +404,13 @@ func TestRouterOneChild(t *testing.T) {
 			CIDR:          "192.168.0.0/24",
 			LoggerFactory: loggerFactory,
 		})
-		assert.Nil(t, err, "should succeed")
-		assert.NotNil(t, lan, "should succeed")
+		lnw, err := NewNet(&NetConfig{})
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
 
 		lanNet := &dummyNIC{
-			Net: NewNet(&NetConfig{}),
+			Net: lnw,
 		}
 		err = lan.AddNet(lanNet)
 		assert.Nil(t, err, "should succeed")
@@ -631,12 +643,14 @@ func TestRouterFailures(t *testing.T) {
 		})
 		assert.Nil(t, err, "should succeed")
 
-		nic := NewNet(&NetConfig{
+		nic, err := NewNet(&NetConfig{
 			StaticIPs: []string{
 				"5.6.7.8", // out of parent router'c CIDR
 			},
 		})
-		assert.NotNil(t, nic, "should succeed")
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
 
 		err = r.AddNet(nic)
 		assert.Error(t, err, "should fail")
