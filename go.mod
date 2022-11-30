@@ -1,8 +1,6 @@
-module github.com/pion/transport
+module github.com/pion/transport/v2
 
 go 1.12
-
-retract v0.14.0
 
 require (
 	github.com/pion/logging v0.2.2
