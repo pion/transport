@@ -171,10 +171,7 @@ func TestUDPConn(t *testing.T) {
 
 		var n int
 		n, err = conn.Write(data)
-		if !assert.Nil(t, err, "should succeed") {
-			return
-		}
-
+		assert.Nil(t, err, "should succeed")
 		assert.Equal(t, len(data), n, "should match")
 
 	loop:

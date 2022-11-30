@@ -15,7 +15,7 @@ func TestTokenBucketFilter(t *testing.T) {
 		mnic := newMockNIC(t)
 
 		tbf, err := NewTokenBucketFilter(mnic, TBFRate(10*MBit), TBFMaxBurst(10*MBit))
-		assert.NoError(t, err, "should succeed")
+		assert.NoError(t, err)
 
 		received := 0
 		mnic.mockOnInboundChunk = func(Chunk) {
@@ -42,7 +42,7 @@ func TestTokenBucketFilter(t *testing.T) {
 		mnic := newMockNIC(t)
 
 		tbf, err := NewTokenBucketFilter(mnic, TBFRate(capacity))
-		assert.NoError(t, err, "should succeed")
+		assert.NoError(t, err)
 
 		chunkChan := make(chan Chunk)
 		mnic.mockOnInboundChunk = func(c Chunk) {
@@ -98,7 +98,7 @@ func TestTokenBucketFilter(t *testing.T) {
 			bits := float64(bytesSent) * 8.0
 			rate := bits / time.Since(start).Seconds()
 			mBitPerSecond := rate / float64(MBit)
-			log.Infof("duration=%v, bytesSent=%v, packetsSent=%v throughput=%.2f Mb/s", time.Since(start), bytesSent, packetsSent, mBitPerSecond)
+			log.Infof("duration=%v, bytesSent=%v, pacetsSent=%v throughput=%.2f Mb/s", time.Since(start), bytesSent, packetsSent, mBitPerSecond)
 
 			assert.NoError(t, tbf.Close())
 		}()

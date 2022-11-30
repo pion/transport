@@ -469,7 +469,7 @@ func TestNetTest(t *testing.T) {
 		return &closePropagator{conn0, conn1}, &closePropagator{conn1, conn0},
 			func() {
 				// RacyRead test leave receive buffer filled.
-				// As net.Conn.Read() should return received data even after Close()-ed,
+				// As net.Conn.Read() shoud return received data even after Close()-ed,
 				// queue must be cleared explicitly.
 				br.clear()
 				_ = conn0.Close()

@@ -43,7 +43,7 @@ func TBFQueueSizeInBytes(bytes int) TBFOption {
 	}
 }
 
-// TBFRate sets the bit rate of a TokenBucketFilter
+// TBFRate sets the bitrate of a TokenBucketFilter
 func TBFRate(rate int) TBFOption {
 	return func(t *TokenBucketFilter) TBFOption {
 		t.mutex.Lock()

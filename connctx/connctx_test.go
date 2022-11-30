@@ -56,7 +56,7 @@ func TestReadTImeout(t *testing.T) {
 	b := make([]byte, 100)
 	n, err := c.ReadContext(ctx, b)
 	if err == nil {
-		t.Error("Read unexpectedly succeeded")
+		t.Error("Read unexpectedly successed")
 	}
 	if n != 0 {
 		t.Errorf("Wrong data length, expected %d, got %d", 0, n)
@@ -79,7 +79,7 @@ func TestReadCancel(t *testing.T) {
 	b := make([]byte, 100)
 	n, err := c.ReadContext(ctx, b)
 	if err == nil {
-		t.Error("Read unexpectedly succeeded")
+		t.Error("Read unexpectedly successed")
 	}
 	if n != 0 {
 		t.Errorf("Wrong data length, expected %d, got %d", 0, n)
@@ -151,7 +151,7 @@ func TestWriteTimeout(t *testing.T) {
 	b := make([]byte, 100)
 	n, err := c.WriteContext(ctx, b)
 	if err == nil {
-		t.Error("Write unexpectedly succeeded")
+		t.Error("Write unexpectedly successed")
 	}
 	if n != 0 {
 		t.Errorf("Wrong data length, expected %d, got %d", 0, n)
@@ -174,7 +174,7 @@ func TestWriteCancel(t *testing.T) {
 	b := make([]byte, 100)
 	n, err := c.WriteContext(ctx, b)
 	if err == nil {
-		t.Error("Write unexpectedly succeeded")
+		t.Error("Write unexpectedly successed")
 	}
 	if n != 0 {
 		t.Errorf("Wrong data length, expected %d, got %d", 0, n)

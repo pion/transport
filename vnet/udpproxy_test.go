@@ -72,7 +72,7 @@ func (v *MockUDPEchoServer) doMockUDPServer(ctx context.Context) error {
 			return fmt.Errorf("nn=%v, n=%v", nn, n) // nolint:goerr113
 		}
 
-		// Check the address, should not change, use content as ID.
+		// Check the address, shold not change, use content as ID.
 		clientID := string(buf[:n])
 		if oldAddr, ok := addrs[clientID]; ok && oldAddr.String() != addr.String() {
 			return fmt.Errorf("address change %v to %v", oldAddr.String(), addr.String()) // nolint:goerr113
@@ -91,12 +91,9 @@ func TestMain(m *testing.M) {
 }
 
 // vnet client:
-//
-//	10.0.0.11:5787
-//
+//		10.0.0.11:5787
 // proxy to real server:
-//
-//	192.168.1.10:8000
+//		192.168.1.10:8000
 func TestUDPProxyOne2One(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -156,13 +153,9 @@ func TestUDPProxyOne2One(t *testing.T) {
 				return err
 			}
 
-			clientNetwork, err := NewNet(&NetConfig{
+			clientNetwork := NewNet(&NetConfig{
 				StaticIP: "10.0.0.11",
 			})
-			if err != nil {
-				return err
-			}
-
 			if err = router.AddNet(clientNetwork); err != nil {
 				return err
 			}
@@ -243,13 +236,10 @@ func TestUDPProxyOne2One(t *testing.T) {
 }
 
 // vnet client:
-//
-//	10.0.0.11:5787
-//	10.0.0.11:5788
-//
+//		10.0.0.11:5787
+//		10.0.0.11:5788
 // proxy to real server:
-//
-//	192.168.1.10:8000
+//		192.168.1.10:8000
 func TestUDPProxyTwo2One(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -309,13 +299,9 @@ func TestUDPProxyTwo2One(t *testing.T) {
 				return err
 			}
 
-			clientNetwork, err := NewNet(&NetConfig{
+			clientNetwork := NewNet(&NetConfig{
 				StaticIP: "10.0.0.11",
 			})
-			if err != nil {
-				return err
-			}
-
 			if err = router.AddNet(clientNetwork); err != nil {
 				return err
 			}
@@ -424,20 +410,14 @@ func TestUDPProxyTwo2One(t *testing.T) {
 }
 
 // vnet client:
-//
-//	10.0.0.11:5787
-//
+//		10.0.0.11:5787
 // proxy to real server:
-//
-//	192.168.1.10:8000
+//		192.168.1.10:8000
 //
 // vnet client:
-//
-//	10.0.0.11:5788
-//
+//		10.0.0.11:5788
 // proxy to real server:
-//
-//	192.168.1.10:8000
+//		192.168.1.10:8000
 func TestUDPProxyProxyTwice(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -497,13 +477,9 @@ func TestUDPProxyProxyTwice(t *testing.T) {
 				return err
 			}
 
-			clientNetwork, err := NewNet(&NetConfig{
+			clientNetwork := NewNet(&NetConfig{
 				StaticIP: "10.0.0.11",
 			})
-			if err != nil {
-				return err
-			}
-
 			if err = router.AddNet(clientNetwork); err != nil {
 				return err
 			}

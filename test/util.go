@@ -85,17 +85,17 @@ func GatherErrs(c chan error) []error {
 
 // FlattenErrs flattens a slice of errors into a single error
 func FlattenErrs(errs []error) error {
-	var errStrings []string
+	var errstrings []string
 
 	for _, err := range errs {
 		if err != nil {
-			errStrings = append(errStrings, err.Error())
+			errstrings = append(errstrings, err.Error())
 		}
 	}
 
-	if len(errStrings) == 0 {
+	if len(errstrings) == 0 {
 		return nil
 	}
 
-	return fmt.Errorf("%w %s", errFlattenErrs, strings.Join(errStrings, "\n"))
+	return fmt.Errorf("%w %s", errFlattenErrs, strings.Join(errstrings, "\n"))
 }

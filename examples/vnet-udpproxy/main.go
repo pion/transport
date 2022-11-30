@@ -1,5 +1,3 @@
-// Package main implements an example for the virtual Net
-// UDP proxy.
 package main
 
 import (
@@ -27,13 +25,9 @@ func main() {
 	}
 
 	// Create a network and add to router, for example, for client.
-	clientNetwork, err := vnet.NewNet(&vnet.NetConfig{
+	clientNetwork := vnet.NewNet(&vnet.NetConfig{
 		StaticIP: "10.0.0.11",
 	})
-	if err != nil {
-		panic(err)
-	}
-
 	if err = router.AddNet(clientNetwork); err != nil {
 		panic(err)
 	}

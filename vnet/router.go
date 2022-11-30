@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/pion/logging"
-	"github.com/pion/transport"
 )
 
 const (
@@ -64,9 +63,9 @@ type RouterConfig struct {
 	LoggerFactory logging.LoggerFactory
 }
 
-// NIC is a network interface controller that interfaces Router
+// NIC is a nework inerface controller that interfaces Router
 type NIC interface {
-	getInterface(ifName string) (*transport.Interface, error)
+	getInterface(ifName string) (*Interface, error)
 	onInboundChunk(c Chunk)
 	getStaticIPs() []net.IP
 	setRouter(r *Router) error
@@ -79,7 +78,7 @@ type ChunkFilter func(c Chunk) bool
 // Router ...
 type Router struct {
 	name           string                    // read-only
-	interfaces     []*transport.Interface    // read-only
+	interfaces     []*Interface              // read-only
 	ipv4Net        *net.IPNet                // read-only
 	staticIPs      []net.IP                  // read-only
 	staticLocalIPs map[string]net.IP         // read-only,
@@ -117,17 +116,17 @@ func NewRouter(config *RouterConfig) (*Router, error) {
 	}
 
 	// set up network interface, lo0
-	lo0 := transport.NewInterface(net.Interface{
+	lo0 := NewInterface(net.Interface{
 		Index:        1,
 		MTU:          16384,
 		Name:         lo0String,
 		HardwareAddr: nil,
 		Flags:        net.FlagUp | net.FlagLoopback | net.FlagMulticast,
 	})
-	lo0.AddAddress(&net.IPAddr{IP: net.ParseIP("127.0.0.1"), Zone: ""})
+	lo0.AddAddr(&net.IPAddr{IP: net.ParseIP("127.0.0.1"), Zone: ""})
 
 	// set up network interface, eth0
-	eth0 := transport.NewInterface(net.Interface{
+	eth0 := NewInterface(net.Interface{
 		Index:        2,
 		MTU:          1500,
 		Name:         "eth0",
@@ -178,7 +177,7 @@ func NewRouter(config *RouterConfig) (*Router, error) {
 
 	return &Router{
 		name:           name,
-		interfaces:     []*transport.Interface{lo0, eth0},
+		interfaces:     []*Interface{lo0, eth0},
 		ipv4Net:        ipv4Net,
 		staticIPs:      staticIPs,
 		staticLocalIPs: staticLocalIPs,
@@ -195,7 +194,7 @@ func NewRouter(config *RouterConfig) (*Router, error) {
 }
 
 // caller must hold the mutex
-func (r *Router) getInterfaces() ([]*transport.Interface, error) {
+func (r *Router) getInterfaces() ([]*Interface, error) {
 	if len(r.interfaces) == 0 {
 		return nil, fmt.Errorf("%w is available", errNoInterface)
 	}
@@ -203,7 +202,7 @@ func (r *Router) getInterfaces() ([]*transport.Interface, error) {
 	return r.interfaces, nil
 }
 
-func (r *Router) getInterface(ifName string) (*transport.Interface, error) {
+func (r *Router) getInterface(ifName string) (*Interface, error) {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
 
@@ -217,7 +216,7 @@ func (r *Router) getInterface(ifName string) (*transport.Interface, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("%w: %s", transport.ErrInterfaceNotFound, ifName)
+	return nil, fmt.Errorf("interface %s %w", ifName, errNotFound)
 }
 
 // Start ...
@@ -317,7 +316,7 @@ func (r *Router) addNIC(nic NIC) error {
 			return fmt.Errorf("%w: %s", errStaticIPisBeyondSubnet, r.ipv4Net.String())
 		}
 
-		ifc.AddAddress(&net.IPNet{
+		ifc.AddAddr(&net.IPNet{
 			IP:   ip,
 			Mask: r.ipv4Net.Mask,
 		})
@@ -332,7 +331,7 @@ func (r *Router) addNIC(nic NIC) error {
 	return nil
 }
 
-// AddRouter adds a child Router.
+// AddRouter adds a chile Router.
 func (r *Router) AddRouter(router *Router) error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
@@ -483,7 +482,7 @@ func (r *Router) processChunks() (time.Duration, error) {
 
 		dstIP := c.getDestinationIP()
 
-		// check if the destination is in our subnet
+		// check if the desination is in our subnet
 		if r.ipv4Net.Contains(dstIP) {
 			// search for the destination NIC
 			var nic NIC
@@ -521,7 +520,7 @@ func (r *Router) processChunks() (time.Duration, error) {
 
 		//nolint:godox
 		/* FIXME: this implementation would introduce a duplicate packet!
-		if r.nat.natType.Hairpinning {
+		if r.nat.natType.Hairpining {
 			hairpinned, err := r.nat.translateInbound(toParent)
 			if err != nil {
 				r.log.Warnf("[%s] %s", r.name, err.Error())
@@ -554,15 +553,14 @@ func (r *Router) setRouter(parent *Router) error {
 		return err
 	}
 
-	addrs, _ := ifc.Addresses()
-	if len(addrs) == 0 {
+	if len(ifc.addrs) == 0 {
 		return errNoIPAddrEth0
 	}
 
 	mappedIPs := []net.IP{}
 	localIPs := []net.IP{}
 
-	for _, ifcAddr := range addrs {
+	for _, ifcAddr := range ifc.addrs {
 		var ip net.IP
 		switch addr := ifcAddr.(type) {
 		case *net.IPNet:
@@ -588,7 +586,7 @@ func (r *Router) setRouter(parent *Router) error {
 		r.natType = &NATType{
 			MappingBehavior:   EndpointIndependent,
 			FilteringBehavior: EndpointAddrPortDependent,
-			Hairpinning:       false,
+			Hairpining:        false,
 			PortPreservation:  false,
 			MappingLifeTime:   30 * time.Second,
 		}

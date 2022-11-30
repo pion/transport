@@ -59,7 +59,7 @@ func (e *netError) Timeout() bool {
 }
 
 func (e *netError) Temporary() bool {
-	return e.temporary
+	return e.timeout
 }
 
 // Read reads data, block until the data becomes available.

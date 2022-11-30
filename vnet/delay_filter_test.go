@@ -12,22 +12,19 @@ func TestDelayFilter(t *testing.T) {
 	t.Run("schedulesOnePacketAtATime", func(t *testing.T) {
 		nic := newMockNIC(t)
 		df, err := NewDelayFilter(nic, 10*time.Millisecond)
-		if !assert.NoError(t, err, "should succeed") {
-			return
-		}
-
+		assert.NoError(t, err)
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		go df.Run(ctx)
 
-		type TimestampedChunk struct {
+		type cchunk struct {
 			ts time.Time
 			c  Chunk
 		}
-		receiveCh := make(chan TimestampedChunk)
+		receiveCh := make(chan cchunk)
 		nic.mockOnInboundChunk = func(c Chunk) {
 			receivedAt := time.Now()
-			receiveCh <- TimestampedChunk{
+			receiveCh <- cchunk{
 				ts: receivedAt,
 				c:  c,
 			}
@@ -58,28 +55,25 @@ func TestDelayFilter(t *testing.T) {
 	t.Run("schedulesSubsequentManyPackets", func(t *testing.T) {
 		nic := newMockNIC(t)
 		df, err := NewDelayFilter(nic, 10*time.Millisecond)
-		if !assert.NoError(t, err, "should succeed") {
-			return
-		}
-
+		assert.NoError(t, err)
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		go df.Run(ctx)
 
-		type TimestampedChunk struct {
+		type cchunk struct {
 			ts time.Time
 			c  Chunk
 		}
-		receiveCh := make(chan TimestampedChunk)
+		receiveCh := make(chan cchunk)
 		nic.mockOnInboundChunk = func(c Chunk) {
 			receivedAt := time.Now()
-			receiveCh <- TimestampedChunk{
+			receiveCh <- cchunk{
 				ts: receivedAt,
 				c:  c,
 			}
 		}
 
-		// schedule 100 chunks
+		// schedula 100 chunks
 		sent := time.Now()
 		for i := 0; i < 100; i++ {
 			df.onInboundChunk(&chunkUDP{
@@ -88,7 +82,7 @@ func TestDelayFilter(t *testing.T) {
 			})
 		}
 
-		// receive 100 chunks with delay>10ms
+		// receive 100 chunks with deay>10ms
 		for i := 0; i < 100; i++ {
 			select {
 			case c := <-receiveCh:
