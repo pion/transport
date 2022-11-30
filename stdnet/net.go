@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/pion/transport"
+	"github.com/pion/transport/v2"
 )
 
 const (

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/pion/transport"
+	"github.com/pion/transport/v2"
 )
 
 const (
