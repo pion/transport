@@ -13,6 +13,7 @@ Juliusz Chroboczek <jch@irif.fr>
 Luke Curley <kixelated@gmail.com>
 Mathis Engelbart <mathis.engelbart@gmail.com>
 OrlandoCo <luisorlando.co@gmail.com>
+Sean DuBois <duboisea@justin.tv>
 Sean DuBois <duboisea@twitch.tv>
 Sean DuBois <seaduboi@amazon.com>
 Sean DuBois <sean@siobud.com>
