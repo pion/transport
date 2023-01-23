@@ -22,3 +22,6 @@ Winlin <winlin@vip.126.com>
 Woodrow Douglass <wdouglass@carnegierobotics.com>
 Yutaka Takeda <yt0916@gmail.com>
 ZHENK <chengzhenyang@gmail.com>
+
+# List of contributors not appearing in Git history
+
