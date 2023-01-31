@@ -82,7 +82,7 @@ func TestStressTestUDP(t *testing.T) {
 				continue
 			}
 
-			addrs, err2 := ifc.Addresses()
+			addrs, err2 := ifc.Addrs()
 			if !assert.NoError(t, err2, "should succeed") {
 				return
 			}

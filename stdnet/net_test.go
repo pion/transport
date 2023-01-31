@@ -28,13 +28,13 @@ func TestStdNet(t *testing.T) {
 		log.Debugf("interfaces: %+v", interfaces)
 		for _, ifc := range interfaces {
 			if ifc.Name == lo0String {
-				_, err := ifc.Addresses()
+				_, err := ifc.Addrs()
 				if !assert.NoError(t, err, "should succeed") {
 					return
 				}
 			}
 
-			if addrs, err := ifc.Addresses(); err == nil {
+			if addrs, err := ifc.Addrs(); err == nil {
 				for _, addr := range addrs {
 					log.Debugf("[%d] %s:%s",
 						ifc.Index,

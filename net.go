@@ -406,8 +406,8 @@ func (ifc *Interface) AddAddress(addr net.Addr) {
 	ifc.addrs = append(ifc.addrs, addr)
 }
 
-// Addresses returns a slice of configured addresses on the interface
-func (ifc *Interface) Addresses() ([]net.Addr, error) {
+// Addrs returns a slice of configured addresses on the interface
+func (ifc *Interface) Addrs() ([]net.Addr, error) {
 	if len(ifc.addrs) == 0 {
 		return nil, ErrNoAddressAssigned
 	}

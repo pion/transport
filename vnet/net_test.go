@@ -38,7 +38,7 @@ func TestNetVirtual(t *testing.T) {
 					ifc.Flags,
 					"Flags mismatch")
 
-				addrs, err := ifc.Addresses()
+				addrs, err := ifc.Addrs()
 				assert.NoError(t, err, "should succeed")
 				assert.Equal(t, 1, len(addrs), "should be one address")
 			case "eth0":
@@ -50,13 +50,13 @@ func TestNetVirtual(t *testing.T) {
 					ifc.Flags,
 					"Flags mismatch")
 
-				_, err := ifc.Addresses()
+				_, err := ifc.Addrs()
 				assert.NotNil(t, err, "should fail")
 			default:
 				assert.Fail(t, "unknown tnet.Interface: %v", ifc.Name)
 			}
 
-			if addrs, err := ifc.Addresses(); err == nil {
+			if addrs, err := ifc.Addrs(); err == nil {
 				for _, addr := range addrs {
 					log.Debugf("[%d] %s:%s",
 						ifc.Index,
@@ -93,7 +93,7 @@ func TestNetVirtual(t *testing.T) {
 				ifc.Flags,
 				"Flags mismatch")
 
-			addrs, err2 := ifc.Addresses()
+			addrs, err2 := ifc.Addrs()
 			assert.NoError(t, err2, "should succeed")
 			assert.Equal(t, 1, len(addrs), "should be one address")
 		}
@@ -108,7 +108,7 @@ func TestNetVirtual(t *testing.T) {
 			ifc.Flags,
 			"Flags mismatch")
 
-		_, err = ifc.Addresses()
+		_, err = ifc.Addrs()
 		assert.NotNil(t, err, "should fail")
 
 		_, err = nw.InterfaceByName("foo0")
@@ -134,7 +134,7 @@ func TestNetVirtual(t *testing.T) {
 			Mask: net.CIDRMask(24, 32),
 		})
 
-		_, err = ifc.Addresses()
+		_, err = ifc.Addrs()
 		assert.NoError(t, err, "should succeed")
 
 		assert.True(t, nw.hasIPAddr(net.ParseIP("127.0.0.1")),
