@@ -554,7 +554,7 @@ func (r *Router) setRouter(parent *Router) error {
 		return err
 	}
 
-	addrs, _ := ifc.Addresses()
+	addrs, _ := ifc.Addrs()
 	if len(addrs) == 0 {
 		return errNoIPAddrEth0
 	}

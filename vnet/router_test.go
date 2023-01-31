@@ -29,7 +29,7 @@ func getIPAddr(n NIC) (string, error) {
 		return "", err
 	}
 
-	addrs, err := eth0.Addresses()
+	addrs, err := eth0.Addrs()
 	if err != nil {
 		return "", err
 	}
@@ -101,7 +101,7 @@ func TestRouterStandalone(t *testing.T) {
 		eth0, err := nic.getInterface("eth0")
 		assert.Nil(t, err, "should succeed")
 
-		addrs, err := eth0.Addresses()
+		addrs, err := eth0.Addrs()
 		assert.Nil(t, err, "should succeed")
 		assert.Equal(t, 1, len(addrs), "should match")
 		assert.Equal(t, "ip+net", addrs[0].Network(), "should match")
@@ -167,7 +167,7 @@ func TestRouterStandalone(t *testing.T) {
 			// Now, eth0 must have one address assigned
 			eth0, err2 := nic[i].getInterface("eth0")
 			assert.Nil(t, err2, "should succeed")
-			addrs, err2 := eth0.Addresses()
+			addrs, err2 := eth0.Addrs()
 			assert.Nil(t, err2, "should succeed")
 			assert.Equal(t, 1, len(addrs), "should match")
 			//nolint:forcetypeassert
@@ -229,7 +229,7 @@ func TestRouterStandalone(t *testing.T) {
 			// Now, eth0 must have one address assigned
 			eth0, err2 := nic[i].getInterface("eth0")
 			assert.Nil(t, err2, "should succeed")
-			addrs, err2 := eth0.Addresses()
+			addrs, err2 := eth0.Addrs()
 			assert.Nil(t, err2, "should succeed")
 			assert.Equal(t, 1, len(addrs), "should match")
 			//nolint:forcetypeassert
@@ -332,7 +332,7 @@ func TestRouterDelay(t *testing.T) {
 				// Now, eth0 must have one address assigned
 				eth0, err2 := nic[i].getInterface("eth0")
 				assert.Nil(t, err2, "should succeed")
-				addrs, err2 := eth0.Addresses()
+				addrs, err2 := eth0.Addrs()
 				assert.Nil(t, err2, "should succeed")
 				assert.Equal(t, 1, len(addrs), "should match")
 				//nolint:forcetypeassert
