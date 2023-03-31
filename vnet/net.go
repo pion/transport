@@ -116,7 +116,7 @@ func (v *Net) getAllIPAddrs(ipv6 bool) []net.IP {
 	ips := []net.IP{}
 
 	for _, ifc := range v.interfaces {
-		addrs, err := ifc.Addresses()
+		addrs, err := ifc.Addrs()
 		if err != nil {
 			continue
 		}
@@ -403,7 +403,7 @@ func (v *Net) determineSourceIP(locIP, dstIP net.IP) net.IP {
 			return nil
 		}
 
-		addrs, err2 := ifc.Addresses()
+		addrs, err2 := ifc.Addrs()
 		if err2 != nil {
 			return nil
 		}
@@ -441,7 +441,7 @@ func (v *Net) determineSourceIP(locIP, dstIP net.IP) net.IP {
 // caller must hold the mutex
 func (v *Net) hasIPAddr(ip net.IP) bool { //nolint:gocognit
 	for _, ifc := range v.interfaces {
-		if addrs, err := ifc.Addresses(); err == nil {
+		if addrs, err := ifc.Addrs(); err == nil {
 			for _, addr := range addrs {
 				var locIP net.IP
 				if ipNet, ok := addr.(*net.IPNet); ok {
