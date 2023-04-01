@@ -188,7 +188,7 @@ func (b *Buffer) Write(packet []byte) (int, error) {
 // Blocks until data is available or the buffer is closed.
 // Returns io.ErrShortBuffer is the packet is too small to copy the Write.
 // Returns io.EOF if the buffer is closed.
-func (b *Buffer) Read(packet []byte) (n int, err error) {
+func (b *Buffer) Read(packet []byte) (n int, err error) { //nolint:gocognit
 	// Return immediately if the deadline is already exceeded.
 	select {
 	case <-b.readDeadline.Done():
