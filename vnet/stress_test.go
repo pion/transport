@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/pion/logging"
-	"github.com/pion/transport/test"
+	"github.com/pion/transport/v2/test"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -27,11 +27,13 @@ func TestStressTestUDP(t *testing.T) {
 			LoggerFactory: loggerFactory,
 		})
 		assert.NoError(t, err, "should succeed")
-		assert.NotNil(t, wan, "should succeed")
 
-		net0 := NewNet(&NetConfig{
+		net0, err := NewNet(&NetConfig{
 			StaticIPs: []string{demoIP},
 		})
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
 
 		err = wan.AddNet(net0)
 		assert.NoError(t, err, "should succeed")
@@ -43,9 +45,11 @@ func TestStressTestUDP(t *testing.T) {
 			LoggerFactory: loggerFactory,
 		})
 		assert.NoError(t, err, "should succeed")
-		assert.NotNil(t, lan, "should succeed")
 
-		net1 := NewNet(&NetConfig{})
+		net1, err := NewNet(&NetConfig{})
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
 
 		err = lan.AddNet(net1)
 		assert.NoError(t, err, "should succeed")

@@ -16,9 +16,13 @@ import (
 )
 
 // The vnet client:
-//		10.0.0.11:5787
+//
+//	10.0.0.11:5787
+//
 // which proxy to real server:
-//		192.168.1.10:8000
+//
+//	192.168.1.10:8000
+//
 // We should get a reply if directly deliver to proxy.
 func TestUDPProxyDirectDeliverTypical(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -79,9 +83,13 @@ func TestUDPProxyDirectDeliverTypical(t *testing.T) {
 				return err
 			}
 
-			clientNetwork := NewNet(&NetConfig{
+			clientNetwork, err := NewNet(&NetConfig{
 				StaticIP: "10.0.0.11",
 			})
+			if err != nil {
+				return err
+			}
+
 			if err = router.AddNet(clientNetwork); err != nil {
 				return err
 			}
@@ -169,7 +177,7 @@ func TestUDPProxyDirectDeliverTypical(t *testing.T) {
 }
 
 // Error if deliver to invalid address.
-func TestUDPProxyDirectDeliverBadcase(t *testing.T) {
+func TestUDPProxyDirectDeliverBadCase(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	var r0, r1, r2 error
@@ -228,9 +236,13 @@ func TestUDPProxyDirectDeliverBadcase(t *testing.T) {
 				return err
 			}
 
-			clientNetwork := NewNet(&NetConfig{
+			clientNetwork, err := NewNet(&NetConfig{
 				StaticIP: "10.0.0.11",
 			})
+			if err != nil {
+				return err
+			}
+
 			if err = router.AddNet(clientNetwork); err != nil {
 				return err
 			}

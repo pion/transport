@@ -16,7 +16,7 @@ import (
 
 const demoIP = "1.2.3.4"
 
-func TestNATTypeDefauts(t *testing.T) {
+func TestNATTypeDefaults(t *testing.T) {
 	loggerFactory := logging.NewDefaultLoggerFactory()
 	nat, err := newNAT(&natConfig{
 		natType:       NATType{},
@@ -27,7 +27,7 @@ func TestNATTypeDefauts(t *testing.T) {
 
 	assert.Equal(t, EndpointIndependent, nat.natType.MappingBehavior, "should match")
 	assert.Equal(t, EndpointIndependent, nat.natType.FilteringBehavior, "should match")
-	assert.False(t, nat.natType.Hairpining, "should be false")
+	assert.False(t, nat.natType.Hairpinning, "should be false")
 	assert.False(t, nat.natType.PortPreservation, "should be false")
 	assert.Equal(t, defaultNATMappingLifeTime, nat.natType.MappingLifeTime, "should be false")
 }
@@ -41,7 +41,7 @@ func TestNATMappingBehavior(t *testing.T) {
 			natType: NATType{
 				MappingBehavior:   EndpointIndependent,
 				FilteringBehavior: EndpointIndependent,
-				Hairpining:        false,
+				Hairpinning:       false,
 				MappingLifeTime:   30 * time.Second,
 			},
 			mappedIPs:     []net.IP{net.ParseIP(demoIP)},
@@ -133,7 +133,7 @@ func TestNATMappingBehavior(t *testing.T) {
 			natType: NATType{
 				MappingBehavior:   EndpointIndependent,
 				FilteringBehavior: EndpointAddrDependent,
-				Hairpining:        false,
+				Hairpinning:       false,
 				MappingLifeTime:   30 * time.Second,
 			},
 			mappedIPs:     []net.IP{net.ParseIP(demoIP)},
@@ -234,7 +234,7 @@ func TestNATMappingBehavior(t *testing.T) {
 		_, err = nat.translateInbound(iec)
 		assert.Nil(t, err, "should succeed")
 
-		// packet from different addr will be droped (restricted-cone)
+		// packet from different addr will be dropped (restricted-cone)
 		//nolint:forcetypeassert
 		iec = newChunkUDP(
 			&net.UDPAddr{
@@ -257,7 +257,7 @@ func TestNATMappingBehavior(t *testing.T) {
 			natType: NATType{
 				MappingBehavior:   EndpointIndependent,
 				FilteringBehavior: EndpointAddrPortDependent,
-				Hairpining:        false,
+				Hairpinning:       false,
 				MappingLifeTime:   30 * time.Second,
 			},
 			mappedIPs:     []net.IP{net.ParseIP(demoIP)},
@@ -356,7 +356,7 @@ func TestNATMappingBehavior(t *testing.T) {
 		_, err = nat.translateInbound(iec)
 		assert.NotNil(t, err, "should fail (dropped)")
 
-		// packet from different addr will be droped (restricted-cone)
+		// packet from different addr will be dropped (restricted-cone)
 		//nolint:forcetypeassert
 		iec = newChunkUDP(
 			&net.UDPAddr{
@@ -378,7 +378,7 @@ func TestNATMappingBehavior(t *testing.T) {
 			natType: NATType{
 				MappingBehavior:   EndpointAddrDependent,
 				FilteringBehavior: EndpointAddrDependent,
-				Hairpining:        false,
+				Hairpinning:       false,
 				MappingLifeTime:   30 * time.Second,
 			},
 			mappedIPs:     []net.IP{net.ParseIP(demoIP)},
@@ -448,7 +448,7 @@ func TestNATMappingBehavior(t *testing.T) {
 			natType: NATType{
 				MappingBehavior:   EndpointAddrPortDependent,
 				FilteringBehavior: EndpointAddrPortDependent,
-				Hairpining:        false,
+				Hairpinning:       false,
 				MappingLifeTime:   30 * time.Second,
 			},
 			mappedIPs:     []net.IP{net.ParseIP(demoIP)},
@@ -523,7 +523,7 @@ func TestNATMappingTimeout(t *testing.T) {
 			natType: NATType{
 				MappingBehavior:   EndpointIndependent,
 				FilteringBehavior: EndpointIndependent,
-				Hairpining:        false,
+				Hairpinning:       false,
 				MappingLifeTime:   100 * time.Millisecond,
 			},
 			mappedIPs:     []net.IP{net.ParseIP(demoIP)},
@@ -586,7 +586,7 @@ func TestNATMappingTimeout(t *testing.T) {
 			natType: NATType{
 				MappingBehavior:   EndpointIndependent,
 				FilteringBehavior: EndpointIndependent,
-				Hairpining:        false,
+				Hairpinning:       false,
 				MappingLifeTime:   100 * time.Millisecond,
 			},
 			mappedIPs:     []net.IP{net.ParseIP(demoIP)},
@@ -637,7 +637,7 @@ func TestNATMappingTimeout(t *testing.T) {
 	})
 }
 
-func TestNAT1To1Bahavior(t *testing.T) {
+func TestNAT1To1Behavior(t *testing.T) {
 	loggerFactory := logging.NewDefaultLoggerFactory()
 	log := loggerFactory.NewLogger("test")
 

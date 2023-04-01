@@ -94,7 +94,7 @@ func TestReplayDetector(t *testing.T) {
 			[]uint64{24, 32, 40, 48, 56, 64, 72, 80, 88, 96, 104, 112, 120, 128},
 			nil,
 		},
-		"ContinuouesReplayed": {
+		"ContinuousReplayed": {
 			8, 0x0000FFFFFFFFFFFF,
 			[]uint64{16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25},
 			[]bool{

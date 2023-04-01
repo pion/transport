@@ -155,7 +155,7 @@ func (c *chunkUDP) Clone() Chunk {
 }
 
 func (c *chunkUDP) Network() string {
-	return udpString
+	return udp
 }
 
 func (c *chunkUDP) String() string {
@@ -170,7 +170,7 @@ func (c *chunkUDP) String() string {
 }
 
 func (c *chunkUDP) setSourceAddr(address string) error {
-	addr, err := net.ResolveUDPAddr(udpString, address)
+	addr, err := net.ResolveUDPAddr(udp, address)
 	if err != nil {
 		return err
 	}
@@ -180,7 +180,7 @@ func (c *chunkUDP) setSourceAddr(address string) error {
 }
 
 func (c *chunkUDP) setDestinationAddr(address string) error {
-	addr, err := net.ResolveUDPAddr(udpString, address)
+	addr, err := net.ResolveUDPAddr(udp, address)
 	if err != nil {
 		return err
 	}

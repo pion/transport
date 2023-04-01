@@ -11,7 +11,7 @@ import (
 
 var (
 	errHostnameEmpty       = errors.New("host name must not be empty")
-	errFailedtoParseIPAddr = errors.New("failed to parse IP address")
+	errFailedToParseIPAddr = errors.New("failed to parse IP address")
 )
 
 type resolverConfig struct {
@@ -53,7 +53,7 @@ func (r *resolver) addHost(name string, ipAddr string) error {
 	}
 	ip := net.ParseIP(ipAddr)
 	if ip == nil {
-		return fmt.Errorf("%w \"%s\"", errFailedtoParseIPAddr, ipAddr)
+		return fmt.Errorf("%w \"%s\"", errFailedToParseIPAddr, ipAddr)
 	}
 	r.hosts[name] = ip
 	return nil

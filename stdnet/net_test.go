@@ -1,7 +1,7 @@
 //go:build !js
 // +build !js
 
-package vnet
+package stdnet
 
 import (
 	"net"
@@ -11,19 +11,27 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestNetNative(t *testing.T) {
+func TestStdNet(t *testing.T) {
 	log := logging.NewDefaultLoggerFactory().NewLogger("test")
 
 	t.Run("Interfaces", func(t *testing.T) {
-		nw := NewNet(nil)
-		assert.False(t, nw.IsVirtual(), "should be false")
+		nw, err := NewNet()
+		if !assert.Nil(t, err, "should succeed") {
+			return
+		}
+
 		interfaces, err := nw.Interfaces()
-		assert.NoError(t, err, "should succeed")
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+
 		log.Debugf("interfaces: %+v", interfaces)
 		for _, ifc := range interfaces {
 			if ifc.Name == lo0String {
 				_, err := ifc.Addrs()
-				assert.NoError(t, err, "should succeed")
+				if !assert.NoError(t, err, "should succeed") {
+					return
+				}
 			}
 
 			if addrs, err := ifc.Addrs(); err == nil {
@@ -38,7 +46,10 @@ func TestNetNative(t *testing.T) {
 	})
 
 	t.Run("ResolveUDPAddr", func(t *testing.T) {
-		nw := NewNet(nil)
+		nw, err := NewNet()
+		if !assert.Nil(t, err, "should succeed") {
+			return
+		}
 
 		udpAddr, err := nw.ResolveUDPAddr(udpString, "localhost:1234")
 		if !assert.NoError(t, err, "should succeed") {
@@ -49,7 +60,10 @@ func TestNetNative(t *testing.T) {
 	})
 
 	t.Run("ListenPacket", func(t *testing.T) {
-		nw := NewNet(nil)
+		nw, err := NewNet()
+		if !assert.Nil(t, err, "should succeed") {
+			return
+		}
 
 		conn, err := nw.ListenPacket(udpString, "127.0.0.1:0")
 		if !assert.NoError(t, err, "should succeed") {
@@ -65,7 +79,10 @@ func TestNetNative(t *testing.T) {
 	})
 
 	t.Run("ListenUDP random port", func(t *testing.T) {
-		nw := NewNet(nil)
+		nw, err := NewNet()
+		if !assert.Nil(t, err, "should succeed") {
+			return
+		}
 
 		srcAddr := &net.UDPAddr{
 			IP: net.ParseIP("127.0.0.1"),
@@ -80,7 +97,8 @@ func TestNetNative(t *testing.T) {
 	})
 
 	t.Run("Dial (UDP)", func(t *testing.T) {
-		nw := NewNet(nil)
+		nw, err := NewNet()
+		assert.Nil(t, err, "should succeed")
 
 		conn, err := nw.Dial(udpString, "127.0.0.1:1234")
 		assert.NoError(t, err, "should succeed")
@@ -98,7 +116,8 @@ func TestNetNative(t *testing.T) {
 	})
 
 	t.Run("DialUDP", func(t *testing.T) {
-		nw := NewNet(nil)
+		nw, err := NewNet()
+		assert.Nil(t, err, "should succeed")
 
 		locAddr := &net.UDPAddr{
 			IP:   net.IPv4(127, 0, 0, 1),
@@ -126,7 +145,8 @@ func TestNetNative(t *testing.T) {
 	})
 
 	t.Run("UDPLoopback", func(t *testing.T) {
-		nw := NewNet(nil)
+		nw, err := NewNet()
+		assert.Nil(t, err, "should succeed")
 
 		conn, err := nw.ListenPacket(udpString, "127.0.0.1:0")
 		assert.NoError(t, err, "should succeed")
@@ -146,7 +166,8 @@ func TestNetNative(t *testing.T) {
 	})
 
 	t.Run("Dialer", func(t *testing.T) {
-		nw := NewNet(nil)
+		nw, err := NewNet()
+		assert.Nil(t, err, "should succeed")
 
 		dialer := nw.CreateDialer(&net.Dialer{
 			LocalAddr: &net.UDPAddr{
@@ -171,7 +192,7 @@ func TestNetNative(t *testing.T) {
 	})
 
 	t.Run("Unexpected operations", func(t *testing.T) {
-		// For portability of test, find a name of loopack interface name first
+		// For portability of test, find a name of loopback interface name first
 		var loName string
 		ifs, err := net.Interfaces()
 		assert.NoError(t, err, "should succeed")
@@ -182,31 +203,17 @@ func TestNetNative(t *testing.T) {
 			}
 		}
 
-		nw := NewNet(nil)
+		nw, err := NewNet()
+		assert.Nil(t, err, "should succeed")
 
 		if len(loName) > 0 {
 			// InterfaceByName
 			ifc, err2 := nw.InterfaceByName(loName)
 			assert.NoError(t, err2, "should succeed")
 			assert.Equal(t, loName, ifc.Name, "should match")
-
-			// getInterface
-			_, err2 = nw.getInterface(loName)
-			assert.Error(t, err2, "should fail")
 		}
 
 		_, err = nw.InterfaceByName("foo0")
 		assert.Error(t, err, "should fail")
-
-		// setRouter
-		err = nw.setRouter(nil)
-		assert.Error(t, err, "should fail")
-
-		// onInboundChunk (shouldn't crash)
-		nw.onInboundChunk(nil)
-
-		// getStaticIPs
-		ips := nw.getStaticIPs()
-		assert.Nil(t, ips, "should be nil")
 	})
 }

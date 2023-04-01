@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pion/transport/deadline"
+	"github.com/pion/transport/v2/deadline"
 )
 
 const (
@@ -59,7 +59,7 @@ func (e *netError) Timeout() bool {
 }
 
 func (e *netError) Temporary() bool {
-	return e.timeout
+	return e.temporary
 }
 
 // Read reads data, block until the data becomes available.
