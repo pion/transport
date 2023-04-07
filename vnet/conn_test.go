@@ -26,7 +26,7 @@ func (o *dummyObserver) onClosed(addr net.Addr) {
 	o.onOnClosed(addr)
 }
 
-func (o *dummyObserver) determineSourceIP(locIP, dstIP net.IP) net.IP {
+func (o *dummyObserver) determineSourceIP(locIP, _ net.IP) net.IP {
 	return locIP
 }
 

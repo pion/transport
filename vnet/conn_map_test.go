@@ -9,14 +9,14 @@ import (
 
 type myConnObserver struct{}
 
-func (obs *myConnObserver) write(c Chunk) error {
+func (obs *myConnObserver) write(Chunk) error {
 	return nil
 }
 
-func (obs *myConnObserver) onClosed(addr net.Addr) {
+func (obs *myConnObserver) onClosed(net.Addr) {
 }
 
-func (obs *myConnObserver) determineSourceIP(locIP, dstIP net.IP) net.IP {
+func (obs *myConnObserver) determineSourceIP(net.IP, net.IP) net.IP {
 	return net.IP{}
 }
 
