@@ -11,6 +11,7 @@ package xor
 
 // XorBytes xors the bytes in a and b. The destination should have enough
 // space, otherwise xorBytes will panic. Returns the number of bytes xor'd.
+//
 //revive:disable-next-line
 func XorBytes(dst, a, b []byte) int {
 	n := len(a)
