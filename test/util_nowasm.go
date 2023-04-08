@@ -3,6 +3,6 @@
 
 package test
 
-func filterRoutineWASM(stack string) bool {
+func filterRoutineWASM(string) bool {
 	return false
 }

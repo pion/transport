@@ -210,12 +210,12 @@ type connAddrMock struct{}
 
 func (*connAddrMock) RemoteAddr() net.Addr               { return stringAddr{"remote_net", "remote_addr"} }
 func (*connAddrMock) LocalAddr() net.Addr                { return stringAddr{"local_net", "local_addr"} }
-func (*connAddrMock) Read(b []byte) (n int, err error)   { panic("unimplemented") }
-func (*connAddrMock) Write(b []byte) (n int, err error)  { panic("unimplemented") }
+func (*connAddrMock) Read(_ []byte) (n int, err error)   { panic("unimplemented") }
+func (*connAddrMock) Write(_ []byte) (n int, err error)  { panic("unimplemented") }
 func (*connAddrMock) Close() error                       { panic("unimplemented") }
-func (*connAddrMock) SetDeadline(t time.Time) error      { panic("unimplemented") }
-func (*connAddrMock) SetReadDeadline(t time.Time) error  { panic("unimplemented") }
-func (*connAddrMock) SetWriteDeadline(t time.Time) error { panic("unimplemented") }
+func (*connAddrMock) SetDeadline(_ time.Time) error      { panic("unimplemented") }
+func (*connAddrMock) SetReadDeadline(_ time.Time) error  { panic("unimplemented") }
+func (*connAddrMock) SetWriteDeadline(_ time.Time) error { panic("unimplemented") }
 
 func TestLocalAddrAndRemoteAddr(t *testing.T) {
 	c := New(&connAddrMock{})
