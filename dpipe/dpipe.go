@@ -1,4 +1,6 @@
 // Package dpipe provides the pipe works like datagram protocol on memory.
+//
+// This package is mainly intended for testing and not for production!
 package dpipe
 
 import (
