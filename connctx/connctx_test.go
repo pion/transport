@@ -232,3 +232,128 @@ func TestLocalAddrAndRemoteAddr(t *testing.T) {
 		t.Error("Wrong RemoteAddr implementation")
 	}
 }
+
+func BenchmarkBase(b *testing.B) {
+	ca, cb := net.Pipe()
+	defer func() {
+		_ = ca.Close()
+	}()
+
+	data := make([]byte, 4096)
+	for i := range data {
+		data[i] = byte(i)
+	}
+	buf := make([]byte, len(data))
+
+	b.SetBytes(int64(len(data)))
+	b.ResetTimer()
+
+	go func(n int) {
+		for i := 0; i < n; i++ {
+			_, _ = cb.Write(data)
+		}
+		_ = cb.Close()
+	}(b.N)
+
+	count := 0
+	for {
+		n, err := ca.Read(buf)
+		if err != nil {
+			if err != io.EOF {
+				b.Fatal(err)
+			}
+			break
+		}
+		if n != len(data) {
+			b.Errorf("Expected %v, got %v", len(data), n)
+		}
+		count++
+	}
+	if count != b.N {
+		b.Errorf("Expected %v, got %v", b.N, count)
+	}
+}
+
+func BenchmarkWrite(b *testing.B) {
+	ca, cb := net.Pipe()
+	defer func() {
+		_ = ca.Close()
+	}()
+
+	data := make([]byte, 4096)
+	for i := range data {
+		data[i] = byte(i)
+	}
+	buf := make([]byte, len(data))
+
+	b.SetBytes(int64(len(data)))
+	b.ResetTimer()
+
+	go func(n int) {
+		c := New(cb)
+		for i := 0; i < n; i++ {
+			_, _ = c.WriteContext(context.Background(), data)
+		}
+		_ = cb.Close()
+	}(b.N)
+
+	count := 0
+	for {
+		n, err := ca.Read(buf)
+		if err != nil {
+			if err != io.EOF {
+				b.Fatal(err)
+			}
+			break
+		}
+		if n != len(data) {
+			b.Errorf("Expected %v, got %v", len(data), n)
+		}
+		count++
+	}
+	if count != b.N {
+		b.Errorf("Expected %v, got %v", b.N, count)
+	}
+}
+
+func BenchmarkRead(b *testing.B) {
+	ca, cb := net.Pipe()
+	defer func() {
+		_ = ca.Close()
+	}()
+
+	data := make([]byte, 4096)
+	for i := range data {
+		data[i] = byte(i)
+	}
+	buf := make([]byte, len(data))
+
+	b.SetBytes(int64(len(data)))
+	b.ResetTimer()
+
+	go func(n int) {
+		for i := 0; i < n; i++ {
+			_, _ = cb.Write(data)
+		}
+		_ = cb.Close()
+	}(b.N)
+
+	c := New(ca)
+	count := 0
+	for {
+		n, err := c.ReadContext(context.Background(), buf)
+		if err != nil {
+			if err != io.EOF {
+				b.Fatal(err)
+			}
+			break
+		}
+		if n != len(data) {
+			b.Errorf("Expected %v, got %v", len(data), n)
+		}
+		count++
+	}
+	if count != b.N {
+		b.Errorf("Expected %v, got %v", b.N, count)
+	}
+}
