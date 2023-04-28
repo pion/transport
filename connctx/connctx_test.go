@@ -46,7 +46,7 @@ func TestRead(t *testing.T) {
 	}
 }
 
-func TestReadTImeout(t *testing.T) {
+func TestReadTimeout(t *testing.T) {
 	ca, _ := net.Pipe()
 	defer func() {
 		_ = ca.Close()
