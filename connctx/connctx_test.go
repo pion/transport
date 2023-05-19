@@ -259,7 +259,7 @@ func BenchmarkBase(b *testing.B) {
 	for {
 		n, err := ca.Read(buf)
 		if err != nil {
-			if err != io.EOF {
+			if !errors.Is(err, io.EOF) {
 				b.Fatal(err)
 			}
 			break
@@ -301,7 +301,7 @@ func BenchmarkWrite(b *testing.B) {
 	for {
 		n, err := ca.Read(buf)
 		if err != nil {
-			if err != io.EOF {
+			if !errors.Is(err, io.EOF) {
 				b.Fatal(err)
 			}
 			break
@@ -343,7 +343,7 @@ func BenchmarkRead(b *testing.B) {
 	for {
 		n, err := c.ReadContext(context.Background(), buf)
 		if err != nil {
-			if err != io.EOF {
+			if !errors.Is(err, io.EOF) {
 				b.Fatal(err)
 			}
 			break
