@@ -25,19 +25,17 @@ const (
 var (
 	ErrClosedListener      = errors.New("udp: listener closed")
 	ErrListenQueueExceeded = errors.New("udp: listen queue exceeded")
-	ErrReadBufferFailed    = errors.New("udp: failed to get read buffer from pool")
 )
 
 // listener augments a connection-oriented Listener over a UDP PacketConn
 type listener struct {
 	pConn *net.UDPConn
 
-	accepting      atomic.Value // bool
-	acceptCh       chan *Conn
-	doneCh         chan struct{}
-	doneOnce       sync.Once
-	acceptFilter   func([]byte) bool
-	readBufferPool *sync.Pool
+	accepting    atomic.Value // bool
+	acceptCh     chan *Conn
+	doneCh       chan struct{}
+	doneOnce     sync.Once
+	acceptFilter func([]byte) bool
 
 	connLock sync.Mutex
 	conns    map[string]*Conn
@@ -143,14 +141,8 @@ func (lc *ListenConfig) Listen(network string, laddr *net.UDPAddr) (net.Listener
 		conns:        make(map[string]*Conn),
 		doneCh:       make(chan struct{}),
 		acceptFilter: lc.AcceptFilter,
-		readBufferPool: &sync.Pool{
-			New: func() interface{} {
-				buf := make([]byte, receiveMTU)
-				return &buf
-			},
-		},
-		connWG:     &sync.WaitGroup{},
-		readDoneCh: make(chan struct{}),
+		connWG:       &sync.WaitGroup{},
+		readDoneCh:   make(chan struct{}),
 	}
 
 	l.accepting.Store(true)
@@ -182,25 +174,20 @@ func (l *listener) readLoop() {
 	defer l.readWG.Done()
 	defer close(l.readDoneCh)
 
-	buf, ok := l.readBufferPool.Get().(*[]byte)
-	if !ok {
-		l.errRead.Store(ErrReadBufferFailed)
-		return
-	}
-	defer l.readBufferPool.Put(buf)
+	buf := make([]byte, receiveMTU)
 
 	for {
-		n, raddr, err := l.pConn.ReadFrom(*buf)
+		n, raddr, err := l.pConn.ReadFrom(buf)
 		if err != nil {
 			l.errRead.Store(err)
 			return
 		}
-		conn, ok, err := l.getConn(raddr, (*buf)[:n])
+		conn, ok, err := l.getConn(raddr, buf[:n])
 		if err != nil {
 			continue
 		}
 		if ok {
-			_, _ = conn.buffer.Write((*buf)[:n])
+			_, _ = conn.buffer.Write(buf[:n])
 		}
 	}
 }
