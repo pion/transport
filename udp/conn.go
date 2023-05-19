@@ -25,6 +25,7 @@ const (
 var (
 	ErrClosedListener      = errors.New("udp: listener closed")
 	ErrListenQueueExceeded = errors.New("udp: listen queue exceeded")
+	ErrReadBufferFailed    = errors.New("udp: failed to get read buffer from pool")
 )
 
 // listener augments a connection-oriented Listener over a UDP PacketConn
@@ -44,6 +45,9 @@ type listener struct {
 
 	readWG   sync.WaitGroup
 	errClose atomic.Value // error
+
+	readDoneCh chan struct{}
+	errRead    atomic.Value // error
 }
 
 // Accept waits for and returns the next connection to the listener.
@@ -52,6 +56,10 @@ func (l *listener) Accept() (net.Conn, error) {
 	case c := <-l.acceptCh:
 		l.connWG.Add(1)
 		return c, nil
+
+	case <-l.readDoneCh:
+		err, _ := l.errRead.Load().(error)
+		return nil, err
 
 	case <-l.doneCh:
 		return nil, ErrClosedListener
@@ -141,7 +149,8 @@ func (lc *ListenConfig) Listen(network string, laddr *net.UDPAddr) (net.Listener
 				return &buf
 			},
 		},
-		connWG: &sync.WaitGroup{},
+		connWG:     &sync.WaitGroup{},
+		readDoneCh: make(chan struct{}),
 	}
 
 	l.accepting.Store(true)
@@ -171,15 +180,19 @@ func Listen(network string, laddr *net.UDPAddr) (net.Listener, error) {
 //  2. Creating a new Conn when receiving from a new remote.
 func (l *listener) readLoop() {
 	defer l.readWG.Done()
+	defer close(l.readDoneCh)
+
+	buf, ok := l.readBufferPool.Get().(*[]byte)
+	if !ok {
+		l.errRead.Store(ErrReadBufferFailed)
+		return
+	}
+	defer l.readBufferPool.Put(buf)
 
 	for {
-		buf, ok := l.readBufferPool.Get().(*[]byte)
-		if !ok {
-			return
-		}
-
 		n, raddr, err := l.pConn.ReadFrom(*buf)
 		if err != nil {
+			l.errRead.Store(err)
 			return
 		}
 		conn, ok, err := l.getConn(raddr, (*buf)[:n])
