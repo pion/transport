@@ -36,6 +36,7 @@ type listener struct {
 	doneCh       chan struct{}
 	doneOnce     sync.Once
 	acceptFilter func([]byte) bool
+	connIDFn     func(net.Addr, []byte) string
 
 	connLock sync.Mutex
 	conns    map[string]*Conn
@@ -122,6 +123,11 @@ type ListenConfig struct {
 	// AcceptFilter determines whether the new conn should be made for
 	// the incoming packet. If not set, any packet creates new conn.
 	AcceptFilter func([]byte) bool
+
+	// ConnIDFn defines a custom connection identifier that will be used
+	// instead of the remote address. This allows for custom routing of
+	// received packets
+	ConnIDFn func(net.Addr, []byte) string
 }
 
 // Listen creates a new listener based on the ListenConfig.
@@ -141,6 +147,7 @@ func (lc *ListenConfig) Listen(network string, laddr *net.UDPAddr) (net.Listener
 		conns:        make(map[string]*Conn),
 		doneCh:       make(chan struct{}),
 		acceptFilter: lc.AcceptFilter,
+		connIDFn:     lc.ConnIDFn,
 		connWG:       &sync.WaitGroup{},
 		readDoneCh:   make(chan struct{}),
 	}
@@ -195,7 +202,22 @@ func (l *listener) readLoop() {
 func (l *listener) getConn(raddr net.Addr, buf []byte) (*Conn, bool, error) {
 	l.connLock.Lock()
 	defer l.connLock.Unlock()
-	conn, ok := l.conns[raddr.String()]
+	connID := raddr.String()
+	if l.connIDFn != nil {
+		connID = l.connIDFn(raddr, buf)
+		// If we have a connection associated with this connection ID,
+		// make sure that the remote address matches.
+		if conn, ok := l.conns[connID]; ok && conn.RemoteAddr() != raddr {
+			conn.rAddr = raddr
+		}
+		// If we have a connection associated with this remote address,
+		// update it to use the new ID.
+		if conn, ok := l.conns[raddr.String()]; ok {
+			l.conns[connID] = conn
+			delete(l.conns, raddr.String())
+		}
+	}
+	conn, ok := l.conns[connID]
 	if !ok {
 		if isAccepting, ok := l.accepting.Load().(bool); !isAccepting || !ok {
 			return nil, false, ErrClosedListener
@@ -208,7 +230,7 @@ func (l *listener) getConn(raddr net.Addr, buf []byte) (*Conn, bool, error) {
 		conn = l.newConn(raddr)
 		select {
 		case l.acceptCh <- conn:
-			l.conns[raddr.String()] = conn
+			l.conns[connID] = conn
 		default:
 			return nil, false, ErrListenQueueExceeded
 		}
