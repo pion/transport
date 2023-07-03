@@ -8,6 +8,7 @@ package udp
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -79,8 +80,7 @@ func stressDuplex(t *testing.T) {
 		MsgCount: 1, // Can't rely on UDP message order in CI
 	}
 
-	err = test.StressDuplex(ca, cb, opt)
-	if err != nil {
+	if err := test.StressDuplex(ca, cb, opt); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -99,14 +99,12 @@ func TestListenerCloseTimeout(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = listener.Close()
-	if err != nil {
+	if err := listener.Close(); err != nil {
 		t.Fatal(err)
 	}
 
 	// Close client after server closes to cleanup
-	err = ca.Close()
-	if err != nil {
+	if err := ca.Close(); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -147,7 +145,7 @@ func TestListenerCloseUnaccepted(t *testing.T) {
 	time.Sleep(100 * time.Millisecond) // Wait all packets being processed by readLoop
 
 	// Unaccepted connections must be closed by listener.Close()
-	if err = listener.Close(); err != nil {
+	if err := listener.Close(); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -311,12 +309,201 @@ func TestListenerConcurrent(t *testing.T) {
 	}()
 
 	time.Sleep(100 * time.Millisecond) // Last Accept should be discarded
-	err = listener.Close()
-	if err != nil {
+	if err := listener.Close(); err != nil {
 		t.Fatal(err)
 	}
 
 	wg.Wait()
+}
+
+func TestListenerCustomConnID(t *testing.T) {
+	const helloPayload = "hello"
+	// Limit runtime in case of deadlocks
+	lim := test.TimeOut(time.Second * 20)
+	defer lim.Stop()
+
+	// Check for leaking routines
+	report := test.CheckRoutines(t)
+	defer report()
+
+	type pkt struct {
+		ID      int
+		Payload string
+	}
+	network, addr := getConfig()
+	listener, err := (&ListenConfig{
+		ConnIDFn: func(raddr net.Addr, buf []byte) string {
+			p := &pkt{}
+			if err := json.Unmarshal(buf, p); err != nil {
+				t.Fatal(err)
+			}
+			if p.Payload == helloPayload {
+				return raddr.String()
+			}
+			return fmt.Sprint(p.ID)
+		},
+	}).Listen(network, addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	clientWg := sync.WaitGroup{}
+	var readFirst [5]chan struct{}
+	for i := range readFirst {
+		readFirst[i] = make(chan struct{})
+	}
+	var readSecond [5]chan struct{}
+	for i := range readSecond {
+		readSecond[i] = make(chan struct{})
+	}
+	serverWg := sync.WaitGroup{}
+	clientMap := map[string]struct{}{}
+	var clientMapMu sync.Mutex
+	for i := 0; i < 5; i++ {
+		serverWg.Add(1)
+		go func() {
+			defer serverWg.Done()
+			conn, err := listener.Accept()
+			if err != nil {
+				t.Error(err)
+			}
+			buf := make([]byte, 40)
+			n, rErr := conn.Read(buf)
+			if rErr != nil {
+				t.Error(err)
+			}
+			p := &pkt{}
+			if uErr := json.Unmarshal(buf[:n], p); uErr != nil {
+				t.Error(err)
+			}
+			// First message should be a hello and custom connection
+			// ID function will use remote address as identifier.
+			// Connection ID is extracted to signal that we are
+			// ready for the second message.
+			if p.Payload != helloPayload {
+				t.Error("Expected hello message")
+			}
+			connID := p.ID
+			close(readFirst[connID])
+			n, err = conn.Read(buf)
+			if err != nil {
+				t.Error(err)
+			}
+			if err := json.Unmarshal(buf[:n], p); err != nil {
+				t.Error(err)
+			}
+			// Second message should be a set and custom connection
+			// function will update the connection ID from remote
+			// address to the supplied ID.
+			if p.Payload != "set" {
+				t.Error("Expected set message")
+			}
+			if p.ID != connID {
+				t.Errorf("Expected connection ID %d, but got %d", connID, p.ID)
+			}
+			close(readSecond[connID])
+			for j := 0; j < 4; j++ {
+				n, err := conn.Read(buf)
+				if err != nil {
+					t.Error(err)
+				}
+				p := &pkt{}
+				if err := json.Unmarshal(buf[:n], p); err != nil {
+					t.Error(err)
+				}
+				if p.ID != connID {
+					t.Errorf("Expected connection ID %d, but got %d", connID, p.ID)
+				}
+				// Ensure we only ever receive one message from
+				// a given client.
+				clientMapMu.Lock()
+				if _, ok := clientMap[p.Payload]; ok {
+					t.Errorf("Multiple messages from single client %s", p.Payload)
+				}
+				clientMap[p.Payload] = struct{}{}
+				clientMapMu.Unlock()
+			}
+			if err := conn.Close(); err != nil {
+				t.Error(err)
+			}
+		}()
+	}
+
+	for i := 0; i < 5; i++ {
+		clientWg.Add(1)
+		go func(connID int) {
+			defer clientWg.Done()
+			conn, dErr := net.DialUDP(network, nil, listener.Addr().(*net.UDPAddr))
+			if dErr != nil {
+				t.Error(dErr)
+			}
+			hbuf, err := json.Marshal(&pkt{
+				ID:      connID,
+				Payload: helloPayload,
+			})
+			if err != nil {
+				t.Error(err)
+			}
+			if _, wErr := conn.Write(hbuf); wErr != nil {
+				t.Error(wErr)
+			}
+			// Ensure that the first message, which does not include
+			// a connection ID is read before sending additional
+			// messages.
+			<-readFirst[connID]
+			// Send a message to update the connection ID from the
+			// remote address to the provided ID.
+			buf, err := json.Marshal(&pkt{
+				ID:      connID,
+				Payload: "set",
+			})
+			if err != nil {
+				t.Error(err)
+			}
+			if _, wErr := conn.Write(buf); wErr != nil {
+				t.Error(wErr)
+			}
+			if cErr := conn.Close(); cErr != nil {
+				t.Error(cErr)
+			}
+		}(i)
+	}
+
+	// Spawn 20 clients sending on 5 connections.
+	for i := 1; i <= 20; i++ {
+		clientWg.Add(1)
+		go func(connID int) {
+			defer clientWg.Done()
+			// Ensure that we are using a connection ID for packet
+			// routing prior to sending any messages.
+			<-readSecond[connID]
+			conn, dErr := net.DialUDP(network, nil, listener.Addr().(*net.UDPAddr))
+			if dErr != nil {
+				t.Error(dErr)
+			}
+			buf, err := json.Marshal(&pkt{
+				ID:      connID,
+				Payload: conn.LocalAddr().String(),
+			})
+			if err != nil {
+				t.Error(err)
+			}
+			if _, wErr := conn.Write(buf); wErr != nil {
+				t.Error(wErr)
+			}
+			if cErr := conn.Close(); cErr != nil {
+				t.Error(cErr)
+			}
+		}(i % 5)
+	}
+
+	// Wait for clients to exit.
+	clientWg.Wait()
+	// Wait for servers to exit.
+	serverWg.Wait()
+	if err := listener.Close(); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func pipe() (net.Listener, net.Conn, *net.UDPConn, error) {
