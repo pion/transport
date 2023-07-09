@@ -10,5 +10,5 @@ import (
 // Pipe creates piped pair of ConnCtx.
 func Pipe() (ConnCtx, ConnCtx) {
 	ca, cb := net.Pipe()
-	return New(ca), New(cb)
+	return NewConnCtx(ca), NewConnCtx(cb)
 }
