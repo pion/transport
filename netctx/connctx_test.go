@@ -27,7 +27,7 @@ func TestRead(t *testing.T) {
 		chErr <- err
 	}()
 
-	c := New(ca)
+	c := NewConnCtx(ca)
 	b := make([]byte, 100)
 	n, err := c.ReadContext(context.Background(), b)
 	if err != nil {
@@ -55,7 +55,7 @@ func TestReadTimeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
 
-	c := New(ca)
+	c := NewConnCtx(ca)
 	b := make([]byte, 100)
 	n, err := c.ReadContext(ctx, b)
 	if err == nil {
@@ -78,7 +78,7 @@ func TestReadCancel(t *testing.T) {
 		cancel()
 	}()
 
-	c := New(ca)
+	c := NewConnCtx(ca)
 	b := make([]byte, 100)
 	n, err := c.ReadContext(ctx, b)
 	if err == nil {
@@ -92,7 +92,7 @@ func TestReadCancel(t *testing.T) {
 func TestReadClosed(t *testing.T) {
 	ca, _ := net.Pipe()
 
-	c := New(ca)
+	c := NewConnCtx(ca)
 	_ = c.Close()
 
 	b := make([]byte, 100)
@@ -121,7 +121,7 @@ func TestWrite(t *testing.T) {
 		chRead <- b[:n]
 	}()
 
-	c := New(ca)
+	c := NewConnCtx(ca)
 	data := []byte{0x01, 0x02, 0xFF}
 	n, err := c.WriteContext(context.Background(), data)
 	if err != nil {
@@ -150,7 +150,7 @@ func TestWriteTimeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
 
-	c := New(ca)
+	c := NewConnCtx(ca)
 	b := make([]byte, 100)
 	n, err := c.WriteContext(ctx, b)
 	if err == nil {
@@ -173,7 +173,7 @@ func TestWriteCancel(t *testing.T) {
 		cancel()
 	}()
 
-	c := New(ca)
+	c := NewConnCtx(ca)
 	b := make([]byte, 100)
 	n, err := c.WriteContext(ctx, b)
 	if err == nil {
@@ -187,7 +187,7 @@ func TestWriteCancel(t *testing.T) {
 func TestWriteClosed(t *testing.T) {
 	ca, _ := net.Pipe()
 
-	c := New(ca)
+	c := NewConnCtx(ca)
 	_ = c.Close()
 
 	b := make([]byte, 100)
@@ -221,7 +221,7 @@ func (*connAddrMock) SetReadDeadline(_ time.Time) error  { panic("unimplemented"
 func (*connAddrMock) SetWriteDeadline(_ time.Time) error { panic("unimplemented") }
 
 func TestLocalAddrAndRemoteAddr(t *testing.T) {
-	c := New(&connAddrMock{})
+	c := NewConnCtx(&connAddrMock{})
 	al := c.LocalAddr()
 	ar := c.RemoteAddr()
 
@@ -290,7 +290,7 @@ func BenchmarkWrite(b *testing.B) {
 	b.ResetTimer()
 
 	go func(n int) {
-		c := New(cb)
+		c := NewConnCtx(cb)
 		for i := 0; i < n; i++ {
 			_, _ = c.WriteContext(context.Background(), data)
 		}
@@ -338,7 +338,7 @@ func BenchmarkRead(b *testing.B) {
 		_ = cb.Close()
 	}(b.N)
 
-	c := New(ca)
+	c := NewConnCtx(ca)
 	count := 0
 	for {
 		n, err := c.ReadContext(context.Background(), buf)

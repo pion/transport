@@ -53,8 +53,8 @@ type connCtx struct {
 
 var veryOld = time.Unix(0, 1) //nolint:gochecknoglobals
 
-// New creates a new ConnCtx wrapping given net.Conn.
-func New(conn net.Conn) ConnCtx {
+// NewConnCtx creates a new ConnCtx wrapping given net.Conn.
+func NewConnCtx(conn net.Conn) ConnCtx {
 	c := &connCtx{
 		nextConn: conn,
 		closed:   make(chan struct{}),
