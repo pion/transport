@@ -11,7 +11,7 @@ import (
 	"io"
 	"sync"
 
-	"github.com/pion/transport/v2/connctx"
+	"github.com/pion/transport/v2/netctx"
 )
 
 var errByteSequenceChanged = errors.New("byte sequence changed")
@@ -30,7 +30,7 @@ func Stress(ca io.Writer, cb io.Reader, opt Options) error {
 
 // StressContext enables stress testing of a io.ReadWriter.
 // It checks that packets are received correctly and in order.
-func StressContext(ctx context.Context, ca connctx.Writer, cb connctx.Reader, opt Options) error {
+func StressContext(ctx context.Context, ca netctx.Writer, cb netctx.Reader, opt Options) error {
 	bufs := make(chan []byte, opt.MsgCount)
 	errCh := make(chan error)
 	// Write
@@ -57,7 +57,7 @@ func StressContext(ctx context.Context, ca connctx.Writer, cb connctx.Reader, op
 	return FlattenErrs(GatherErrs(errCh))
 }
 
-func read(ctx context.Context, r connctx.Reader, original, result []byte) error {
+func read(ctx context.Context, r netctx.Reader, original, result []byte) error {
 	n, err := r.ReadContext(ctx, result)
 	if err != nil {
 		return err
@@ -77,7 +77,7 @@ func StressDuplex(ca io.ReadWriter, cb io.ReadWriter, opt Options) error {
 
 // StressDuplexContext enables duplex stress testing of a io.ReadWriter.
 // It checks that packets are received correctly and in order.
-func StressDuplexContext(ctx context.Context, ca connctx.ReadWriter, cb connctx.ReadWriter, opt Options) error {
+func StressDuplexContext(ctx context.Context, ca netctx.ReadWriter, cb netctx.ReadWriter, opt Options) error {
 	errCh := make(chan error)
 
 	var wg sync.WaitGroup
@@ -101,7 +101,7 @@ func StressDuplexContext(ctx context.Context, ca connctx.ReadWriter, cb connctx.
 	return FlattenErrs(GatherErrs(errCh))
 }
 
-func write(ctx context.Context, c connctx.Writer, bufs chan []byte, opt Options) error {
+func write(ctx context.Context, c netctx.Writer, bufs chan []byte, opt Options) error {
 	randomizer := initRand()
 	for i := 0; i < opt.MsgCount; i++ {
 		buf, err := randomizer.randBuf(opt.MsgSize)
