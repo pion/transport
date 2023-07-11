@@ -68,7 +68,7 @@ func (c *conn) ReadContext(ctx context.Context, b []byte) (int, error) {
 
 	select {
 	case <-c.closed:
-		return 0, io.EOF
+		return 0, net.ErrClosed
 	default:
 	}
 

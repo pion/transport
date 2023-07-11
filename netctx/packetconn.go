@@ -54,7 +54,7 @@ func (p *packetConn) ReadFromContext(ctx context.Context, b []byte) (int, net.Ad
 
 	select {
 	case <-p.closed:
-		return 0, nil, io.EOF
+		return 0, nil, net.ErrClosed
 	default:
 	}
 
