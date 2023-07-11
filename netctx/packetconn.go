@@ -22,14 +22,8 @@ type WriterTo interface {
 	WriteToContext(context.Context, []byte, net.Addr) (int, error)
 }
 
-// ReadFromWriterTo is a composite of ReadFromWriterTo.
-type ReadFromWriterTo interface {
-	ReaderFrom
-	WriterTo
-}
-
-// PacketConnCtx is a wrapper of net.PacketConn using context.Context.
-type PacketConnCtx interface {
+// PacketConn is a wrapper of net.PacketConn using context.Context.
+type PacketConn interface {
 	ReaderFrom
 	WriterTo
 	io.Closer
@@ -37,7 +31,7 @@ type PacketConnCtx interface {
 	Conn() net.PacketConn
 }
 
-type packetConnCtx struct {
+type packetConn struct {
 	nextConn  net.PacketConn
 	closed    chan struct{}
 	closeOnce sync.Once
@@ -45,16 +39,16 @@ type packetConnCtx struct {
 	writeMu   sync.Mutex
 }
 
-// NewPacketConn creates a new PacketConnCtx wrapping the given net.PacketConn.
-func NewPacketConn(pconn net.PacketConn) PacketConnCtx {
-	p := &packetConnCtx{
+// NewPacketConn creates a new PacketConn wrapping the given net.PacketConn.
+func NewPacketConn(pconn net.PacketConn) PacketConn {
+	p := &packetConn{
 		nextConn: pconn,
 		closed:   make(chan struct{}),
 	}
 	return p
 }
 
-func (p *packetConnCtx) ReadFromContext(ctx context.Context, b []byte) (int, net.Addr, error) {
+func (p *packetConn) ReadFromContext(ctx context.Context, b []byte) (int, net.Addr, error) {
 	p.readMu.Lock()
 	defer p.readMu.Unlock()
 
@@ -98,7 +92,7 @@ func (p *packetConnCtx) ReadFromContext(ctx context.Context, b []byte) (int, net
 	return n, raddr, err
 }
 
-func (p *packetConnCtx) WriteToContext(ctx context.Context, b []byte, raddr net.Addr) (int, error) {
+func (p *packetConn) WriteToContext(ctx context.Context, b []byte, raddr net.Addr) (int, error) {
 	p.writeMu.Lock()
 	defer p.writeMu.Unlock()
 
@@ -142,7 +136,7 @@ func (p *packetConnCtx) WriteToContext(ctx context.Context, b []byte, raddr net.
 	return n, err
 }
 
-func (p *packetConnCtx) Close() error {
+func (p *packetConn) Close() error {
 	err := p.nextConn.Close()
 	p.closeOnce.Do(func() {
 		p.writeMu.Lock()
@@ -154,10 +148,10 @@ func (p *packetConnCtx) Close() error {
 	return err
 }
 
-func (p *packetConnCtx) LocalAddr() net.Addr {
+func (p *packetConn) LocalAddr() net.Addr {
 	return p.nextConn.LocalAddr()
 }
 
-func (p *packetConnCtx) Conn() net.PacketConn {
+func (p *packetConn) Conn() net.PacketConn {
 	return p.nextConn
 }
