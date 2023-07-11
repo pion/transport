@@ -7,8 +7,8 @@ import (
 	"net"
 )
 
-// Pipe creates piped pair of ConnCtx.
-func Pipe() (ConnCtx, ConnCtx) {
+// Pipe creates piped pair of Conn.
+func Pipe() (Conn, Conn) {
 	ca, cb := net.Pipe()
-	return NewConnCtx(ca), NewConnCtx(cb)
+	return NewConn(ca), NewConn(cb)
 }
