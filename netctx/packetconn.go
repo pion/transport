@@ -48,6 +48,15 @@ func NewPacketConn(pconn net.PacketConn) PacketConn {
 	return p
 }
 
+// ReadFromContext reads a packet from the connection,
+// copying the payload into p. It returns the number of
+// bytes copied into p and the return address that
+// was on the packet.
+// It returns the number of bytes read (0 <= n <= len(p))
+// and any error encountered. Callers should always process
+// the n > 0 bytes returned before considering the error err.
+// Unlike net.PacketConn.ReadFrom(), the provided context is
+// used to control timeout.
 func (p *packetConn) ReadFromContext(ctx context.Context, b []byte) (int, net.Addr, error) {
 	p.readMu.Lock()
 	defer p.readMu.Unlock()
@@ -92,6 +101,10 @@ func (p *packetConn) ReadFromContext(ctx context.Context, b []byte) (int, net.Ad
 	return n, raddr, err
 }
 
+// WriteToContext writes a packet with payload p to addr.
+// Unlike net.PacketConn.WriteTo(), the provided context
+// is used to control timeout.
+// On packet-oriented connections, write timeouts are rare.
 func (p *packetConn) WriteToContext(ctx context.Context, b []byte, raddr net.Addr) (int, error) {
 	p.writeMu.Lock()
 	defer p.writeMu.Unlock()
@@ -136,6 +149,9 @@ func (p *packetConn) WriteToContext(ctx context.Context, b []byte, raddr net.Add
 	return n, err
 }
 
+// Close closes the connection.
+// Any blocked ReadFromContext or WriteToContext operations will be unblocked
+// and return errors.
 func (p *packetConn) Close() error {
 	err := p.nextConn.Close()
 	p.closeOnce.Do(func() {
@@ -148,10 +164,12 @@ func (p *packetConn) Close() error {
 	return err
 }
 
+// LocalAddr returns the local network address, if known.
 func (p *packetConn) LocalAddr() net.Addr {
 	return p.nextConn.LocalAddr()
 }
 
+// Conn returns the underlying net.PacketConn.
 func (p *packetConn) Conn() net.PacketConn {
 	return p.nextConn
 }
