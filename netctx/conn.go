@@ -62,6 +62,8 @@ func NewConn(netConn net.Conn) Conn {
 	return c
 }
 
+// ReadContext reads data from the connection.
+// Unlike net.Conn.Read(), the provided context is used to control timeout.
 func (c *conn) ReadContext(ctx context.Context, b []byte) (int, error) {
 	c.readMu.Lock()
 	defer c.readMu.Unlock()
@@ -106,6 +108,8 @@ func (c *conn) ReadContext(ctx context.Context, b []byte) (int, error) {
 	return n, err
 }
 
+// WriteContext writes data to the connection.
+// Unlike net.Conn.Write(), the provided context is used to control timeout.
 func (c *conn) WriteContext(ctx context.Context, b []byte) (int, error) {
 	c.writeMu.Lock()
 	defer c.writeMu.Unlock()
@@ -150,6 +154,9 @@ func (c *conn) WriteContext(ctx context.Context, b []byte) (int, error) {
 	return n, err
 }
 
+// Close closes the connection.
+// Any blocked ReadContext or WriteContext operations will be unblocked and
+// return errors.
 func (c *conn) Close() error {
 	err := c.nextConn.Close()
 	c.closeOnce.Do(func() {
@@ -162,14 +169,17 @@ func (c *conn) Close() error {
 	return err
 }
 
+// LocalAddr returns the local network address, if known.
 func (c *conn) LocalAddr() net.Addr {
 	return c.nextConn.LocalAddr()
 }
 
+// LocalAddr returns the local network address, if known.
 func (c *conn) RemoteAddr() net.Addr {
 	return c.nextConn.RemoteAddr()
 }
 
+// Conn returns the underlying net.Conn.
 func (c *conn) Conn() net.Conn {
 	return c.nextConn
 }
