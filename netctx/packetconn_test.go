@@ -141,8 +141,8 @@ func TestReadFromClosed(t *testing.T) {
 
 	b := make([]byte, 100)
 	n, _, err := c.ReadFromContext(context.Background(), b)
-	if !errors.Is(err, io.EOF) {
-		t.Errorf("Expected error '%v', got '%v'", io.EOF, err)
+	if !errors.Is(err, net.ErrClosed) {
+		t.Errorf("Expected error '%v', got '%v'", net.ErrClosed, err)
 	}
 	if n != 0 {
 		t.Errorf("Wrong data length, expected %d, got %d", 0, n)
