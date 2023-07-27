@@ -4,6 +4,7 @@
 package replaydetector
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 )
@@ -180,7 +181,7 @@ func TestReplayDetector(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			for typeName, typ := range map[string]struct {
-				newFunc  func(uint, uint64) ReplayDetector
+				newFunc  func(uint, uint64, ...Option) ReplayDetector
 				expected []uint64
 			}{
 				"NoWrap": {
@@ -215,3 +216,58 @@ func TestReplayDetector(t *testing.T) {
 		})
 	}
 }
+
+func TestStateFactoryOption(t *testing.T) {
+	for typeName, newFunc := range map[string]func(uint, uint64, ...Option) ReplayDetector{
+		"NoWrap": New,
+		"Wrap":   WithWrap,
+	} {
+		newFunc := newFunc
+		t.Run(typeName, func(t *testing.T) {
+			var ops []string
+			ms := &mockState{
+				FnLsh: func(n uint) {
+					ops = append(ops, fmt.Sprintf("Lsh%d", n))
+				},
+				FnBit: func(i uint) uint {
+					ops = append(ops, fmt.Sprintf("Bit%d", i))
+					return 1
+				},
+				FnSetBit: func(i uint) {
+					ops = append(ops, fmt.Sprintf("SetBit%d", i))
+				},
+			}
+			det := newFunc(4, 16, StateFactoryOption(func(n uint) State {
+				if n != 4 {
+					t.Fatalf("State size must be 4, got %d", n)
+				}
+				return ms
+			}))
+			if accept, ok := det.Check(1); ok {
+				accept()
+			}
+			if accept, ok := det.Check(3); ok {
+				accept()
+			}
+			if accept, ok := det.Check(2); ok {
+				accept()
+			}
+			expectedOps := []string{"Lsh1", "SetBit0", "Lsh2", "SetBit0", "Bit1"}
+			if !reflect.DeepEqual(expectedOps, ops) {
+				t.Errorf("Expected operations:\n  %v\nActual:\n  %v", expectedOps, ops)
+			}
+		})
+	}
+}
+
+type mockState struct {
+	FnLsh    func(n uint)
+	FnBit    func(i uint) uint
+	FnSetBit func(i uint)
+	FnString func() string
+}
+
+func (ms *mockState) Lsh(n uint)      { ms.FnLsh(n) }
+func (ms *mockState) Bit(i uint) uint { return ms.FnBit(i) }
+func (ms *mockState) SetBit(i uint)   { ms.FnSetBit(i) }
+func (ms *mockState) String() string  { return ms.FnString() }

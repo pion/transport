@@ -7,6 +7,18 @@ import (
 	"fmt"
 )
 
+// State is an interface to store ReplayDetector's state.
+type State interface {
+	// Lsh is the left shift operation.
+	Lsh(n uint)
+	// Bit returns i-th bit of the fixedBigInt.
+	Bit(i uint) uint
+	// SetBit sets i-th bit to 1.
+	SetBit(i uint)
+	// String returns string representation of fixedBigInt.
+	String() string
+}
+
 // fixedBigInt is the fix-sized multi-word integer.
 type fixedBigInt struct {
 	bits    []uint64
@@ -15,7 +27,7 @@ type fixedBigInt struct {
 }
 
 // newFixedBigInt creates a new fix-sized multi-word int.
-func newFixedBigInt(n uint) *fixedBigInt {
+func newFixedBigInt(n uint) State {
 	chunkSize := (n + 63) / 64
 	if chunkSize == 0 {
 		chunkSize = 1

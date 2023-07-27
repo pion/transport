@@ -15,18 +15,24 @@ type slidingWindowDetector struct {
 	latestSeq  uint64
 	maxSeq     uint64
 	windowSize uint
-	mask       *fixedBigInt
+	mask       State
 }
 
 // New creates ReplayDetector.
 // Created ReplayDetector doesn't allow wrapping.
 // It can handle monotonically increasing sequence number up to
 // full 64bit number. It is suitable for DTLS replay protection.
-func New(windowSize uint, maxSeq uint64) ReplayDetector {
+func New(windowSize uint, maxSeq uint64, opt ...Option) ReplayDetector {
+	opts := &Options{
+		StateFactory: newFixedBigInt,
+	}
+	for _, o := range opt {
+		o(opts)
+	}
 	return &slidingWindowDetector{
 		maxSeq:     maxSeq,
 		windowSize: windowSize,
-		mask:       newFixedBigInt(windowSize),
+		mask:       opts.StateFactory(windowSize),
 	}
 }
 
@@ -59,11 +65,17 @@ func (d *slidingWindowDetector) Check(seq uint64) (accept func(), ok bool) {
 
 // WithWrap creates ReplayDetector allowing sequence wrapping.
 // This is suitable for short bit width counter like SRTP and SRTCP.
-func WithWrap(windowSize uint, maxSeq uint64) ReplayDetector {
+func WithWrap(windowSize uint, maxSeq uint64, opt ...Option) ReplayDetector {
+	opts := &Options{
+		StateFactory: newFixedBigInt,
+	}
+	for _, o := range opt {
+		o(opts)
+	}
 	return &wrappedSlidingWindowDetector{
 		maxSeq:     maxSeq,
 		windowSize: windowSize,
-		mask:       newFixedBigInt(windowSize),
+		mask:       opts.StateFactory(windowSize),
 	}
 }
 
@@ -71,7 +83,7 @@ type wrappedSlidingWindowDetector struct {
 	latestSeq  uint64
 	maxSeq     uint64
 	windowSize uint
-	mask       *fixedBigInt
+	mask       State
 	init       bool
 }
 
@@ -116,4 +128,19 @@ func (d *wrappedSlidingWindowDetector) Check(seq uint64) (accept func(), ok bool
 		}
 		d.mask.SetBit(uint(d.latestSeq - seq))
 	}, true
+}
+
+// Options stores replay detector options.
+type Options struct {
+	StateFactory func(n uint) State
+}
+
+// Option represents option of ReplayDetector.
+type Option func(*Options)
+
+// StateFactoryOption sets State factory as an option of ReplayDetector.
+func StateFactoryOption(fn func(n uint) State) Option {
+	return Option(func(opts *Options) {
+		opts.StateFactory = fn
+	})
 }
