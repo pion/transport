@@ -37,7 +37,7 @@ func New(windowSize uint, maxSeq uint64) ReplayDetector {
 	}
 }
 
-func (d *slidingWindowDetector) Check(seq uint64) (accept func() bool, ok bool) {
+func (d *slidingWindowDetector) Check(seq uint64) (func() bool, bool) {
 	if seq > d.maxSeq {
 		// Exceeded upper limit.
 		return nop, false
@@ -85,7 +85,7 @@ type wrappedSlidingWindowDetector struct {
 	init       bool
 }
 
-func (d *wrappedSlidingWindowDetector) Check(seq uint64) (accept func() bool, ok bool) {
+func (d *wrappedSlidingWindowDetector) Check(seq uint64) (func() bool, bool) {
 	if seq > d.maxSeq {
 		// Exceeded upper limit.
 		return nop, false
