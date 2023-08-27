@@ -12,6 +12,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	syncx "github.com/pion/transport/v2/internal/sync"
+
 	"github.com/pion/transport/v2/deadline"
 	"github.com/pion/transport/v2/packetio"
 )
@@ -39,7 +41,7 @@ type listener struct {
 
 	connLock sync.Mutex
 	conns    map[string]*Conn
-	connWG   *sync.WaitGroup
+	connWG   *syncx.WaitGroup
 
 	readWG   sync.WaitGroup
 	errClose atomic.Value // error
@@ -141,7 +143,7 @@ func (lc *ListenConfig) Listen(network string, laddr *net.UDPAddr) (net.Listener
 		conns:        make(map[string]*Conn),
 		doneCh:       make(chan struct{}),
 		acceptFilter: lc.AcceptFilter,
-		connWG:       &sync.WaitGroup{},
+		connWG:       syncx.NewWaitGroup(),
 		readDoneCh:   make(chan struct{}),
 	}
 
