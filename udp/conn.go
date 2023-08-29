@@ -118,7 +118,8 @@ func (l *listener) Addr() net.Addr {
 // it will use ReadBatch/WriteBatch to improve throughput for UDP.
 type BatchIOConfig struct {
 	Enable bool
-	// ReadBatchSize indicates the maximum number of packets to be read in one batch
+	// ReadBatchSize indicates the maximum number of packets to be read in one batch, a batch size less than 2 means
+	// disable read batch.
 	ReadBatchSize int
 	// WriteBatchSize indicates the maximum number of packets to be written in one batch
 	WriteBatchSize int
@@ -158,7 +159,7 @@ func (lc *ListenConfig) Listen(network string, laddr *net.UDPAddr) (net.Listener
 		lc.Backlog = defaultListenBacklog
 	}
 
-	if lc.Batch.Enable && (lc.Batch.ReadBatchSize <= 0 || lc.Batch.WriteBatchSize <= 0 || lc.Batch.WriteBatchInterval <= 0) {
+	if lc.Batch.Enable && (lc.Batch.WriteBatchSize <= 0 || lc.Batch.WriteBatchInterval <= 0) {
 		return nil, ErrInvalidBatchConfig
 	}
 
@@ -218,7 +219,7 @@ func (l *listener) readLoop() {
 	defer l.readWG.Done()
 	defer close(l.readDoneCh)
 
-	if br, ok := l.pConn.(BatchReader); ok {
+	if br, ok := l.pConn.(BatchReader); ok && l.readBatchSize > 1 {
 		l.readBatch(br)
 	} else {
 		l.read()

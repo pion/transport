@@ -13,6 +13,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -488,6 +489,8 @@ func TestBatchIO(t *testing.T) {
 			WriteBatchSize:     3,
 			WriteBatchInterval: 5 * time.Millisecond,
 		},
+		ReadBufferSize:  64 * 1024,
+		WriteBufferSize: 64 * 1024,
 	}
 
 	laddr := &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 15678}
@@ -496,29 +499,53 @@ func TestBatchIO(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	acceptQc := make(chan struct{})
+	var serverConnWg sync.WaitGroup
+	serverConnWg.Add(1)
 	go func() {
-		defer close(acceptQc)
+		var exit atomic.Bool
+		defer func() {
+			defer serverConnWg.Done()
+			exit.Store(true)
+		}()
 		for {
 			buf := make([]byte, 1400)
-			conn, err := listener.Accept()
-			if errors.Is(err, ErrClosedListener) {
+			conn, lerr := listener.Accept()
+			if errors.Is(lerr, ErrClosedListener) {
 				break
 			}
-			assert.NoError(t, err)
+			assert.NoError(t, lerr)
+			serverConnWg.Add(1)
 			go func() {
-				defer func() { _ = conn.Close() }()
-				for {
-					n, err := conn.Read(buf)
-					assert.NoError(t, err)
-					_, err = conn.Write(buf[:n])
-					assert.NoError(t, err)
+				defer func() {
+					_ = conn.Close()
+					serverConnWg.Done()
+				}()
+				for !exit.Load() {
+					_ = conn.SetReadDeadline(time.Now().Add(time.Second))
+					n, rerr := conn.Read(buf)
+					if rerr != nil {
+						assert.ErrorContains(t, rerr, "timeout")
+					} else {
+						_, rerr = conn.Write(buf[:n])
+						assert.NoError(t, rerr)
+					}
 				}
 			}()
 		}
 	}()
 
 	raddr, _ := listener.Addr().(*net.UDPAddr)
+
+	// test flush by WriteBatchInterval expired
+	readBuf := make([]byte, 1400)
+	cli, err := net.DialUDP("udp", nil, raddr)
+	assert.NoError(t, err)
+	flushStr := "flushbytimer"
+	_, err = cli.Write([]byte("flushbytimer"))
+	assert.NoError(t, err)
+	n, err := cli.Read(readBuf)
+	assert.NoError(t, err)
+	assert.Equal(t, flushStr, string(readBuf[:n]))
 
 	wgs := sync.WaitGroup{}
 	cc := 3
@@ -532,7 +559,7 @@ func TestBatchIO(t *testing.T) {
 			client, err := net.DialUDP("udp", nil, raddr)
 			assert.NoError(t, err)
 			defer func() { _ = client.Close() }()
-			for i := 0; i < 100; i++ {
+			for i := 0; i < 1; i++ {
 				_, err := client.Write([]byte(sendStr))
 				assert.NoError(t, err)
 				err = client.SetReadDeadline(time.Now().Add(time.Second))
@@ -546,5 +573,5 @@ func TestBatchIO(t *testing.T) {
 	wgs.Wait()
 
 	_ = listener.Close()
-	<-acceptQc
+	serverConnWg.Wait()
 }

@@ -4,6 +4,7 @@
 package udp
 
 import (
+	"io"
 	"net"
 	"runtime"
 	"sync"
@@ -28,6 +29,7 @@ type BatchReader interface {
 type BatchPacketConn interface {
 	BatchWriter
 	BatchReader
+	io.Closer
 }
 
 // BatchConn uses ipv4/v6.NewPacketConn to wrap a net.PacketConn to write/read messages in batch,
@@ -48,7 +50,7 @@ type BatchConn struct {
 	closed atomic.Bool
 }
 
-// NewBatchConn creates a *BatchCon from net.PacketConn with batch configs.
+// NewBatchConn creates a *BatchConn from net.PacketConn with batch configs.
 func NewBatchConn(conn net.PacketConn, batchWriteSize int, batchWriteInterval time.Duration) *BatchConn {
 	bc := &BatchConn{
 		PacketConn:         conn,
@@ -92,6 +94,14 @@ func NewBatchConn(conn net.PacketConn, batchWriteSize int, batchWriteInterval ti
 // Close batchConn and the underlying PacketConn
 func (c *BatchConn) Close() error {
 	c.closed.Store(true)
+	c.batchWriteMutex.Lock()
+	if c.batchWritePos > 0 {
+		_ = c.flush()
+	}
+	c.batchWriteMutex.Unlock()
+	if c.batchConn != nil {
+		return c.batchConn.Close()
+	}
 	return c.PacketConn.Close()
 }
 
@@ -100,15 +110,14 @@ func (c *BatchConn) WriteTo(b []byte, addr net.Addr) (int, error) {
 	if c.batchConn == nil {
 		return c.PacketConn.WriteTo(b, addr)
 	}
-	return c.writeBatch(b, addr)
+	return c.enqueueMessage(b, addr)
 }
 
-func (c *BatchConn) writeBatch(buf []byte, raddr net.Addr) (int, error) {
+func (c *BatchConn) enqueueMessage(buf []byte, raddr net.Addr) (int, error) {
 	var err error
 	c.batchWriteMutex.Lock()
 	defer c.batchWriteMutex.Unlock()
 
-	// c.writeCounter++
 	msg := &c.batchWriteMessages[c.batchWritePos]
 	// reset buffers
 	msg.Buffers = msg.Buffers[:1]
