@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/pion/transport/v2/test"
+	"github.com/stretchr/testify/assert"
 )
 
 var errHandshakeFailed = errors.New("handshake failed")
@@ -477,4 +478,73 @@ func TestConnClose(t *testing.T) {
 			t.Errorf("Failed to close listener: %v", err)
 		}
 	})
+}
+
+func TestBatchIO(t *testing.T) {
+	lc := ListenConfig{
+		Batch: BatchIOConfig{
+			Enable:             true,
+			ReadBatchSize:      10,
+			WriteBatchSize:     3,
+			WriteBatchInterval: 5 * time.Millisecond,
+		},
+	}
+
+	laddr := &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 15678}
+	listener, err := lc.Listen("udp", laddr)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	acceptQc := make(chan struct{})
+	go func() {
+		defer close(acceptQc)
+		for {
+			buf := make([]byte, 1400)
+			conn, err := listener.Accept()
+			if errors.Is(err, ErrClosedListener) {
+				break
+			}
+			assert.NoError(t, err)
+			go func() {
+				defer func() { _ = conn.Close() }()
+				for {
+					n, err := conn.Read(buf)
+					assert.NoError(t, err)
+					_, err = conn.Write(buf[:n])
+					assert.NoError(t, err)
+				}
+			}()
+		}
+	}()
+
+	raddr, _ := listener.Addr().(*net.UDPAddr)
+
+	wgs := sync.WaitGroup{}
+	cc := 3
+	wgs.Add(cc)
+
+	for i := 0; i < cc; i++ {
+		sendStr := fmt.Sprintf("hello %d", i)
+		go func() {
+			defer wgs.Done()
+			buf := make([]byte, 1400)
+			client, err := net.DialUDP("udp", nil, raddr)
+			assert.NoError(t, err)
+			defer func() { _ = client.Close() }()
+			for i := 0; i < 100; i++ {
+				_, err := client.Write([]byte(sendStr))
+				assert.NoError(t, err)
+				err = client.SetReadDeadline(time.Now().Add(time.Second))
+				assert.NoError(t, err)
+				n, err := client.Read(buf)
+				assert.NoError(t, err)
+				assert.Equal(t, sendStr, string(buf[:n]), i)
+			}
+		}()
+	}
+	wgs.Wait()
+
+	_ = listener.Close()
+	<-acceptQc
 }

@@ -14,10 +14,12 @@ import (
 
 	"github.com/pion/transport/v2/deadline"
 	"github.com/pion/transport/v2/packetio"
+	"golang.org/x/net/ipv4"
 )
 
 const (
 	receiveMTU           = 8192
+	sendMTU              = 1500
 	defaultListenBacklog = 128 // same as Linux default
 )
 
@@ -25,11 +27,14 @@ const (
 var (
 	ErrClosedListener      = errors.New("udp: listener closed")
 	ErrListenQueueExceeded = errors.New("udp: listen queue exceeded")
+	ErrInvalidBatchConfig  = errors.New("udp: invalid batch config")
 )
 
 // listener augments a connection-oriented Listener over a UDP PacketConn
 type listener struct {
-	pConn *net.UDPConn
+	pConn net.PacketConn
+
+	readBatchSize int
 
 	accepting    atomic.Value // bool
 	acceptCh     chan *Conn
@@ -109,6 +114,19 @@ func (l *listener) Addr() net.Addr {
 	return l.pConn.LocalAddr()
 }
 
+// BatchIOConfig indicates config to batch read/write packets,
+// it will use ReadBatch/WriteBatch to improve throughput for UDP.
+type BatchIOConfig struct {
+	Enable bool
+	// ReadBatchSize indicates the maximum number of packets to be read in one batch
+	ReadBatchSize int
+	// WriteBatchSize indicates the maximum number of packets to be written in one batch
+	WriteBatchSize int
+	// WriteBatchInterval indicates the maximum interval to wait before writing packets in one batch
+	// small interval will reduce latency/jitter, but increase the io count.
+	WriteBatchInterval time.Duration
+}
+
 // ListenConfig stores options for listening to an address.
 type ListenConfig struct {
 	// Backlog defines the maximum length of the queue of pending
@@ -122,6 +140,16 @@ type ListenConfig struct {
 	// AcceptFilter determines whether the new conn should be made for
 	// the incoming packet. If not set, any packet creates new conn.
 	AcceptFilter func([]byte) bool
+
+	// ReadBufferSize sets the size of the operating system's
+	// receive buffer associated with the listener.
+	ReadBufferSize int
+
+	// WriteBufferSize sets the size of the operating system's
+	// send buffer associated with the connection.
+	WriteBufferSize int
+
+	Batch BatchIOConfig
 }
 
 // Listen creates a new listener based on the ListenConfig.
@@ -130,9 +158,20 @@ func (lc *ListenConfig) Listen(network string, laddr *net.UDPAddr) (net.Listener
 		lc.Backlog = defaultListenBacklog
 	}
 
+	if lc.Batch.Enable && (lc.Batch.ReadBatchSize <= 0 || lc.Batch.WriteBatchSize <= 0 || lc.Batch.WriteBatchInterval <= 0) {
+		return nil, ErrInvalidBatchConfig
+	}
+
 	conn, err := net.ListenUDP(network, laddr)
 	if err != nil {
 		return nil, err
+	}
+
+	if lc.ReadBufferSize > 0 {
+		_ = conn.SetReadBuffer(lc.ReadBufferSize)
+	}
+	if lc.WriteBufferSize > 0 {
+		_ = conn.SetWriteBuffer(lc.WriteBufferSize)
 	}
 
 	l := &listener{
@@ -143,6 +182,11 @@ func (lc *ListenConfig) Listen(network string, laddr *net.UDPAddr) (net.Listener
 		acceptFilter: lc.AcceptFilter,
 		connWG:       &sync.WaitGroup{},
 		readDoneCh:   make(chan struct{}),
+	}
+
+	if lc.Batch.Enable {
+		l.pConn = NewBatchConn(conn, lc.Batch.WriteBatchSize, lc.Batch.WriteBatchInterval)
+		l.readBatchSize = lc.Batch.ReadBatchSize
 	}
 
 	l.accepting.Store(true)
@@ -174,21 +218,51 @@ func (l *listener) readLoop() {
 	defer l.readWG.Done()
 	defer close(l.readDoneCh)
 
-	buf := make([]byte, receiveMTU)
+	if br, ok := l.pConn.(BatchReader); ok {
+		l.readBatch(br)
+	} else {
+		l.read()
+	}
+}
 
+func (l *listener) readBatch(br BatchReader) {
+	msgs := make([]ipv4.Message, l.readBatchSize)
+	for i := range msgs {
+		msg := &msgs[i]
+		msg.Buffers = [][]byte{make([]byte, receiveMTU)}
+		msg.OOB = make([]byte, 40)
+	}
+	for {
+		n, err := br.ReadBatch(msgs, 0)
+		if err != nil {
+			l.errRead.Store(err)
+			return
+		}
+		for i := 0; i < n; i++ {
+			l.dispatchMsg(msgs[i].Addr, msgs[i].Buffers[0][:msgs[i].N])
+		}
+	}
+}
+
+func (l *listener) read() {
+	buf := make([]byte, receiveMTU)
 	for {
 		n, raddr, err := l.pConn.ReadFrom(buf)
 		if err != nil {
 			l.errRead.Store(err)
 			return
 		}
-		conn, ok, err := l.getConn(raddr, buf[:n])
-		if err != nil {
-			continue
-		}
-		if ok {
-			_, _ = conn.buffer.Write(buf[:n])
-		}
+		l.dispatchMsg(raddr, buf[:n])
+	}
+}
+
+func (l *listener) dispatchMsg(addr net.Addr, buf []byte) {
+	conn, ok, err := l.getConn(addr, buf)
+	if err != nil {
+		return
+	}
+	if ok {
+		_, _ = conn.buffer.Write(buf)
 	}
 }
 
