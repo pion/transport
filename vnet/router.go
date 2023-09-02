@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/pion/logging"
-	"github.com/pion/transport/v2"
+	"github.com/pion/transport/v3"
 )
 
 const (
