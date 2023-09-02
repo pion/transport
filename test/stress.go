@@ -11,7 +11,7 @@ import (
 	"io"
 	"sync"
 
-	"github.com/pion/transport/v2/netctx"
+	"github.com/pion/transport/v3/netctx"
 )
 
 var errByteSequenceChanged = errors.New("byte sequence changed")
