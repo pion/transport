@@ -502,10 +502,10 @@ func TestBatchIO(t *testing.T) {
 	var serverConnWg sync.WaitGroup
 	serverConnWg.Add(1)
 	go func() {
-		var exit atomic.Bool
+		var exit int32
 		defer func() {
 			defer serverConnWg.Done()
-			exit.Store(true)
+			atomic.StoreInt32(&exit, 1)
 		}()
 		for {
 			buf := make([]byte, 1400)
@@ -520,7 +520,7 @@ func TestBatchIO(t *testing.T) {
 					_ = conn.Close()
 					serverConnWg.Done()
 				}()
-				for !exit.Load() {
+				for atomic.LoadInt32(&exit) != 1 {
 					_ = conn.SetReadDeadline(time.Now().Add(time.Second))
 					n, rerr := conn.Read(buf)
 					if rerr != nil {
