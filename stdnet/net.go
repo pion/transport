@@ -44,10 +44,10 @@ func (n *Net) UpdateInterfaces() error {
 		return err
 	}
 
-	for _, oif := range oifs {
-		ifc := transport.NewInterface(oif)
+	for i := range oifs {
+		ifc := transport.NewInterface(oifs[i])
 
-		addrs, err := anet.InterfaceAddrsByInterface(&oif)
+		addrs, err := anet.InterfaceAddrsByInterface(&oifs[i])
 		if err != nil {
 			return err
 		}
