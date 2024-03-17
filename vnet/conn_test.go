@@ -62,7 +62,7 @@ func TestUDPConn(t *testing.T) {
 				conn.readCh <- chunk // echo back
 				return nil
 			},
-			onOnClosed: func(addr net.Addr) {
+			onOnClosed: func(net.Addr) {
 				atomic.AddInt32(&nClosed, 1)
 			},
 		}
@@ -143,7 +143,7 @@ func TestUDPConn(t *testing.T) {
 				conn.readCh <- chunk // echo back
 				return nil
 			},
-			onOnClosed: func(addr net.Addr) {
+			onOnClosed: func(net.Addr) {
 				atomic.AddInt32(&nClosed, 1)
 			},
 		}
@@ -204,7 +204,7 @@ func TestUDPConn(t *testing.T) {
 			Port: 1234,
 		}
 		obs := &dummyObserver{
-			onOnClosed: func(addr net.Addr) {
+			onOnClosed: func(net.Addr) {
 				atomic.AddInt32(&nClosed, 1)
 			},
 		}

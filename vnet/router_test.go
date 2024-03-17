@@ -348,7 +348,7 @@ func TestRouterDelay(t *testing.T) {
 			var delayRes []time.Duration
 			nPkts := 1
 
-			nic[0].onInboundChunkHandler = func(c Chunk) {}
+			nic[0].onInboundChunkHandler = func(Chunk) {}
 
 			nic[1].onInboundChunkHandler = func(c Chunk) {
 				delay := time.Since(c.getTimestamp())

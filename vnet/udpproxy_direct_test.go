@@ -329,9 +329,9 @@ func TestUDPProxyDirectDeliverBadCase(t *testing.T) {
 			}
 
 			// BadCase: Write on closed socket, error and ignore.
-			proxy.workers.Range(func(key, value interface{}) bool {
+			proxy.workers.Range(func(_, value interface{}) bool {
 				//nolint:forcetypeassert
-				value.(*aUDPProxyWorker).endpoints.Range(func(key, value interface{}) bool {
+				value.(*aUDPProxyWorker).endpoints.Range(func(_, value interface{}) bool {
 					_ = value.(*net.UDPConn).Close() //nolint:forcetypeassert
 					return true
 				})
