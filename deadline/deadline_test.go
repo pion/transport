@@ -170,3 +170,13 @@ func TestContext(t *testing.T) {
 		}
 	})
 }
+
+func BenchmarkDeadline(b *testing.B) {
+	b.Run("Set", func(b *testing.B) {
+		d := New()
+		t := time.Now().Add(time.Minute)
+		for i := 0; i < b.N; i++ {
+			d.Set(t)
+		}
+	})
+}
