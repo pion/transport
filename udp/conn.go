@@ -17,6 +17,12 @@ import (
 	"golang.org/x/net/ipv4"
 )
 
+type PacketConnExtended interface {
+	net.PacketConn
+
+	WriteMsgUDP(b, oob []byte, addr *net.UDPAddr) (n, oobn int, err error)
+}
+
 const (
 	receiveMTU           = 8192
 	sendMTU              = 1500
@@ -32,7 +38,7 @@ var (
 
 // listener augments a connection-oriented Listener over a UDP PacketConn
 type listener struct {
-	pConn net.PacketConn
+	pConn PacketConnExtended
 
 	readBatchSize int
 
@@ -328,6 +334,16 @@ func (c *Conn) Write(p []byte) (n int, err error) {
 	default:
 	}
 	return c.listener.pConn.WriteTo(p, c.rAddr)
+}
+
+// Write writes len(p) bytes from p to the DTLS connection
+func (c *Conn) WriteOOB(p []byte, oob []byte) (n int, oobn int, err error) {
+	select {
+	case <-c.writeDeadline.Done():
+		return 0, 0, context.DeadlineExceeded
+	default:
+	}
+	return c.listener.pConn.WriteMsgUDP(p, oob, c.rAddr.(*net.UDPAddr))
 }
 
 // Close closes the conn and releases any Read calls

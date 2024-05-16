@@ -35,7 +35,7 @@ type BatchPacketConn interface {
 // BatchConn uses ipv4/v6.NewPacketConn to wrap a net.PacketConn to write/read messages in batch,
 // only available in linux. In other platform, it will use single Write/Read as same as net.Conn.
 type BatchConn struct {
-	net.PacketConn
+	PacketConnExtended
 
 	batchConn BatchPacketConn
 
@@ -51,9 +51,9 @@ type BatchConn struct {
 }
 
 // NewBatchConn creates a *BatchConn from net.PacketConn with batch configs.
-func NewBatchConn(conn net.PacketConn, batchWriteSize int, batchWriteInterval time.Duration) *BatchConn {
+func NewBatchConn(conn PacketConnExtended, batchWriteSize int, batchWriteInterval time.Duration) *BatchConn {
 	bc := &BatchConn{
-		PacketConn:         conn,
+		PacketConnExtended: conn,
 		batchWriteLast:     time.Now(),
 		batchWriteInterval: batchWriteInterval,
 		batchWriteSize:     batchWriteSize,
@@ -101,18 +101,26 @@ func (c *BatchConn) Close() error {
 	if c.batchConn != nil {
 		return c.batchConn.Close()
 	}
-	return c.PacketConn.Close()
+	return c.PacketConnExtended.Close()
 }
 
 // WriteTo write message to an UDPAddr, addr should be nil if it is a connected socket.
 func (c *BatchConn) WriteTo(b []byte, addr net.Addr) (int, error) {
 	if c.batchConn == nil {
-		return c.PacketConn.WriteTo(b, addr)
+		return c.PacketConnExtended.WriteTo(b, addr)
 	}
-	return c.enqueueMessage(b, addr)
+	n, _, err := c.enqueueMessage(b, nil, addr)
+	return n, err
 }
 
-func (c *BatchConn) enqueueMessage(buf []byte, raddr net.Addr) (int, error) {
+func (c *BatchConn) WriteMsgUDP(b, oob []byte, addr *net.UDPAddr) (int, int, error) {
+	if c.batchConn == nil {
+		return c.PacketConnExtended.WriteMsgUDP(b, oob, addr)
+	}
+	return c.enqueueMessage(b, oob, addr)
+}
+
+func (c *BatchConn) enqueueMessage(buf []byte, oob []byte, raddr net.Addr) (int, int, error) {
 	var err error
 	c.batchWriteMutex.Lock()
 	defer c.batchWriteMutex.Unlock()
@@ -133,16 +141,17 @@ func (c *BatchConn) enqueueMessage(buf []byte, raddr net.Addr) (int, error) {
 	} else {
 		msg.Buffers[0] = msg.Buffers[0][:n]
 	}
+	msg.OOB = oob
 	if c.batchWritePos == c.batchWriteSize {
 		err = c.flush()
 	}
-	return len(buf), err
+	return len(buf), len(oob), err
 }
 
 // ReadBatch reads messages in batch, return length of message readed and error.
 func (c *BatchConn) ReadBatch(msgs []ipv4.Message, flags int) (int, error) {
 	if c.batchConn == nil {
-		n, addr, err := c.PacketConn.ReadFrom(msgs[0].Buffers[0])
+		n, addr, err := c.PacketConnExtended.ReadFrom(msgs[0].Buffers[0])
 		if err == nil {
 			msgs[0].N = n
 			msgs[0].Addr = addr
