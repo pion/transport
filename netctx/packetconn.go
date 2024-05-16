@@ -10,6 +10,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/pion/transport/v3/udp"
 )
 
 // ReaderFrom is an interface for context controlled packet reader.
@@ -19,7 +21,7 @@ type ReaderFrom interface {
 
 // WriterTo is an interface for context controlled packet writer.
 type WriterTo interface {
-	WriteToContext(context.Context, []byte, net.Addr) (int, error)
+	WriteToContext(context.Context, []byte, []byte, net.Addr) (int, error)
 }
 
 // PacketConn is a wrapper of net.PacketConn using context.Context.
@@ -105,7 +107,7 @@ func (p *packetConn) ReadFromContext(ctx context.Context, b []byte) (int, net.Ad
 // Unlike net.PacketConn.WriteTo(), the provided context
 // is used to control timeout.
 // On packet-oriented connections, write timeouts are rare.
-func (p *packetConn) WriteToContext(ctx context.Context, b []byte, raddr net.Addr) (int, error) {
+func (p *packetConn) WriteToContext(ctx context.Context, b []byte, oob []byte, raddr net.Addr) (int, error) {
 	p.writeMu.Lock()
 	defer p.writeMu.Unlock()
 
@@ -136,7 +138,13 @@ func (p *packetConn) WriteToContext(ctx context.Context, b []byte, raddr net.Add
 		}
 	}()
 
-	n, err := p.nextConn.WriteTo(b, raddr)
+	var n int
+	var err error
+	if pConnExt, ok := p.nextConn.(udp.PacketConnExtended); ok {
+		n, _, err = pConnExt.WriteMsgUDP(b, oob, raddr.(*net.UDPAddr))
+	} else {
+		n, err = p.nextConn.WriteTo(b, raddr)
+	}
 
 	close(done)
 	wg.Wait()
