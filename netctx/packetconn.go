@@ -43,7 +43,7 @@ type packetConn struct {
 }
 
 const (
-	oobCtxKey string = "oob"
+	OOBCtxKey string = "oob"
 )
 
 // NewPacketConn creates a new PacketConn wrapping the given net.PacketConn.
@@ -147,7 +147,7 @@ func (p *packetConn) WriteToContext(ctx context.Context, b []byte, raddr net.Add
 
 	var n int
 	var err error
-	if oob, ok := ctx.Value(oobCtxKey).([]byte); ok && p.oobCapable {
+	if oob, ok := ctx.Value(OOBCtxKey).([]byte); ok && p.oobCapable {
 		oobConn := p.nextConn.(udp.OOBCapablePacketConn)
 		n, _, err = oobConn.WriteMsgUDP(b, oob, raddr.(*net.UDPAddr))
 	} else {
