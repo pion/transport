@@ -42,8 +42,10 @@ type packetConn struct {
 	oobCapable bool
 }
 
+type OOBKey string
+
 const (
-	OOBCtxKey string = "oob"
+	OOBCtxKey OOBKey = "oob"
 )
 
 // NewPacketConn creates a new PacketConn wrapping the given net.PacketConn.
