@@ -21,7 +21,7 @@ type ReaderFrom interface {
 
 // WriterTo is an interface for context controlled packet writer.
 type WriterTo interface {
-	WriteToContext(context.Context, []byte, []byte, net.Addr) (int, error)
+	WriteToContext(context.Context, []byte, net.Addr) (int, error)
 }
 
 // PacketConn is a wrapper of net.PacketConn using context.Context.
@@ -34,18 +34,25 @@ type PacketConn interface {
 }
 
 type packetConn struct {
-	nextConn  net.PacketConn
-	closed    chan struct{}
-	closeOnce sync.Once
-	readMu    sync.Mutex
-	writeMu   sync.Mutex
+	nextConn   net.PacketConn
+	closed     chan struct{}
+	closeOnce  sync.Once
+	readMu     sync.Mutex
+	writeMu    sync.Mutex
+	oobCapable bool
 }
+
+const (
+	oobCtxKey string = "oob"
+)
 
 // NewPacketConn creates a new PacketConn wrapping the given net.PacketConn.
 func NewPacketConn(pconn net.PacketConn) PacketConn {
+	_, oobCapable := pconn.(udp.OOBCapablePacketConn)
 	p := &packetConn{
-		nextConn: pconn,
-		closed:   make(chan struct{}),
+		nextConn:   pconn,
+		closed:     make(chan struct{}),
+		oobCapable: oobCapable,
 	}
 	return p
 }
@@ -107,7 +114,7 @@ func (p *packetConn) ReadFromContext(ctx context.Context, b []byte) (int, net.Ad
 // Unlike net.PacketConn.WriteTo(), the provided context
 // is used to control timeout.
 // On packet-oriented connections, write timeouts are rare.
-func (p *packetConn) WriteToContext(ctx context.Context, b []byte, oob []byte, raddr net.Addr) (int, error) {
+func (p *packetConn) WriteToContext(ctx context.Context, b []byte, raddr net.Addr) (int, error) {
 	p.writeMu.Lock()
 	defer p.writeMu.Unlock()
 
@@ -140,8 +147,9 @@ func (p *packetConn) WriteToContext(ctx context.Context, b []byte, oob []byte, r
 
 	var n int
 	var err error
-	if pConnExt, ok := p.nextConn.(udp.PacketConnExtended); ok {
-		n, _, err = pConnExt.WriteMsgUDP(b, oob, raddr.(*net.UDPAddr))
+	if oob, ok := ctx.Value(oobCtxKey).([]byte); ok && p.oobCapable {
+		oobConn := p.nextConn.(udp.OOBCapablePacketConn)
+		n, _, err = oobConn.WriteMsgUDP(b, oob, raddr.(*net.UDPAddr))
 	} else {
 		n, err = p.nextConn.WriteTo(b, raddr)
 	}

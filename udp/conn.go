@@ -17,7 +17,7 @@ import (
 	"golang.org/x/net/ipv4"
 )
 
-type PacketConnExtended interface {
+type OOBCapablePacketConn interface {
 	net.PacketConn
 
 	WriteMsgUDP(b, oob []byte, addr *net.UDPAddr) (n, oobn int, err error)
@@ -38,7 +38,7 @@ var (
 
 // listener augments a connection-oriented Listener over a UDP PacketConn
 type listener struct {
-	pConn PacketConnExtended
+	pConn OOBCapablePacketConn
 
 	readBatchSize int
 
