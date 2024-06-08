@@ -336,16 +336,6 @@ func (c *Conn) Write(p []byte) (n int, err error) {
 	return c.listener.pConn.WriteTo(p, c.rAddr)
 }
 
-// Write writes len(p) bytes from p to the DTLS connection
-func (c *Conn) WriteOOB(p []byte, oob []byte) (n int, oobn int, err error) {
-	select {
-	case <-c.writeDeadline.Done():
-		return 0, 0, context.DeadlineExceeded
-	default:
-	}
-	return c.listener.pConn.WriteMsgUDP(p, oob, c.rAddr.(*net.UDPAddr))
-}
-
 // Close closes the conn and releases any Read calls
 func (c *Conn) Close() error {
 	var err error
