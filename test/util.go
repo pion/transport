@@ -53,6 +53,20 @@ func CheckRoutines(t *testing.T) func() {
 	}
 }
 
+// CheckRoutinesStrict is used to check for leaked go-routines.
+// It differs from CheckRoutines in that it won't wait at all
+// for lingering goroutines. This is helpful for tests that need
+// to ensure clean closure of resources.
+func CheckRoutinesStrict(tb testing.TB) func() {
+	return func() {
+		routines := getRoutines()
+		if len(routines) == 0 {
+			return
+		}
+		tb.Fatalf("%s: \n%s", "Unexpected routines on test end", strings.Join(routines, "\n\n")) // nolint
+	}
+}
+
 func getRoutines() []string {
 	buf := make([]byte, 2<<20)
 	buf = buf[:runtime.Stack(buf, true)]
