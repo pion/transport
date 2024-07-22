@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	wordSize          = int(unsafe.Sizeof(uintptr(0)))                                                                                   // nolint:gosec
+	wordSize          = int(unsafe.Sizeof(uintptr(0)))                                                                                                                                             // nolint:gosec
 	supportsUnaligned = runtime.GOARCH == "386" || runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64" || runtime.GOARCH == "ppc64" || runtime.GOARCH == "ppc64le" || runtime.GOARCH == "s390x" // nolint:gochecknoglobals
 )
 
