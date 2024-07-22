@@ -176,14 +176,13 @@ func (b *Buffer) Write(packet []byte) (int, error) {
 	waiting := b.waiting
 	b.waiting = false
 
-	b.mutex.Unlock()
-
 	if waiting {
 		select {
 		case b.notify <- struct{}{}:
 		default:
 		}
 	}
+	b.mutex.Unlock()
 
 	return len(packet), nil
 }
@@ -280,15 +279,10 @@ func (b *Buffer) Close() (err error) {
 		return nil
 	}
 
-	waiting := b.waiting
 	b.waiting = false
 	b.closed = true
-
+	close(b.notify)
 	b.mutex.Unlock()
-
-	if waiting {
-		close(b.notify)
-	}
 
 	return nil
 }
