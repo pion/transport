@@ -5,7 +5,7 @@ go 1.19
 require (
 	github.com/pion/logging v0.2.2
 	github.com/stretchr/testify v1.9.0
-	github.com/wlynxg/anet v0.0.1
+	github.com/wlynxg/anet v0.0.3
 	golang.org/x/net v0.26.0
 	golang.org/x/sys v0.22.0
 )
