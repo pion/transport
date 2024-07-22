@@ -287,10 +287,7 @@ func (b *Buffer) Close() (err error) {
 	b.mutex.Unlock()
 
 	if waiting {
-		select {
-		case b.notify <- struct{}{}:
-		default:
-		}
+		close(b.notify)
 	}
 
 	return nil
