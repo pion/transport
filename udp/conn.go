@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/pion/logging"
 	"github.com/pion/transport/v3/deadline"
 	"github.com/pion/transport/v3/packetio"
 	"golang.org/x/net/ipv4"
@@ -51,6 +52,8 @@ type listener struct {
 
 	readDoneCh chan struct{}
 	errRead    atomic.Value // error
+
+	log logging.LeveledLogger
 }
 
 // Accept waits for and returns the next connection to the listener.
@@ -83,9 +86,13 @@ func (l *listener) Close() error {
 		for {
 			select {
 			case c := <-l.acceptCh:
+				// don't call Close directly since it will deadlock; instead,
+				// manually clean up resources that Close normally would.
 				close(c.doneCh)
+				if closeErr := c.buffer.Close(); closeErr != nil {
+					l.log.Tracef("error closing unaccepted conn: %v", closeErr)
+				}
 				delete(l.conns, c.rAddr.String())
-
 			default:
 				break lclose
 			}
@@ -183,6 +190,7 @@ func (lc *ListenConfig) Listen(network string, laddr *net.UDPAddr) (net.Listener
 		acceptFilter: lc.AcceptFilter,
 		connWG:       &sync.WaitGroup{},
 		readDoneCh:   make(chan struct{}),
+		log:          logging.NewDefaultLoggerFactory().NewLogger("udp_listener"),
 	}
 
 	if lc.Batch.Enable {
@@ -285,6 +293,12 @@ func (l *listener) getConn(raddr net.Addr, buf []byte) (*Conn, bool, error) {
 		case l.acceptCh <- conn:
 			l.conns[raddr.String()] = conn
 		default:
+			// don't call Close directly since it will deadlock; instead,
+			// manually clean up resources that Close normally would.
+			close(conn.doneCh)
+			if closeErr := conn.buffer.Close(); closeErr != nil {
+				l.log.Tracef("error closing unaccepted conn: %v", closeErr)
+			}
 			return nil, false, ErrListenQueueExceeded
 		}
 	}

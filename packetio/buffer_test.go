@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pion/transport/v3/test"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -430,10 +431,10 @@ func TestBufferAlloc(t *testing.T) {
 		}
 	}
 
-	t.Run("100 writes", test(w, 100, 11))
-	t.Run("200 writes", test(w, 200, 14))
-	t.Run("400 writes", test(w, 400, 17))
-	t.Run("1000 writes", test(w, 1000, 21))
+	t.Run("100 writes", test(w, 100, 14))
+	t.Run("200 writes", test(w, 200, 20))
+	t.Run("400 writes", test(w, 400, 26))
+	t.Run("1000 writes", test(w, 1000, 32))
 
 	wr := func(count int) func() {
 		return func() {
@@ -451,9 +452,9 @@ func TestBufferAlloc(t *testing.T) {
 		}
 	}
 
-	t.Run("100 writes and reads", test(wr, 100, 5))
-	t.Run("1000 writes and reads", test(wr, 1000, 5))
-	t.Run("10000 writes and reads", test(wr, 10000, 5))
+	t.Run("100 writes and reads", test(wr, 100, 18))
+	t.Run("1000 writes and reads", test(wr, 1000, 18))
+	t.Run("10000 writes and reads", test(wr, 10000, 18))
 }
 
 func benchmarkBufferWR(b *testing.B, size int64, write bool, grow int) { // nolint:unparam
@@ -584,6 +585,8 @@ func BenchmarkBuffer1400(b *testing.B) {
 }
 
 func TestBufferConcurrentRead(t *testing.T) {
+	defer test.TimeOut(time.Second * 5).Stop()
+
 	assert := assert.New(t)
 
 	buffer := NewBuffer()
@@ -625,4 +628,62 @@ func TestBufferConcurrentRead(t *testing.T) {
 	assert.Equal(io.EOF, err)
 	err = <-errCh
 	assert.Equal(io.EOF, err)
+}
+
+func TestBufferConcurrentReadWrite(t *testing.T) {
+	defer test.TimeOut(time.Second * 5).Stop()
+
+	assert := assert.New(t)
+
+	buffer := NewBuffer()
+	packet := make([]byte, 4)
+
+	errCh := make(chan error, 4)
+	readIntoErr := func() {
+		_, readErr := buffer.Read(packet)
+		errCh <- readErr
+	}
+	writeIntoErr := func() {
+		_, writeErr := buffer.Write([]byte{2, 3, 4})
+		errCh <- writeErr
+	}
+	go readIntoErr()
+	go readIntoErr()
+	go writeIntoErr()
+	go writeIntoErr()
+
+	// Close
+	err := buffer.Close()
+	assert.NoError(err)
+
+	// we just care that the reads and writes happen
+	for i := 0; i < 4; i++ {
+		<-errCh
+	}
+}
+
+func TestBufferReadDeadlineInSyncCond(t *testing.T) {
+	defer test.TimeOut(time.Second * 10).Stop()
+
+	assert := assert.New(t)
+
+	buffer := NewBuffer()
+
+	assert.NoError(buffer.SetReadDeadline(time.Now().Add(5 * time.Second))) // Set deadline to avoid test deadlock
+
+	// Start up a goroutine to start a blocking read.
+	readErr := make(chan error)
+	go func() {
+		packet := make([]byte, 4)
+		_, err := buffer.Read(packet)
+		readErr <- err
+	}()
+
+	err := <-readErr
+	var e net.Error
+	if !errors.As(err, &e) || !e.Timeout() {
+		t.Errorf("Unexpected error: %v", err)
+	}
+
+	assert.NoError(buffer.Close())
 }

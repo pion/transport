@@ -38,14 +38,15 @@ type Buffer struct {
 	data       []byte
 	head, tail int
 
-	notify  chan struct{}
-	waiting bool
-	closed  bool
+	closed bool
 
 	count                 int
 	limitCount, limitSize int
 
-	readDeadline *deadline.Deadline
+	readDeadline              *deadline.Deadline
+	nextDeadline              chan struct{}
+	readNotifier              *sync.Cond
+	readChannelWatcherRunning sync.WaitGroup
 }
 
 const (
@@ -56,9 +57,35 @@ const (
 
 // NewBuffer creates a new Buffer.
 func NewBuffer() *Buffer {
-	return &Buffer{
-		notify:       make(chan struct{}, 1),
+	buffer := &Buffer{
 		readDeadline: deadline.New(),
+		nextDeadline: make(chan struct{}, 1),
+	}
+	buffer.readNotifier = sync.NewCond(&buffer.mutex)
+	buffer.readChannelWatcherRunning.Add(1)
+	go buffer.readDeadlineWatcher()
+	return buffer
+}
+
+func (b *Buffer) readDeadlineWatcher() {
+	defer b.readChannelWatcherRunning.Done()
+	for {
+		select {
+		case <-b.readDeadline.Done():
+			b.mutex.Lock()
+			b.readNotifier.Broadcast()
+			b.mutex.Unlock()
+		case _, ok := <-b.nextDeadline:
+			if ok {
+				continue
+			}
+			return
+		}
+
+		_, ok := <-b.nextDeadline
+		if !ok {
+			return
+		}
 	}
 }
 
@@ -173,15 +200,7 @@ func (b *Buffer) Write(packet []byte) (int, error) {
 	}
 	b.count++
 
-	waiting := b.waiting
-	b.waiting = false
-
-	if waiting {
-		select {
-		case b.notify <- struct{}{}:
-		default:
-		}
-	}
+	b.readNotifier.Signal()
 	b.mutex.Unlock()
 
 	return len(packet), nil
@@ -199,9 +218,8 @@ func (b *Buffer) Read(packet []byte) (n int, err error) { //nolint:gocognit
 	default:
 	}
 
+	b.mutex.Lock()
 	for {
-		b.mutex.Lock()
-
 		if b.head != b.tail {
 			// decode the packet size
 			n1 := b.data[b.head]
@@ -244,7 +262,6 @@ func (b *Buffer) Read(packet []byte) (n int, err error) { //nolint:gocognit
 			}
 
 			b.count--
-			b.waiting = false
 			b.mutex.Unlock()
 
 			if copied < count {
@@ -258,19 +275,19 @@ func (b *Buffer) Read(packet []byte) (n int, err error) { //nolint:gocognit
 			return 0, io.EOF
 		}
 
-		b.waiting = true
-		b.mutex.Unlock()
-
+		b.readNotifier.Wait()
 		select {
 		case <-b.readDeadline.Done():
+			b.mutex.Unlock()
 			return 0, &netError{ErrTimeout, true, true}
-		case <-b.notify:
+		default:
 		}
 	}
 }
 
 // Close the buffer, unblocking any pending reads.
 // Data in the buffer can still be read, Read will return io.EOF only when empty.
+// It returns when any goroutines Buffer started have completed.
 func (b *Buffer) Close() (err error) {
 	b.mutex.Lock()
 
@@ -279,11 +296,12 @@ func (b *Buffer) Close() (err error) {
 		return nil
 	}
 
-	b.waiting = false
 	b.closed = true
-	close(b.notify)
+	close(b.nextDeadline)
+	b.readNotifier.Broadcast()
 	b.mutex.Unlock()
 
+	b.readChannelWatcherRunning.Wait()
 	return nil
 }
 
@@ -338,6 +356,16 @@ func (b *Buffer) SetLimitSize(limit int) {
 // SetReadDeadline sets the deadline for the Read operation.
 // Setting to zero means no deadline.
 func (b *Buffer) SetReadDeadline(t time.Time) error {
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+
 	b.readDeadline.Set(t)
+	select {
+	case b.nextDeadline <- struct{}{}:
+	default:
+		// if there is no receiver, then we know that readDeadlineWatcher
+		// is about to receive the buffered value in the channel. otherwise
+		// we communicated the next deadline to the receiver directly.
+	}
 	return nil
 }
