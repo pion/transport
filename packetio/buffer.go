@@ -28,7 +28,8 @@ const (
 // Buffer allows writing packets to an intermediate buffer, which can then be read form.
 // This is verify similar to bytes.Buffer but avoids combining multiple writes into a single read.
 type Buffer struct {
-	mutex sync.Mutex
+	cond         sync.Cond
+	readDeadline *deadline.Scheduler
 
 	// this is a circular buffer.  If head <= tail, then the useful
 	// data is in the interval [head, tail[.  If tail < head, then
@@ -38,13 +39,10 @@ type Buffer struct {
 	data       []byte
 	head, tail int
 
-	notify chan struct{}
 	closed bool
 
 	count                 int
 	limitCount, limitSize int
-
-	readDeadline *deadline.Deadline
 }
 
 const (
@@ -55,10 +53,11 @@ const (
 
 // NewBuffer creates a new Buffer.
 func NewBuffer() *Buffer {
-	return &Buffer{
-		notify:       make(chan struct{}, 1),
-		readDeadline: deadline.New(),
+	b := &Buffer{
+		cond: sync.Cond{L: &sync.Mutex{}},
 	}
+	b.readDeadline = deadline.NewScheduler(b.handleReadDeadline)
+	return b
 }
 
 // available returns true if the buffer is large enough to fit a packet
@@ -128,16 +127,16 @@ func (b *Buffer) Write(packet []byte) (int, error) {
 		return 0, errPacketTooBig
 	}
 
-	b.mutex.Lock()
+	b.cond.L.Lock()
 
 	if b.closed {
-		b.mutex.Unlock()
+		b.cond.L.Unlock()
 		return 0, io.ErrClosedPipe
 	}
 
 	if (b.limitCount > 0 && b.count >= b.limitCount) ||
 		(b.limitSize > 0 && b.size()+2+len(packet) > b.limitSize) {
-		b.mutex.Unlock()
+		b.cond.L.Unlock()
 		return 0, ErrFull
 	}
 
@@ -145,7 +144,7 @@ func (b *Buffer) Write(packet []byte) (int, error) {
 	for !b.available(len(packet)) {
 		err := b.grow()
 		if err != nil {
-			b.mutex.Unlock()
+			b.cond.L.Unlock()
 			return 0, err
 		}
 	}
@@ -172,11 +171,9 @@ func (b *Buffer) Write(packet []byte) (int, error) {
 	}
 	b.count++
 
-	select {
-	case b.notify <- struct{}{}:
-	default:
-	}
-	b.mutex.Unlock()
+	b.cond.L.Unlock()
+
+	b.cond.Signal()
 
 	return len(packet), nil
 }
@@ -186,15 +183,12 @@ func (b *Buffer) Write(packet []byte) (int, error) {
 // Returns io.ErrShortBuffer is the packet is too small to copy the Write.
 // Returns io.EOF if the buffer is closed.
 func (b *Buffer) Read(packet []byte) (n int, err error) { //nolint:gocognit
-	// Return immediately if the deadline is already exceeded.
-	select {
-	case <-b.readDeadline.Done():
-		return 0, &netError{ErrTimeout, true, true}
-	default:
-	}
-
+	b.cond.L.Lock()
 	for {
-		b.mutex.Lock()
+		if b.readDeadline.DeadlineExceeded() {
+			b.cond.L.Unlock()
+			return 0, &netError{ErrTimeout, true, true}
+		}
 
 		if b.head != b.tail {
 			// decode the packet size
@@ -238,7 +232,7 @@ func (b *Buffer) Read(packet []byte) (n int, err error) { //nolint:gocognit
 			}
 
 			b.count--
-			b.mutex.Unlock()
+			b.cond.L.Unlock()
 
 			if copied < count {
 				return copied, io.ErrShortBuffer
@@ -247,40 +241,35 @@ func (b *Buffer) Read(packet []byte) (n int, err error) { //nolint:gocognit
 		}
 
 		if b.closed {
-			b.mutex.Unlock()
+			b.cond.L.Unlock()
 			return 0, io.EOF
 		}
-		b.mutex.Unlock()
 
-		select {
-		case <-b.readDeadline.Done():
-			return 0, &netError{ErrTimeout, true, true}
-		case <-b.notify:
-		}
+		b.cond.Wait()
 	}
 }
 
 // Close the buffer, unblocking any pending reads.
 // Data in the buffer can still be read, Read will return io.EOF only when empty.
 func (b *Buffer) Close() (err error) {
-	b.mutex.Lock()
+	b.cond.L.Lock()
 
 	if b.closed {
-		b.mutex.Unlock()
+		b.cond.L.Unlock()
 		return nil
 	}
 
 	b.closed = true
-	close(b.notify)
-	b.mutex.Unlock()
+	b.cond.Broadcast()
+	b.cond.L.Unlock()
 
 	return nil
 }
 
 // Count returns the number of packets in the buffer.
 func (b *Buffer) Count() int {
-	b.mutex.Lock()
-	defer b.mutex.Unlock()
+	b.cond.L.Lock()
+	defer b.cond.L.Unlock()
 	return b.count
 }
 
@@ -288,8 +277,8 @@ func (b *Buffer) Count() int {
 // Causes Write to return ErrFull when this limit is reached.
 // A zero value will disable this limit.
 func (b *Buffer) SetLimitCount(limit int) {
-	b.mutex.Lock()
-	defer b.mutex.Unlock()
+	b.cond.L.Lock()
+	defer b.cond.L.Unlock()
 
 	b.limitCount = limit
 }
@@ -297,8 +286,8 @@ func (b *Buffer) SetLimitCount(limit int) {
 // Size returns the total byte size of packets in the buffer, including
 // a small amount of administrative overhead.
 func (b *Buffer) Size() int {
-	b.mutex.Lock()
-	defer b.mutex.Unlock()
+	b.cond.L.Lock()
+	defer b.cond.L.Unlock()
 
 	return b.size()
 }
@@ -319,15 +308,29 @@ func (b *Buffer) size() int {
 // When packetioSizeHardLimit build tag is set, SetLimitSize exceeding
 // the hard limit will be silently discarded.
 func (b *Buffer) SetLimitSize(limit int) {
-	b.mutex.Lock()
-	defer b.mutex.Unlock()
+	b.cond.L.Lock()
+	defer b.cond.L.Unlock()
 
 	b.limitSize = limit
+}
+
+func (b *Buffer) handleReadDeadline(verify deadline.VerifyFunc) {
+	b.cond.L.Lock()
+	defer b.cond.L.Unlock()
+	if verify() {
+		b.cond.Broadcast()
+	}
 }
 
 // SetReadDeadline sets the deadline for the Read operation.
 // Setting to zero means no deadline.
 func (b *Buffer) SetReadDeadline(t time.Time) error {
-	b.readDeadline.Set(t)
+	b.cond.L.Lock()
+	defer b.cond.L.Unlock()
+
+	if _, exceeded := b.readDeadline.SetDeadline(t); exceeded {
+		b.cond.Broadcast()
+	}
+
 	return nil
 }

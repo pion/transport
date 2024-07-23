@@ -43,6 +43,16 @@ func TestBuffer(t *testing.T) {
 	}
 	assert.Equal(0, n)
 
+	// Future deadline
+	err = buffer.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+	assert.NoError(err)
+	time.Sleep(200 * time.Millisecond)
+	n, err = buffer.Read(packet)
+	if !errors.As(err, &e) || !e.Timeout() {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	assert.Equal(0, n)
+
 	// Reset deadline
 	err = buffer.SetReadDeadline(time.Time{})
 	assert.NoError(err)
