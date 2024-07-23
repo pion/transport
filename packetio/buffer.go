@@ -38,9 +38,8 @@ type Buffer struct {
 	data       []byte
 	head, tail int
 
-	notify  chan struct{}
-	waiting bool
-	closed  bool
+	notify chan struct{}
+	closed bool
 
 	count                 int
 	limitCount, limitSize int
@@ -271,7 +270,6 @@ func (b *Buffer) Close() (err error) {
 		return nil
 	}
 
-	b.waiting = false
 	b.closed = true
 	close(b.notify)
 	b.mutex.Unlock()
