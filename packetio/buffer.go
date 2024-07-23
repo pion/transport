@@ -173,14 +173,9 @@ func (b *Buffer) Write(packet []byte) (int, error) {
 	}
 	b.count++
 
-	waiting := b.waiting
-	b.waiting = false
-
-	if waiting {
-		select {
-		case b.notify <- struct{}{}:
-		default:
-		}
+	select {
+	case b.notify <- struct{}{}:
+	default:
 	}
 	b.mutex.Unlock()
 
@@ -244,7 +239,6 @@ func (b *Buffer) Read(packet []byte) (n int, err error) { //nolint:gocognit
 			}
 
 			b.count--
-			b.waiting = false
 			b.mutex.Unlock()
 
 			if copied < count {
@@ -257,8 +251,6 @@ func (b *Buffer) Read(packet []byte) (n int, err error) { //nolint:gocognit
 			b.mutex.Unlock()
 			return 0, io.EOF
 		}
-
-		b.waiting = true
 		b.mutex.Unlock()
 
 		select {

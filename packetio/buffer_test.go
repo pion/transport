@@ -8,9 +8,11 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/pion/transport/v3/test"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -611,6 +613,7 @@ func TestBufferConcurrentRead(t *testing.T) {
 
 	errCh := make(chan error, 2)
 	readIntoErr := func() {
+		packet := make([]byte, 4)
 		_, readErr := buffer.Read(packet)
 		errCh <- readErr
 	}
@@ -625,4 +628,39 @@ func TestBufferConcurrentRead(t *testing.T) {
 	assert.Equal(io.EOF, err)
 	err = <-errCh
 	assert.Equal(io.EOF, err)
+}
+
+func TestBufferConcurrentReadWrite(t *testing.T) {
+	defer test.TimeOut(time.Second * 5).Stop()
+
+	assert := assert.New(t)
+
+	buffer := NewBuffer()
+
+	numPkts := 1000
+	var numRead uint64
+	allRead := make(chan struct{})
+	readPkts := func(count int) {
+		packet := make([]byte, 4)
+		for i := 0; i < count; i++ {
+			_, readErr := buffer.Read(packet)
+			if readErr != nil {
+				return
+			}
+			if atomic.AddUint64(&numRead, 1) == uint64(numPkts) {
+				close(allRead)
+				return
+			}
+		}
+	}
+	go readPkts(numPkts)
+	go readPkts(numPkts / 100)
+
+	for i := 0; i < numPkts; i++ {
+		_, writeErr := buffer.Write([]byte{2, 3, 4})
+		assert.NoError(writeErr)
+	}
+	<-allRead
+
+	assert.NoError(buffer.Close())
 }
