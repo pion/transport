@@ -28,28 +28,28 @@ func TimeOut(t time.Duration) *time.Timer {
 	})
 }
 
+func tryCheckRoutinesLoop(tb testing.TB, failMessage string) {
+	try := 0
+	ticker := time.NewTicker(200 * time.Millisecond)
+	defer ticker.Stop()
+	for range ticker.C {
+		runtime.GC()
+		routines := getRoutines()
+		if len(routines) == 0 {
+			return
+		}
+		if try >= 50 {
+			tb.Fatalf("%s: \n%s", failMessage, strings.Join(routines, "\n\n")) // nolint
+		}
+		try++
+	}
+}
+
 // CheckRoutines is used to check for leaked go-routines
 func CheckRoutines(t *testing.T) func() {
-	tryLoop := func(failMessage string) {
-		try := 0
-		ticker := time.NewTicker(200 * time.Millisecond)
-		defer ticker.Stop()
-		for range ticker.C {
-			runtime.GC()
-			routines := getRoutines()
-			if len(routines) == 0 {
-				return
-			}
-			if try >= 50 {
-				t.Fatalf("%s: \n%s", failMessage, strings.Join(routines, "\n\n")) // nolint
-			}
-			try++
-		}
-	}
-
-	tryLoop("Unexpected routines on test startup")
+	tryCheckRoutinesLoop(t, "Unexpected routines on test startup")
 	return func() {
-		tryLoop("Unexpected routines on test end")
+		tryCheckRoutinesLoop(t, "Unexpected routines on test end")
 	}
 }
 
@@ -58,6 +58,7 @@ func CheckRoutines(t *testing.T) func() {
 // for lingering goroutines. This is helpful for tests that need
 // to ensure clean closure of resources.
 func CheckRoutinesStrict(tb testing.TB) func() {
+	tryCheckRoutinesLoop(tb, "Unexpected routines on test startup")
 	return func() {
 		routines := getRoutines()
 		if len(routines) == 0 {
