@@ -54,16 +54,39 @@ func CheckRoutines(t *testing.T) func() {
 }
 
 // CheckRoutinesStrict is used to check for leaked go-routines.
-// It differs from CheckRoutines in that it won't wait at all
+// It differs from CheckRoutines in that it has very little tolerance
 // for lingering goroutines. This is helpful for tests that need
 // to ensure clean closure of resources.
+// Checking the state of goroutines exactly is tricky. As users writing
+// goroutines, we tend to clean up gracefully using some synchronization
+// pattern. When used correctly, we won't leak goroutines, but we cannot
+// gurantee *when* the goroutines will end. This is the nature of waiting
+// on the runtime's goexit1 being called which is the final subroutine
+// called, which is after any user written code. This small, but possible
+// chance to have a thread (not goroutine) be preempted before this is
+// called, can have our goroutine stack be not quite correct yet. The
+// best we can do is sleep a little bit and try to encourage the runtime
+// to run that goroutine (G) on the machine (M) it belongs to.
 func CheckRoutinesStrict(tb testing.TB) func() {
 	tryCheckRoutinesLoop(tb, "Unexpected routines on test startup")
 	return func() {
+		runtime.Gosched()
+		runtime.GC()
 		routines := getRoutines()
 		if len(routines) == 0 {
 			return
 		}
+		// arbitrarily short choice to allow the runtime to cleanup any
+		// goroutines that really aren't doing anything but haven't yet
+		// completed.
+		time.Sleep(time.Millisecond)
+		runtime.Gosched()
+		runtime.GC()
+		routines = getRoutines()
+		if len(routines) == 0 {
+			return
+		}
+
 		tb.Fatalf("%s: \n%s", "Unexpected routines on test end", strings.Join(routines, "\n\n")) // nolint
 	}
 }
