@@ -60,7 +60,7 @@ func CheckRoutines(t *testing.T) func() {
 // Checking the state of goroutines exactly is tricky. As users writing
 // goroutines, we tend to clean up gracefully using some synchronization
 // pattern. When used correctly, we won't leak goroutines, but we cannot
-// gurantee *when* the goroutines will end. This is the nature of waiting
+// guarantee *when* the goroutines will end. This is the nature of waiting
 // on the runtime's goexit1 being called which is the final subroutine
 // called, which is after any user written code. This small, but possible
 // chance to have a thread (not goroutine) be preempted before this is

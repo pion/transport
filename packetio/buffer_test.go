@@ -408,12 +408,12 @@ func TestBufferMisc(t *testing.T) {
 func TestBufferAlloc(t *testing.T) {
 	packet := make([]byte, 1024)
 
-	test := func(f func(count int) func(), count int, max float64) func(t *testing.T) {
+	test := func(f func(count int) func(), count int, maxVal float64) func(t *testing.T) {
 		return func(t *testing.T) {
 			allocs := testing.AllocsPerRun(3, f(count))
-			if allocs > max {
+			if allocs > maxVal {
 				t.Errorf("count=%v, max=%v, got %v",
-					count, max, allocs,
+					count, maxVal, allocs,
 				)
 			}
 		}
