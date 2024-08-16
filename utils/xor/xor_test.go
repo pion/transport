@@ -32,7 +32,7 @@ func TestXOR(t *testing.T) {
 						t.Fatal(err)
 					}
 					XorBytes(d1, p, q)
-					n := min(p, q)
+					n := minInt(p, q)
 					for i := 0; i < n; i++ {
 						d2[i] = p[i] ^ q[i]
 					}
@@ -53,7 +53,7 @@ func TestXOR(t *testing.T) {
 	}
 }
 
-func min(a, b []byte) int {
+func minInt(a, b []byte) int {
 	n := len(a)
 	if len(b) < n {
 		n = len(b)
