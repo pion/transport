@@ -3,8 +3,6 @@
 // SPDX-FileCopyrightText: 2024 The Pion community <https://pion.ly>
 // SPDX-License-Identifier: MIT
 
-//go:build go1.20 && !arm && !gccgo
-
 // Package xor provides the XorBytes function.
 package xor
 
@@ -13,6 +11,8 @@ import (
 )
 
 // XorBytes calls [crypto/suble.XORBytes].
+//
+// Deprecated: please call [crypto/subtle.XORBytes] instead.
 //
 //revive:disable-next-line
 func XorBytes(dst, a, b []byte) int {
