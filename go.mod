@@ -7,7 +7,7 @@ require (
 	github.com/stretchr/testify v1.10.0
 	github.com/wlynxg/anet v0.0.5
 	golang.org/x/net v0.30.0
-	golang.org/x/sys v0.26.0
+	golang.org/x/sys v0.27.0
 )
 
 require (
