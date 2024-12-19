@@ -6,8 +6,8 @@ require (
 	github.com/pion/logging v0.2.2
 	github.com/stretchr/testify v1.10.0
 	github.com/wlynxg/anet v0.0.5
-	golang.org/x/net v0.31.0
-	golang.org/x/sys v0.27.0
+	golang.org/x/net v0.33.0
+	golang.org/x/sys v0.28.0
 )
 
 require (
