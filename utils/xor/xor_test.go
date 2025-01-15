@@ -11,16 +11,16 @@ import (
 	"testing"
 )
 
-func TestXOR(t *testing.T) {
-	for j := 1; j <= 1024; j++ {
+func TestXOR(t *testing.T) { //nolint:cyclop
+	for j := 1; j <= 1024; j++ { //nolint:varnamelen
 		if testing.Short() && j > 16 {
 			break
 		}
 		for alignP := 0; alignP < 2; alignP++ {
 			for alignQ := 0; alignQ < 2; alignQ++ {
 				for alignD := 0; alignD < 2; alignD++ {
-					p := make([]byte, j)[alignP:]
-					q := make([]byte, j)[alignQ:]
+					p := make([]byte, j)[alignP:] //nolint:varnamelen
+					q := make([]byte, j)[alignQ:] //nolint:varnamelen
 					d0 := make([]byte, j+alignD+1)
 					d0[j+alignD] = 42
 					d1 := d0[alignD : j+alignD]
@@ -58,6 +58,7 @@ func minInt(a, b []byte) int {
 	if len(b) < n {
 		n = len(b)
 	}
+
 	return n
 }
 

@@ -22,17 +22,18 @@ import (
 
 type MockUDPEchoServer struct {
 	realServerAddr        *net.UDPAddr
-	realServerReady       context.Context
+	realServerReady       context.Context //nolint:containedctx // this is a test context...
 	realServerReadyCancel context.CancelFunc
 }
 
 func NewMockUDPEchoServer() *MockUDPEchoServer {
 	v := &MockUDPEchoServer{}
 	v.realServerReady, v.realServerReadyCancel = context.WithCancel(context.Background())
+
 	return v
 }
 
-func (v *MockUDPEchoServer) doMockUDPServer(ctx context.Context) error {
+func (v *MockUDPEchoServer) doMockUDPServer(ctx context.Context) error { //nolint:cyclop
 	// Listen to a random port.
 	laddr, err := net.ResolveUDPAddr("udp4", "127.0.0.1:0")
 	if err != nil {
@@ -66,6 +67,7 @@ func (v *MockUDPEchoServer) doMockUDPServer(ctx context.Context) error {
 			if errors.Is(selfKill.Err(), context.Canceled) {
 				return nil
 			}
+
 			return err
 		} else if n == 0 || addr == nil {
 			return fmt.Errorf("n=%v, addr=%v", n, addr) // nolint:goerr113
@@ -100,7 +102,9 @@ func TestMain(m *testing.M) {
 // proxy to real server:
 //
 //	192.168.1.10:8000
-func TestUDPProxyOne2One(t *testing.T) {
+//
+// .
+func TestUDPProxyOne2One(t *testing.T) { //nolint:gocyclo,cyclop
 	ctx, cancel := context.WithCancel(context.Background())
 
 	var r0, r1, r2 error
@@ -221,6 +225,7 @@ func TestUDPProxyOne2One(t *testing.T) {
 					if errors.Is(selfKill.Err(), context.Canceled) {
 						return nil
 					}
+
 					return err
 				} else if n != 5 || addr == nil {
 					return fmt.Errorf("n=%v, addr=%v", n, addr) // nolint:goerr113
@@ -253,7 +258,7 @@ func TestUDPProxyOne2One(t *testing.T) {
 // proxy to real server:
 //
 //	192.168.1.10:8000
-func TestUDPProxyTwo2One(t *testing.T) {
+func TestUDPProxyTwo2One(t *testing.T) { //nolint:gocyclo,cyclop
 	ctx, cancel := context.WithCancel(context.Background())
 
 	var r0, r1, r2, r3 error
@@ -375,6 +380,7 @@ func TestUDPProxyTwo2One(t *testing.T) {
 						if errors.Is(selfKill.Err(), context.Canceled) {
 							return nil
 						}
+
 						return err
 					} else if n != len(echoData) || addr == nil {
 						return fmt.Errorf("n=%v, addr=%v", n, addr) // nolint:goerr113
@@ -441,7 +447,7 @@ func TestUDPProxyTwo2One(t *testing.T) {
 // proxy to real server:
 //
 //	192.168.1.10:8000
-func TestUDPProxyProxyTwice(t *testing.T) {
+func TestUDPProxyProxyTwice(t *testing.T) { //nolint:gocyclo,cyclop
 	ctx, cancel := context.WithCancel(context.Background())
 
 	var r0, r1, r2, r3 error
@@ -563,6 +569,7 @@ func TestUDPProxyProxyTwice(t *testing.T) {
 						if errors.Is(selfKill.Err(), context.Canceled) {
 							return nil
 						}
+
 						return handClientErr
 					} else if n != len(echoData) || addr == nil {
 						return fmt.Errorf("n=%v, addr=%v", n, addr) // nolint:goerr113

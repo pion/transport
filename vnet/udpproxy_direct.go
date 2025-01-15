@@ -20,6 +20,7 @@ func (v *UDPProxy) Deliver(sourceAddr, destAddr net.Addr, b []byte) (nn int, err
 
 		return true // Deliver by next worker.
 	})
+
 	return
 }
 

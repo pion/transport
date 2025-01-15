@@ -49,10 +49,11 @@ type closePropagator struct {
 
 func (c *closePropagator) Close() error {
 	close(c.otherEnd.closing)
+
 	return c.conn.Close()
 }
 
-func TestPipe(t *testing.T) {
+func TestPipe(t *testing.T) { //nolint:cyclop
 	ca, cb := Pipe()
 
 	testData := []byte{0x01, 0x02}

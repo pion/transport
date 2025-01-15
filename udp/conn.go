@@ -23,14 +23,14 @@ const (
 	defaultListenBacklog = 128 // same as Linux default
 )
 
-// Typed errors
+// Typed errors.
 var (
 	ErrClosedListener      = errors.New("udp: listener closed")
 	ErrListenQueueExceeded = errors.New("udp: listen queue exceeded")
 	ErrInvalidBatchConfig  = errors.New("udp: invalid batch config")
 )
 
-// listener augments a connection-oriented Listener over a UDP PacketConn
+// listener augments a connection-oriented Listener over a UDP PacketConn.
 type listener struct {
 	pConn net.PacketConn
 
@@ -58,10 +58,12 @@ func (l *listener) Accept() (net.Conn, error) {
 	select {
 	case c := <-l.acceptCh:
 		l.connWG.Add(1)
+
 		return c, nil
 
 	case <-l.readDoneCh:
 		err, _ := l.errRead.Load().(error)
+
 		return nil, err
 
 	case <-l.doneCh:
@@ -175,7 +177,7 @@ func (lc *ListenConfig) Listen(network string, laddr *net.UDPAddr) (net.Listener
 		_ = conn.SetWriteBuffer(lc.WriteBufferSize)
 	}
 
-	l := &listener{
+	listnerer := &listener{
 		pConn:        conn,
 		acceptCh:     make(chan *Conn, lc.Backlog),
 		conns:        make(map[string]*Conn),
@@ -186,24 +188,24 @@ func (lc *ListenConfig) Listen(network string, laddr *net.UDPAddr) (net.Listener
 	}
 
 	if lc.Batch.Enable {
-		l.pConn = NewBatchConn(conn, lc.Batch.WriteBatchSize, lc.Batch.WriteBatchInterval)
-		l.readBatchSize = lc.Batch.ReadBatchSize
+		listnerer.pConn = NewBatchConn(conn, lc.Batch.WriteBatchSize, lc.Batch.WriteBatchInterval)
+		listnerer.readBatchSize = lc.Batch.ReadBatchSize
 	}
 
-	l.accepting.Store(true)
-	l.connWG.Add(1)
-	l.readWG.Add(2) // wait readLoop and Close execution routine
+	listnerer.accepting.Store(true)
+	listnerer.connWG.Add(1)
+	listnerer.readWG.Add(2) // wait readLoop and Close execution routine
 
-	go l.readLoop()
+	go listnerer.readLoop()
 	go func() {
-		l.connWG.Wait()
-		if err := l.pConn.Close(); err != nil {
-			l.errClose.Store(err)
+		listnerer.connWG.Wait()
+		if err := listnerer.pConn.Close(); err != nil {
+			listnerer.errClose.Store(err)
 		}
-		l.readWG.Done()
+		listnerer.readWG.Done()
 	}()
 
-	return l, nil
+	return listnerer, nil
 }
 
 // Listen creates a new listener using default ListenConfig.
@@ -237,6 +239,7 @@ func (l *listener) readBatch(br BatchReader) {
 		n, err := br.ReadBatch(msgs, 0)
 		if err != nil {
 			l.errRead.Store(err)
+
 			return
 		}
 		for i := 0; i < n; i++ {
@@ -251,6 +254,7 @@ func (l *listener) read() {
 		n, raddr, err := l.pConn.ReadFrom(buf)
 		if err != nil {
 			l.errRead.Store(err)
+
 			return
 		}
 		l.dispatchMsg(raddr, buf[:n])
@@ -288,10 +292,11 @@ func (l *listener) getConn(raddr net.Addr, buf []byte) (*Conn, bool, error) {
 			return nil, false, ErrListenQueueExceeded
 		}
 	}
+
 	return conn, true, nil
 }
 
-// Conn augments a connection-oriented connection over a UDP PacketConn
+// Conn augments a connection-oriented connection over a UDP PacketConn.
 type Conn struct {
 	listener *listener
 
@@ -315,22 +320,23 @@ func (l *listener) newConn(rAddr net.Addr) *Conn {
 	}
 }
 
-// Read reads from c into p
+// Read reads from c into p.
 func (c *Conn) Read(p []byte) (int, error) {
 	return c.buffer.Read(p)
 }
 
-// Write writes len(p) bytes from p to the DTLS connection
+// Write writes len(p) bytes from p to the DTLS connection.
 func (c *Conn) Write(p []byte) (n int, err error) {
 	select {
 	case <-c.writeDeadline.Done():
 		return 0, context.DeadlineExceeded
 	default:
 	}
+
 	return c.listener.pConn.WriteTo(p, c.rAddr)
 }
 
-// Close closes the conn and releases any Read calls
+// Close closes the conn and releases any Read calls.
 func (c *Conn) Close() error {
 	var err error
 	c.doneOnce.Do(func() {
@@ -359,28 +365,29 @@ func (c *Conn) Close() error {
 	return err
 }
 
-// LocalAddr implements net.Conn.LocalAddr
+// LocalAddr implements net.Conn.LocalAddr.
 func (c *Conn) LocalAddr() net.Addr {
 	return c.listener.pConn.LocalAddr()
 }
 
-// RemoteAddr implements net.Conn.RemoteAddr
+// RemoteAddr implements net.Conn.RemoteAddr.
 func (c *Conn) RemoteAddr() net.Addr {
 	return c.rAddr
 }
 
-// SetDeadline implements net.Conn.SetDeadline
+// SetDeadline implements net.Conn.SetDeadline.
 func (c *Conn) SetDeadline(t time.Time) error {
 	c.writeDeadline.Set(t)
+
 	return c.SetReadDeadline(t)
 }
 
-// SetReadDeadline implements net.Conn.SetDeadline
+// SetReadDeadline implements net.Conn.SetDeadline.
 func (c *Conn) SetReadDeadline(t time.Time) error {
 	return c.buffer.SetReadDeadline(t)
 }
 
-// SetWriteDeadline implements net.Conn.SetDeadline
+// SetWriteDeadline implements net.Conn.SetDeadline.
 func (c *Conn) SetWriteDeadline(t time.Time) error {
 	c.writeDeadline.Set(t)
 	// Write deadline of underlying connection should not be changed

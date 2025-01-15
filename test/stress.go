@@ -16,7 +16,7 @@ import (
 
 var errByteSequenceChanged = errors.New("byte sequence changed")
 
-// Options represents the configuration of the stress test
+// Options represents the configuration of the stress test.
 type Options struct {
 	MsgSize  int
 	MsgCount int
@@ -113,5 +113,6 @@ func write(ctx context.Context, c netctx.Writer, bufs chan []byte, opt Options) 
 			return err
 		}
 	}
+
 	return nil
 }

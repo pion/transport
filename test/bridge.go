@@ -79,6 +79,7 @@ func (conn *bridgeConn) Read(b []byte) (int, error) {
 			return 0, io.EOF
 		}
 		n := copy(b, data)
+
 		return n, nil
 	case <-conn.readDeadline.Done():
 		return 0, &netError{errIOTimeout, true, true}
@@ -100,6 +101,7 @@ func (conn *bridgeConn) Write(b []byte) (int, error) {
 	if !conn.br.Push(b, conn.id) {
 		return 0, &netError{errBridgeConnClosed, false, false}
 	}
+
 	return len(b), nil
 }
 
@@ -114,15 +116,16 @@ func (conn *bridgeConn) Close() error {
 
 	conn.closeReq = true
 	conn.closing = true
+
 	return nil
 }
 
-// LocalAddr is not used
+// LocalAddr is not used.
 func (conn *bridgeConn) LocalAddr() net.Addr {
 	return bridgeConnAddr(conn.id)
 }
 
-// RemoteAddr is not used
+// RemoteAddr is not used.
 func (conn *bridgeConn) RemoteAddr() net.Addr { return nil }
 
 // SetDeadline sets deadline of Read/Write operation.
@@ -130,6 +133,7 @@ func (conn *bridgeConn) RemoteAddr() net.Addr { return nil }
 func (conn *bridgeConn) SetDeadline(t time.Time) error {
 	conn.writeDeadline.Set(t)
 	conn.readDeadline.Set(t)
+
 	return nil
 }
 
@@ -137,6 +141,7 @@ func (conn *bridgeConn) SetDeadline(t time.Time) error {
 // Setting zero means no deadline.
 func (conn *bridgeConn) SetReadDeadline(t time.Time) error {
 	conn.readDeadline.Set(t)
+
 	return nil
 }
 
@@ -144,6 +149,7 @@ func (conn *bridgeConn) SetReadDeadline(t time.Time) error {
 // Setting zero means no deadline.
 func (conn *bridgeConn) SetWriteDeadline(t time.Time) error {
 	conn.writeDeadline.Set(t)
+
 	return nil
 }
 
@@ -182,14 +188,16 @@ func inverse(s [][]byte) error {
 	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
 		s[i], s[j] = s[j], s[i]
 	}
+
 	return nil
 }
 
-// drop n packets from the slice starting from offset
+// drop n packets from the slice starting from offset.
 func drop(s [][]byte, offset, n int) [][]byte {
 	if offset+n > len(s) {
 		n = len(s) - offset
 	}
+
 	return append(s[:offset], s[offset+n:]...)
 }
 
@@ -236,13 +244,14 @@ func (br *Bridge) Len(fromID int) int {
 	if fromID == 0 {
 		return len(br.queue0to1)
 	}
+
 	return len(br.queue1to0)
 }
 
 // Push pushes a packet into the specified queue.
-func (br *Bridge) Push(packet []byte, fromID int) bool { //nolint:gocognit
-	d := make([]byte, len(packet))
-	copy(d, packet)
+func (br *Bridge) Push(packet []byte, fromID int) bool { //nolint:gocognit,cyclop
+	data := make([]byte, len(packet))
+	copy(data, packet)
 
 	// Push rate should be limited as same as Tick rate.
 	// Otherwise, queue grows too fast on free running Write.
@@ -265,17 +274,18 @@ func (br *Bridge) Push(packet []byte, fromID int) bool { //nolint:gocognit
 		if fromID == 1 && closing1 {
 			return false
 		}
+
 		return true
 	}
 
-	if fromID == 0 {
+	if fromID == 0 { //nolint:nestif
 		switch {
 		case br.dropNWrites0 > 0:
 			br.dropNWrites0--
 			// fmt.Printf("br: dropped a packet of size %d (rem: %d for q0)\n", len(d), br.dropNWrites0) // nolint
 		case br.reorderNWrites0 > 0:
 			br.reorderNWrites0--
-			br.stack0 = append(br.stack0, d)
+			br.stack0 = append(br.stack0, data)
 			// fmt.Printf("stack0 size: %d\n", len(br.stack0)) // nolint
 			if br.reorderNWrites0 == 0 {
 				if err := inverse(br.stack0); err == nil {
@@ -285,11 +295,11 @@ func (br *Bridge) Push(packet []byte, fromID int) bool { //nolint:gocognit
 					br.err = err
 				}
 			}
-		case br.filterCB0 != nil && !br.filterCB0(d):
+		case br.filterCB0 != nil && !br.filterCB0(data):
 			// fmt.Printf("br: filtered out a packet of size %d (q0)\n", len(d)) // nolint
 		default:
 			// fmt.Printf("br: routed a packet of size %d (q0)\n", len(d)) // nolint
-			br.queue0to1 = append(br.queue0to1, d)
+			br.queue0to1 = append(br.queue0to1, data)
 		}
 	} else {
 		switch {
@@ -298,20 +308,21 @@ func (br *Bridge) Push(packet []byte, fromID int) bool { //nolint:gocognit
 			// fmt.Printf("br: dropped a packet of size %d (rem: %d for q1)\n", len(d), br.dropNWrites0) // nolint
 		case br.reorderNWrites1 > 0:
 			br.reorderNWrites1--
-			br.stack1 = append(br.stack1, d)
+			br.stack1 = append(br.stack1, data)
 			if br.reorderNWrites1 == 0 {
 				if err := inverse(br.stack1); err != nil {
 					br.err = err
 				}
 				br.queue1to0 = append(br.queue1to0, br.stack1...)
 			}
-		case br.filterCB1 != nil && !br.filterCB1(d):
+		case br.filterCB1 != nil && !br.filterCB1(data):
 			// fmt.Printf("br: filtered out a packet of size %d (q1)\n", len(d)) // nolint
 		default:
 			// fmt.Printf("br: routed a packet of size %d (q1)\n", len(d)) // nolint
-			br.queue1to0 = append(br.queue1to0, d)
+			br.queue1to0 = append(br.queue1to0, data)
 		}
 	}
+
 	return true
 }
 
@@ -323,6 +334,7 @@ func (br *Bridge) Reorder(fromID int) error {
 	if fromID == 0 {
 		return inverse(br.queue0to1)
 	}
+
 	return inverse(br.queue1to0)
 }
 
@@ -376,7 +388,7 @@ func (br *Bridge) clear() {
 // Tick attempts to hand a packet from the queue for each directions, to readers,
 // if there are waiting on the queue. If there's no reader, it will return
 // immediately.
-func (br *Bridge) Tick() int {
+func (br *Bridge) Tick() int { //nolint:cyclop
 	br.mutex.Lock()
 	defer br.mutex.Unlock()
 
@@ -428,7 +440,8 @@ func (br *Bridge) Process() {
 	}
 }
 
-// SetLossChance sets the probability of writes being discard (to introduce artificial loss)
+// SetLossChance sets the probability of writes being discard
+// ( to introduce artificial loss).
 func (br *Bridge) SetLossChance(chance int) error {
 	if chance > 100 || chance < 0 {
 		return errBadLossChanceRange
@@ -437,6 +450,7 @@ func (br *Bridge) SetLossChance(chance int) error {
 	rand.Seed(time.Now().UTC().UnixNano())
 	br.conn0.lossChance = chance
 	br.conn1.lossChance = chance
+
 	return nil
 }
 

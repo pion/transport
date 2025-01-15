@@ -18,7 +18,7 @@ const (
 	msg2 = `DEFG`
 )
 
-// helper to close both conns
+// helper to close both conns.
 func closeBridge(br *Bridge) error {
 	if err := br.conn0.Close(); err != nil {
 		return err
@@ -33,7 +33,7 @@ type AsyncResult struct {
 	msg string
 }
 
-func TestBridge(t *testing.T) {
+func TestBridge(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 	tt := TimeOut(30 * time.Second)
 	defer tt.Stop()
 
@@ -364,6 +364,7 @@ func TestBridge(t *testing.T) {
 
 	t.Run("drop next N packets", func(t *testing.T) {
 		testFrom := func(t *testing.T, fromID int) {
+			t.Helper()
 			readRes := make(chan AsyncResult, 5)
 			br := NewBridge()
 			conn0 := br.GetConn0()
@@ -450,6 +451,7 @@ func (c *closePropagator) Close() error {
 	c.otherEnd.mutex.Lock()
 	c.otherEnd.closing = true
 	c.otherEnd.mutex.Unlock()
+
 	return c.bridgeConn.Close()
 }
 
@@ -465,10 +467,12 @@ func TestNetTest(t *testing.T) {
 				br.Process()
 				if conn0.isClosed() && conn1.isClosed() {
 					wg.Done()
+
 					return
 				}
 			}
 		}()
+
 		return &closePropagator{conn0, conn1}, &closePropagator{conn1, conn0},
 			func() {
 				// RacyRead test leave receive buffer filled.

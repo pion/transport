@@ -43,6 +43,8 @@ func TestTokenBucketFilter(t *testing.T) {
 	})
 
 	subTest := func(t *testing.T, capacity int, maxBurst int, duration time.Duration) {
+		t.Helper()
+
 		log := logging.NewDefaultLoggerFactory().NewLogger("test")
 
 		mnic := newMockNIC(t)
@@ -83,16 +85,28 @@ func TestTokenBucketFilter(t *testing.T) {
 					assert.Less(t, rate, 1.05*float64(capacity))
 					assert.Greater(t, rate, 0.9*float64(capacity))
 
-					log.Infof("duration=%v, bytesReceived=%v, packetsReceived=%v throughput=%.2f Mb/s", time.Since(start), bytesReceived, packetsReceived, mBitPerSecond)
-					return
+					log.Infof(
+						"duration=%v, bytesReceived=%v, packetsReceived=%v throughput=%.2f Mb/s",
+						time.Since(start),
+						bytesReceived,
+						packetsReceived,
+						mBitPerSecond,
+					)
 
+					return
 				case now := <-ticker.C:
 					delta := now.Sub(last)
 					last = now
 					bits := float64(bytesReceived) * 8.0
 					rate := bits / delta.Seconds()
 					mBitPerSecond := rate / float64(MBit)
-					log.Infof("duration=%v, bytesReceived=%v, packetsReceived=%v throughput=%.2f Mb/s", delta, bytesReceived, packetsReceived, mBitPerSecond)
+					log.Infof(
+						"duration=%v, bytesReceived=%v, packetsReceived=%v throughput=%.2f Mb/s",
+						delta,
+						bytesReceived,
+						packetsReceived,
+						mBitPerSecond,
+					)
 					// Allow 10% more than capacity due to max bursts
 					assert.Less(t, rate, 1.10*float64(capacity))
 					assert.Greater(t, rate, 0.9*float64(capacity))
@@ -125,7 +139,13 @@ func TestTokenBucketFilter(t *testing.T) {
 			bits := float64(bytesSent) * 8.0
 			rate := bits / time.Since(start).Seconds()
 			mBitPerSecond := rate / float64(MBit)
-			log.Infof("duration=%v, bytesSent=%v, packetsSent=%v throughput=%.2f Mb/s", time.Since(start), bytesSent, packetsSent, mBitPerSecond)
+			log.Infof(
+				"duration=%v, bytesSent=%v, packetsSent=%v throughput=%.2f Mb/s",
+				time.Since(start),
+				bytesSent,
+				packetsSent,
+				mBitPerSecond,
+			)
 
 			assert.NoError(t, tbf.Close())
 		}()

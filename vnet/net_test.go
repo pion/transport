@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestNetVirtual(t *testing.T) {
+func TestNetVirtual(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 	loggerFactory := logging.NewDefaultLoggerFactory()
 	log := logging.NewDefaultLoggerFactory().NewLogger("test")
 
@@ -518,14 +518,14 @@ func TestNetVirtual(t *testing.T) {
 		laddr := conn.LocalAddr()
 		assert.Equal(t, "127.0.0.1:50916", laddr.String(), "should match")
 
-		c := newChunkUDP(&net.UDPAddr{
+		chunk := newChunkUDP(&net.UDPAddr{
 			IP:   net.ParseIP("127.0.0.1"),
 			Port: 4000,
 		}, &net.UDPAddr{
 			IP:   net.ParseIP("127.0.0.1"),
 			Port: 50916,
 		})
-		c.userData = []byte("Hello!")
+		chunk.userData = []byte("Hello!")
 
 		var hasReceived bool
 		recvdCh := make(chan bool)
@@ -540,10 +540,11 @@ func TestNetVirtual(t *testing.T) {
 				n, addr, err = conn.ReadFrom(buf)
 				if err != nil {
 					log.Debugf("ReadFrom returned: %v", err)
+
 					break
 				}
 
-				assert.Equal(t, 6, len(c.userData), "should match")
+				assert.Equal(t, 6, len(chunk.userData), "should match")
 				assert.Equal(t, "127.0.0.1:4000", addr.String(), "should match")
 				assert.Equal(t, "Hello!", string(buf[:n]), "should match")
 
@@ -553,7 +554,7 @@ func TestNetVirtual(t *testing.T) {
 			close(doneCh)
 		}()
 
-		nw.onInboundChunk(c)
+		nw.onInboundChunk(chunk)
 
 	loop:
 		for {
@@ -626,6 +627,7 @@ func TestNetVirtual(t *testing.T) {
 				n, _, err2 := conn1.ReadFrom(buf)
 				if err2 != nil {
 					log.Debugf("ReadFrom returned: %v", err2)
+
 					break
 				}
 
@@ -643,6 +645,7 @@ func TestNetVirtual(t *testing.T) {
 				n, addr, err2 := conn2.ReadFrom(buf)
 				if err2 != nil {
 					log.Debugf("ReadFrom returned: %v", err2)
+
 					break
 				}
 
@@ -752,6 +755,7 @@ func TestNetVirtual(t *testing.T) {
 				n, _, err2 := conn1.ReadFrom(buf)
 				if err2 != nil {
 					log.Debugf("ReadFrom returned: %v", err2)
+
 					break
 				}
 
@@ -769,6 +773,7 @@ func TestNetVirtual(t *testing.T) {
 				n, addr, err2 := conn2.ReadFrom(buf)
 				if err2 != nil {
 					log.Debugf("ReadFrom returned: %v", err2)
+
 					break
 				}
 

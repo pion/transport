@@ -56,6 +56,8 @@ func TestStressDuplex(t *testing.T) {
 }
 
 func stressDuplex(t *testing.T) {
+	t.Helper()
+
 	listener, ca, cb, err := pipe()
 	if err != nil {
 		t.Fatal(err)
@@ -136,6 +138,7 @@ func TestListenerCloseUnaccepted(t *testing.T) {
 		conn, dErr := net.DialUDP(network, nil, listener.Addr().(*net.UDPAddr))
 		if dErr != nil {
 			t.Error(dErr)
+
 			continue
 		}
 		if _, wErr := conn.Write([]byte{byte(i)}); wErr != nil {
@@ -154,7 +157,7 @@ func TestListenerCloseUnaccepted(t *testing.T) {
 	}
 }
 
-func TestListenerAcceptFilter(t *testing.T) {
+func TestListenerAcceptFilter(t *testing.T) { //nolint:cyclop
 	// Limit runtime in case of deadlocks
 	lim := test.TimeOut(time.Second * 20)
 	defer lim.Stop()
@@ -221,6 +224,7 @@ func TestListenerAcceptFilter(t *testing.T) {
 					if !errors.Is(aArr, ErrClosedListener) {
 						t.Error(aArr)
 					}
+
 					return
 				}
 				close(chAccepted)
@@ -247,7 +251,7 @@ func TestListenerAcceptFilter(t *testing.T) {
 	}
 }
 
-func TestListenerConcurrent(t *testing.T) {
+func TestListenerConcurrent(t *testing.T) { //nolint:cyclop
 	// Limit runtime in case of deadlocks
 	lim := test.TimeOut(time.Second * 20)
 	defer lim.Stop()
@@ -270,6 +274,7 @@ func TestListenerConcurrent(t *testing.T) {
 		conn, dErr := net.DialUDP(network, nil, listener.Addr().(*net.UDPAddr))
 		if dErr != nil {
 			t.Error(dErr)
+
 			continue
 		}
 		if _, wErr := conn.Write([]byte{byte(i)}); wErr != nil {
@@ -286,6 +291,7 @@ func TestListenerConcurrent(t *testing.T) {
 		conn, lErr := listener.Accept()
 		if lErr != nil {
 			t.Error(lErr)
+
 			continue
 		}
 		b := make([]byte, 1)
@@ -368,7 +374,7 @@ func getConfig() (string, *net.UDPAddr) {
 	return "udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0}
 }
 
-func TestConnClose(t *testing.T) {
+func TestConnClose(t *testing.T) { //nolint:cyclop
 	lim := test.TimeOut(time.Second * 5)
 	defer lim.Stop()
 
@@ -396,12 +402,12 @@ func TestConnClose(t *testing.T) {
 		report := test.CheckRoutines(t)
 		defer report()
 
-		l, ca, cb, errPipe := pipe()
+		listn, ca, cb, errPipe := pipe()
 		if errPipe != nil {
 			t.Fatal(errPipe)
 		}
 		// Close l.pConn to inject error.
-		if err := l.(*listener).pConn.Close(); err != nil { //nolint:forcetypeassert
+		if err := listn.(*listener).pConn.Close(); err != nil { //nolint:forcetypeassert
 			t.Error(err)
 		}
 
@@ -411,7 +417,7 @@ func TestConnClose(t *testing.T) {
 		if err := ca.Close(); err != nil {
 			t.Errorf("Failed to close B side: %v", err)
 		}
-		if err := l.Close(); err == nil {
+		if err := listn.Close(); err == nil {
 			t.Errorf("Error is not propagated to Listener.Close")
 		}
 	})
@@ -448,7 +454,7 @@ func TestConnClose(t *testing.T) {
 		report := test.CheckRoutines(t)
 		defer report()
 
-		l, ca, cb, errPipe := pipe()
+		listn, ca, cb, errPipe := pipe()
 		if errPipe != nil {
 			t.Fatal(errPipe)
 		}
@@ -475,7 +481,7 @@ func TestConnClose(t *testing.T) {
 		if err := cb.Close(); err != nil {
 			t.Errorf("Failed to close A side: %v", err)
 		}
-		if err := l.Close(); err != nil {
+		if err := listn.Close(); err != nil {
 			t.Errorf("Failed to close listener: %v", err)
 		}
 	})

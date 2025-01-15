@@ -21,6 +21,7 @@ type wrapConn struct {
 
 func (w wrapConn) ReadFrom(p []byte) (int, net.Addr, error) {
 	n, err := w.c.Read(p)
+
 	return n, nil, err
 }
 
@@ -54,6 +55,7 @@ func (w wrapConn) SetWriteDeadline(t time.Time) error {
 
 func pipe() (net.PacketConn, net.PacketConn) {
 	a, b := net.Pipe()
+
 	return wrapConn{a}, wrapConn{b}
 }
 
@@ -292,6 +294,7 @@ func BenchmarkPacketConnBase(b *testing.B) {
 			if !errors.Is(err, io.EOF) {
 				b.Fatal(err)
 			}
+
 			break
 		}
 		if n != len(data) {
@@ -334,6 +337,7 @@ func BenchmarkWriteTo(b *testing.B) {
 			if !errors.Is(err, io.EOF) {
 				b.Fatal(err)
 			}
+
 			break
 		}
 		if n != len(data) {
@@ -376,6 +380,7 @@ func BenchmarkReadFrom(b *testing.B) {
 			if !errors.Is(err, io.EOF) {
 				b.Fatal(err)
 			}
+
 			break
 		}
 		if n != len(data) {

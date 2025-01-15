@@ -200,7 +200,7 @@ func TestWriteClosed(t *testing.T) {
 	}
 }
 
-// Test for TestLocalAddrAndRemoteAddr
+// Test for TestLocalAddrAndRemoteAddr.
 type stringAddr struct {
 	network string
 	addr    string
@@ -262,6 +262,7 @@ func BenchmarkBase(b *testing.B) {
 			if !errors.Is(err, io.EOF) {
 				b.Fatal(err)
 			}
+
 			break
 		}
 		if n != len(data) {
@@ -304,6 +305,7 @@ func BenchmarkWrite(b *testing.B) {
 			if !errors.Is(err, io.EOF) {
 				b.Fatal(err)
 			}
+
 			break
 		}
 		if n != len(data) {
@@ -346,6 +348,7 @@ func BenchmarkRead(b *testing.B) {
 			if !errors.Is(err, io.EOF) {
 				b.Fatal(err)
 			}
+
 			break
 		}
 		if n != len(data) {

@@ -91,6 +91,8 @@ func TestBuffer(t *testing.T) {
 }
 
 func testWraparound(t *testing.T, grow bool) {
+	t.Helper()
+
 	assert := assert.New(t)
 
 	buffer := NewBuffer()
@@ -112,30 +114,30 @@ func testWraparound(t *testing.T, grow bool) {
 	_, err = buffer.Write(p3)
 	assert.NoError(err)
 
-	p := make([]byte, 10)
+	packet := make([]byte, 10)
 
-	n, err := buffer.Read(p)
+	n, err := buffer.Read(packet)
 	assert.NoError(err)
-	assert.Equal(p1, p[:n])
+	assert.Equal(p1, packet[:n])
 
 	if grow {
 		err = buffer.grow()
 		assert.NoError(err)
 	}
 
-	n, err = buffer.Read(p)
+	n, err = buffer.Read(packet)
 	assert.NoError(err)
-	assert.Equal(p2, p[:n])
+	assert.Equal(p2, packet[:n])
 
 	_, err = buffer.Write(p4)
 	assert.NoError(err)
 
-	n, err = buffer.Read(p)
+	n, err = buffer.Read(packet)
 	assert.NoError(err)
-	assert.Equal(p3, p[:n])
-	n, err = buffer.Read(p)
+	assert.Equal(p3, packet[:n])
+	n, err = buffer.Read(packet)
 	assert.NoError(err)
-	assert.Equal(p4, p[:n])
+	assert.Equal(p4, packet[:n])
 
 	if !grow {
 		assert.Equal(len(buffer.data), minSize)
@@ -410,6 +412,8 @@ func TestBufferAlloc(t *testing.T) {
 
 	test := func(f func(count int) func(), count int, maxVal float64) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Helper()
+
 			allocs := testing.AllocsPerRun(3, f(count))
 			if allocs > maxVal {
 				t.Errorf("count=%v, max=%v, got %v",
@@ -419,23 +423,24 @@ func TestBufferAlloc(t *testing.T) {
 		}
 	}
 
-	w := func(count int) func() {
+	writer := func(count int) func() {
 		return func() {
 			buffer := NewBuffer()
 			for i := 0; i < count; i++ {
 				_, err := buffer.Write(packet)
 				if err != nil {
 					t.Errorf("Write: %v", err)
+
 					break
 				}
 			}
 		}
 	}
 
-	t.Run("100 writes", test(w, 100, 11))
-	t.Run("200 writes", test(w, 200, 14))
-	t.Run("400 writes", test(w, 400, 17))
-	t.Run("1000 writes", test(w, 1000, 21))
+	t.Run("100 writes", test(writer, 100, 11))
+	t.Run("200 writes", test(writer, 200, 14))
+	t.Run("400 writes", test(writer, 400, 17))
+	t.Run("1000 writes", test(writer, 1000, 21))
 
 	wr := func(count int) func() {
 		return func() {
@@ -459,6 +464,7 @@ func TestBufferAlloc(t *testing.T) {
 }
 
 func benchmarkBufferWR(b *testing.B, size int64, write bool, grow int) { // nolint:unparam
+	b.Helper()
 	buffer := NewBuffer()
 	packet := make([]byte, size)
 
@@ -513,7 +519,7 @@ func BenchmarkBufferWR1400(b *testing.B) {
 	benchmarkBufferWR(b, 1400, false, 128000)
 }
 
-// Here, the buffer never becomes empty, which forces wraparound
+// Here, the buffer never becomes empty, which forces wraparound.
 func BenchmarkBufferWWR14(b *testing.B) {
 	benchmarkBufferWR(b, 14, true, 128000)
 }
@@ -527,6 +533,8 @@ func BenchmarkBufferWWR1400(b *testing.B) {
 }
 
 func benchmarkBuffer(b *testing.B, size int64) {
+	b.Helper()
+
 	buffer := NewBuffer()
 	b.SetBytes(size)
 
@@ -540,6 +548,7 @@ func benchmarkBuffer(b *testing.B, size int64) {
 				break
 			} else if err != nil {
 				b.Error(err)
+
 				break
 			}
 		}
@@ -647,8 +656,9 @@ func TestBufferConcurrentReadWrite(t *testing.T) {
 			if readErr != nil {
 				return
 			}
-			if atomic.AddUint64(&numRead, 1) == uint64(numPkts) {
+			if atomic.AddUint64(&numRead, 1) == uint64(numPkts) { //nolint:gosec
 				close(allRead)
+
 				return
 			}
 		}

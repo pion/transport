@@ -21,6 +21,7 @@ import (
 func Pipe() (net.Conn, net.Conn) {
 	ch0 := make(chan []byte, 1000)
 	ch1 := make(chan []byte, 1000)
+
 	return &conn{
 			rCh:           ch0,
 			wCh:           ch1,
@@ -60,20 +61,23 @@ func (*conn) RemoteAddr() net.Addr { return pipeAddr{} }
 func (c *conn) SetDeadline(t time.Time) error {
 	c.readDeadline.Set(t)
 	c.writeDeadline.Set(t)
+
 	return nil
 }
 
 func (c *conn) SetReadDeadline(t time.Time) error {
 	c.readDeadline.Set(t)
+
 	return nil
 }
 
 func (c *conn) SetWriteDeadline(t time.Time) error {
 	c.writeDeadline.Set(t)
+
 	return nil
 }
 
-func (c *conn) Read(data []byte) (n int, err error) {
+func (c *conn) Read(data []byte) (n int, err error) { //nolint:cyclop
 	select {
 	case <-c.closed:
 		return 0, io.EOF
@@ -91,9 +95,11 @@ func (c *conn) Read(data []byte) (n int, err error) {
 		case d := <-c.rCh:
 			if len(d) <= len(data) {
 				copy(data, d)
+
 				return len(d), nil
 			}
 			copy(data, d[:len(data)])
+
 			return len(data), nil
 		case <-c.closed:
 			return 0, io.EOF
@@ -123,6 +129,7 @@ func (c *conn) Write(data []byte) (n int, err error) {
 		return 0, io.ErrClosedPipe
 	case <-c.writeDeadline.Done():
 		c.cleanWriteBuffer()
+
 		return 0, context.DeadlineExceeded
 	default:
 	}
@@ -135,6 +142,7 @@ func (c *conn) Write(data []byte) (n int, err error) {
 		return 0, io.ErrClosedPipe
 	case <-c.writeDeadline.Done():
 		c.cleanWriteBuffer()
+
 		return 0, context.DeadlineExceeded
 	case c.wCh <- cData:
 		return len(cData), nil
@@ -145,5 +153,6 @@ func (c *conn) Close() error {
 	c.closeOnce.Do(func() {
 		close(c.closed)
 	})
+
 	return nil
 }

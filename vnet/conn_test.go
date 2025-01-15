@@ -33,7 +33,7 @@ func (o *dummyObserver) determineSourceIP(locIP, _ net.IP) net.IP {
 	return locIP
 }
 
-func TestUDPConn(t *testing.T) {
+func TestUDPConn(t *testing.T) { //nolint:cyclop,maintidx
 	log := logging.NewDefaultLoggerFactory().NewLogger("test")
 
 	t.Run("WriteTo ReadFrom", func(t *testing.T) {
@@ -60,6 +60,7 @@ func TestUDPConn(t *testing.T) {
 				chunk.userData = make([]byte, len(uc.userData))
 				copy(chunk.userData, uc.userData)
 				conn.readCh <- chunk // echo back
+
 				return nil
 			},
 			onOnClosed: func(net.Addr) {
@@ -79,6 +80,7 @@ func TestUDPConn(t *testing.T) {
 				n, addr, err2 := conn.ReadFrom(buf)
 				if err2 != nil {
 					log.Debug("conn closed. exiting the read loop")
+
 					break
 				}
 				log.Debug("read data")
@@ -141,6 +143,7 @@ func TestUDPConn(t *testing.T) {
 				chunk.userData = make([]byte, len(uc.userData))
 				copy(chunk.userData, uc.userData)
 				conn.readCh <- chunk // echo back
+
 				return nil
 			},
 			onOnClosed: func(net.Addr) {
@@ -161,6 +164,7 @@ func TestUDPConn(t *testing.T) {
 				n, err2 := conn.Read(buf)
 				if err2 != nil {
 					log.Debug("conn closed. exiting the read loop")
+
 					break
 				}
 				log.Debug("read data")
@@ -196,6 +200,8 @@ func TestUDPConn(t *testing.T) {
 	})
 
 	deadlineTest := func(t *testing.T, readOnly bool) {
+		t.Helper()
+
 		var nClosed int32
 		var conn *UDPConn
 		var err error

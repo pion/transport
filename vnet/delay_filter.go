@@ -43,7 +43,7 @@ func (f *DelayFilter) onInboundChunk(c Chunk) {
 // Run starts forwarding of packets. Packets will be forwarded if they spent
 // >delay time in the internal queue. Must be called before any packet will be
 // forwarded.
-func (f *DelayFilter) Run(ctx context.Context) {
+func (f *DelayFilter) Run(ctx context.Context) { //nolint:cyclop
 	timer := time.NewTimer(0)
 	for {
 		select {
@@ -59,6 +59,7 @@ func (f *DelayFilter) Run(ctx context.Context) {
 			next := f.queue.peek()
 			if next == nil {
 				timer.Reset(time.Minute)
+
 				continue
 			}
 			if n, ok := next.(timedChunk); ok && n.deadline.Before(now) {
@@ -68,6 +69,7 @@ func (f *DelayFilter) Run(ctx context.Context) {
 			next = f.queue.peek()
 			if next == nil {
 				timer.Reset(time.Minute)
+
 				continue
 			}
 			if n, ok := next.(timedChunk); ok {

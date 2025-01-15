@@ -16,7 +16,7 @@ func TestResolver(t *testing.T) {
 	log := loggerFactory.NewLogger("test")
 
 	t.Run("Standalone", func(t *testing.T) {
-		r := newResolver(&resolverConfig{
+		resolver := newResolver(&resolverConfig{
 			LoggerFactory: loggerFactory,
 		})
 
@@ -25,7 +25,7 @@ func TestResolver(t *testing.T) {
 		ipAddr := "127.0.0.1"
 		ip := net.ParseIP(ipAddr)
 
-		resolved, err := r.lookUp(name)
+		resolved, err := resolver.lookUp(name)
 		assert.NoError(t, err, "should succeed")
 		assert.True(t, resolved.Equal(ip), "should match")
 
@@ -34,10 +34,10 @@ func TestResolver(t *testing.T) {
 		ip = net.ParseIP(ipAddr)
 		log.Debugf("adding %s %s", name, ipAddr)
 
-		err = r.addHost(name, ipAddr)
+		err = resolver.addHost(name, ipAddr)
 		assert.NoError(t, err, "should succeed")
 
-		resolved, err = r.lookUp(name)
+		resolved, err = resolver.lookUp(name)
 		assert.NoError(t, err, "should succeed")
 		assert.True(t, resolved.Equal(ip), "should match")
 	})

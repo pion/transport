@@ -21,7 +21,7 @@ type dummyNIC struct {
 	onInboundChunkHandler func(Chunk)
 }
 
-// hijack onInboundChunk
+// hijack onInboundChunk.
 func (v *dummyNIC) onInboundChunk(c Chunk) {
 	v.onInboundChunkHandler(c)
 }
@@ -44,7 +44,7 @@ func getIPAddr(n NIC) (string, error) {
 	return addrs[0].(*net.IPNet).IP.String(), nil //nolint:forcetypeassert
 }
 
-func TestRouterStandalone(t *testing.T) {
+func TestRouterStandalone(t *testing.T) { //nolint:cyclop,maintidx
 	loggerFactory := logging.NewDefaultLoggerFactory()
 	log := loggerFactory.NewLogger("test")
 
@@ -62,7 +62,7 @@ func TestRouterStandalone(t *testing.T) {
 	})
 
 	t.Run("assignIPAddress", func(t *testing.T) {
-		r, err := NewRouter(&RouterConfig{
+		router, err := NewRouter(&RouterConfig{
 			CIDR:          "1.2.3.0/24",
 			LoggerFactory: loggerFactory,
 		})
@@ -71,7 +71,7 @@ func TestRouterStandalone(t *testing.T) {
 		}
 
 		for i := 1; i < 255; i++ {
-			ip, err2 := r.assignIPAddress()
+			ip, err2 := router.assignIPAddress()
 			assert.Nil(t, err2, "should succeed")
 			assert.Equal(t, byte(1), ip[0], "should match")
 			assert.Equal(t, byte(2), ip[1], "should match")
@@ -79,12 +79,12 @@ func TestRouterStandalone(t *testing.T) {
 			assert.Equal(t, byte(i), ip[3], "should match")
 		}
 
-		_, err = r.assignIPAddress()
+		_, err = router.assignIPAddress()
 		assert.NotNil(t, err, "should fail")
 	})
 
 	t.Run("AddNet", func(t *testing.T) {
-		r, err := NewRouter(&RouterConfig{
+		router, err := NewRouter(&RouterConfig{
 			CIDR:          "1.2.3.0/24",
 			LoggerFactory: loggerFactory,
 		})
@@ -97,7 +97,7 @@ func TestRouterStandalone(t *testing.T) {
 			return
 		}
 
-		err = r.AddNet(nic)
+		err = router.AddNet(nic)
 		assert.Nil(t, err, "should succeed")
 
 		// Now, eth0 must have one address assigned
@@ -143,7 +143,7 @@ func TestRouterStandalone(t *testing.T) {
 	t.Run("routing", func(t *testing.T) {
 		var nCbs0 int32
 		doneCh := make(chan struct{})
-		r, err := NewRouter(&RouterConfig{
+		router, err := NewRouter(&RouterConfig{
 			CIDR:          "1.2.3.0/24",
 			LoggerFactory: loggerFactory,
 		})
@@ -164,7 +164,7 @@ func TestRouterStandalone(t *testing.T) {
 				Net: anic,
 			}
 
-			err2 := r.AddNet(nic[i])
+			err2 := router.AddNet(nic[i])
 			assert.Nil(t, err2, "should succeed")
 
 			// Now, eth0 must have one address assigned
@@ -190,14 +190,14 @@ func TestRouterStandalone(t *testing.T) {
 			close(doneCh)
 		}
 
-		err = r.Start()
+		err = router.Start()
 		assert.Nil(t, err, "should succeed")
 
 		c := newChunkUDP(ip[0], ip[1])
-		r.push(c)
+		router.push(c)
 
 		<-doneCh
-		err = r.Stop()
+		err = router.Stop()
 		assert.Nil(t, err, "should succeed")
 		assert.Equal(t, int32(0), atomic.LoadInt32(&nCbs0), "should be zero")
 	})
@@ -205,7 +205,7 @@ func TestRouterStandalone(t *testing.T) {
 	t.Run("AddChunkFilter", func(t *testing.T) {
 		var nCbs0 int32
 		var nCbs1 int32
-		r, err := NewRouter(&RouterConfig{
+		router, err := NewRouter(&RouterConfig{
 			CIDR:          "1.2.3.0/24",
 			LoggerFactory: loggerFactory,
 		})
@@ -226,7 +226,7 @@ func TestRouterStandalone(t *testing.T) {
 				Net: anic,
 			}
 
-			err2 := r.AddNet(nic[i])
+			err2 := router.AddNet(nic[i])
 			assert.Nil(t, err2, "should succeed")
 
 			// Now, eth0 must have one address assigned
@@ -257,6 +257,7 @@ func TestRouterStandalone(t *testing.T) {
 		// this creates a filter that block the first chunk
 		makeFilter := func(name string) func(c Chunk) bool {
 			n := 0
+
 			return func(c Chunk) bool {
 				pass := (n > 0)
 				if pass {
@@ -265,17 +266,18 @@ func TestRouterStandalone(t *testing.T) {
 					log.Debugf("%s blocked %s", name, c.String())
 				}
 				n++
+
 				return pass
 			}
 		}
 
 		// filter 1: block first one
-		r.AddChunkFilter(makeFilter("filter1"))
+		router.AddChunkFilter(makeFilter("filter1"))
 
 		// filter 2: block first one
-		r.AddChunkFilter(makeFilter("filter2"))
+		router.AddChunkFilter(makeFilter("filter2"))
 
-		err = r.Start()
+		err = router.Start()
 		assert.Nil(t, err, "should succeed")
 
 		// send 3 packets
@@ -283,12 +285,12 @@ func TestRouterStandalone(t *testing.T) {
 			c := newChunkUDP(ip[0], ip[1])
 			c.userData = make([]byte, 1)
 			c.userData[0] = byte(i) // 1-byte seq num
-			r.push(c)
+			router.push(c)
 		}
 
 		time.Sleep(50 * time.Millisecond)
 
-		err = r.Stop()
+		err = router.Stop()
 		assert.Nil(t, err, "should succeed")
 
 		assert.Equal(t, int32(0), atomic.LoadInt32(&nCbs0), "should be zero")
@@ -302,11 +304,13 @@ func TestRouterDelay(t *testing.T) {
 	log := loggerFactory.NewLogger("test")
 
 	subTest := func(t *testing.T, title string, minDelay, maxJitter time.Duration) {
+		t.Helper()
+
 		t.Run(title, func(t *testing.T) {
 			const margin = 8 * time.Millisecond
 			var nCBs int32
 			doneCh := make(chan struct{})
-			r, err := NewRouter(&RouterConfig{
+			router, err := NewRouter(&RouterConfig{
 				CIDR:          "1.2.3.0/24",
 				MinDelay:      minDelay,
 				MaxJitter:     maxJitter,
@@ -329,7 +333,7 @@ func TestRouterDelay(t *testing.T) {
 					Net: anic,
 				}
 
-				err2 := r.AddNet(nic[i])
+				err2 := router.AddNet(nic[i])
 				assert.Nil(t, err2, "should succeed")
 
 				// Now, eth0 must have one address assigned
@@ -354,22 +358,22 @@ func TestRouterDelay(t *testing.T) {
 				delay := time.Since(c.getTimestamp())
 				delayRes = append(delayRes, delay)
 				n := atomic.AddInt32(&nCBs, 1)
-				if n == int32(nPkts) {
+				if n == int32(nPkts) { //nolint:gosec // nPkts is a constant
 					close(doneCh)
 				}
 			}
 
-			err = r.Start()
+			err = router.Start()
 			assert.Nil(t, err, "should succeed")
 
 			for i := 0; i < nPkts; i++ {
 				c := newChunkUDP(ip[0], ip[1])
-				r.push(c)
+				router.push(c)
 				time.Sleep(50 * time.Millisecond)
 			}
 
 			<-doneCh
-			err = r.Stop()
+			err = router.Stop()
 			assert.Nil(t, err, "should succeed")
 
 			// Validate the amount of delays
@@ -478,7 +482,7 @@ func TestRouterOneChild(t *testing.T) {
 		err = wan.Start()
 		assert.Nil(t, err, "should succeed")
 
-		c := newChunkUDP(
+		chunk := newChunkUDP(
 			&net.UDPAddr{
 				IP:   net.ParseIP(lanIP),
 				Port: 1234,
@@ -489,9 +493,9 @@ func TestRouterOneChild(t *testing.T) {
 			},
 		)
 
-		log.Debugf("sending %s", c.String())
+		log.Debugf("sending %s", chunk.String())
 
-		lan.push(c)
+		lan.push(chunk)
 
 		<-doneCh
 		err = wan.Stop()
@@ -662,7 +666,7 @@ func TestRouterFailures(t *testing.T) {
 	})
 
 	t.Run("AddNet", func(t *testing.T) {
-		r, err := NewRouter(&RouterConfig{
+		router, err := NewRouter(&RouterConfig{
 			CIDR:          "1.2.3.0/24",
 			LoggerFactory: loggerFactory,
 		})
@@ -679,7 +683,7 @@ func TestRouterFailures(t *testing.T) {
 			return
 		}
 
-		err = r.AddNet(nic)
+		err = router.AddNet(nic)
 		assert.Error(t, err, "should fail")
 	})
 

@@ -41,24 +41,24 @@ func TestChunk(t *testing.T) {
 			Port: 5678,
 		}
 
-		var c Chunk = newChunkUDP(src, dst)
-		str := c.String()
+		var chunk Chunk = newChunkUDP(src, dst)
+		str := chunk.String()
 		log.Debugf("chunk: %s", str)
-		assert.Equal(t, udp, c.Network(), "should match")
+		assert.Equal(t, udp, chunk.Network(), "should match")
 		assert.True(t, strings.Contains(str, src.Network()), "should include network type")
 		assert.True(t, strings.Contains(str, src.String()), "should include address")
 		assert.True(t, strings.Contains(str, dst.String()), "should include address")
-		assert.True(t, c.getSourceIP().Equal(src.IP), "ip should match")
-		assert.True(t, c.getDestinationIP().Equal(dst.IP), "ip should match")
+		assert.True(t, chunk.getSourceIP().Equal(src.IP), "ip should match")
+		assert.True(t, chunk.getDestinationIP().Equal(dst.IP), "ip should match")
 
 		// Test timestamp
-		ts := c.setTimestamp()
-		assert.Equal(t, ts, c.getTimestamp(), "timestamp should match")
+		ts := chunk.setTimestamp()
+		assert.Equal(t, ts, chunk.getTimestamp(), "timestamp should match")
 
-		uc := c.(*chunkUDP) //nolint:forcetypeassert
+		uc := chunk.(*chunkUDP) //nolint:forcetypeassert
 		uc.userData = []byte("Hello")
 
-		cloned := c.Clone().(*chunkUDP) //nolint:forcetypeassert
+		cloned := chunk.Clone().(*chunkUDP) //nolint:forcetypeassert
 
 		// Test setSourceAddr
 		err := uc.setSourceAddr("2.3.4.5:4000")
@@ -87,28 +87,28 @@ func TestChunk(t *testing.T) {
 			Port: 5678,
 		}
 
-		var c Chunk = newChunkTCP(src, dst, tcpSYN)
-		str := c.String()
+		var chunk Chunk = newChunkTCP(src, dst, tcpSYN)
+		str := chunk.String()
 		log.Debugf("chunk: %s", str)
-		assert.Equal(t, "tcp", c.Network(), "should match")
+		assert.Equal(t, "tcp", chunk.Network(), "should match")
 		assert.True(t, strings.Contains(str, src.Network()), "should include network type")
 		assert.True(t, strings.Contains(str, src.String()), "should include address")
 		assert.True(t, strings.Contains(str, dst.String()), "should include address")
-		assert.True(t, c.getSourceIP().Equal(src.IP), "ip should match")
-		assert.True(t, c.getDestinationIP().Equal(dst.IP), "ip should match")
+		assert.True(t, chunk.getSourceIP().Equal(src.IP), "ip should match")
+		assert.True(t, chunk.getDestinationIP().Equal(dst.IP), "ip should match")
 
-		tcp, ok := c.(*chunkTCP)
+		tcp, ok := chunk.(*chunkTCP)
 		assert.True(t, ok, "type should match")
 		assert.Equal(t, tcp.flags, tcpSYN, "flags should match")
 
 		// Test timestamp
-		ts := c.setTimestamp()
-		assert.Equal(t, ts, c.getTimestamp(), "timestamp should match")
+		ts := chunk.setTimestamp()
+		assert.Equal(t, ts, chunk.getTimestamp(), "timestamp should match")
 
-		tc := c.(*chunkTCP) //nolint:forcetypeassert
+		tc := chunk.(*chunkTCP) //nolint:forcetypeassert
 		tc.userData = []byte("Hello")
 
-		cloned := c.Clone().(*chunkTCP) //nolint:forcetypeassert
+		cloned := chunk.Clone().(*chunkTCP) //nolint:forcetypeassert
 
 		// Test setSourceAddr
 		err := tc.setSourceAddr("2.3.4.5:4000")

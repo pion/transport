@@ -61,10 +61,11 @@ func New(conn net.Conn) ConnCtx {
 		nextConn: conn,
 		closed:   make(chan struct{}),
 	}
+
 	return c
 }
 
-func (c *connCtx) ReadContext(ctx context.Context, b []byte) (int, error) {
+func (c *connCtx) ReadContext(ctx context.Context, b []byte) (int, error) { //nolint:cyclop
 	c.readMu.Lock()
 	defer c.readMu.Unlock()
 
@@ -85,6 +86,7 @@ func (c *connCtx) ReadContext(ctx context.Context, b []byte) (int, error) {
 			// context canceled
 			if err := c.nextConn.SetReadDeadline(veryOld); err != nil {
 				errSetDeadline.Store(err)
+
 				return
 			}
 			<-done
@@ -105,10 +107,11 @@ func (c *connCtx) ReadContext(ctx context.Context, b []byte) (int, error) {
 	if err2, ok := errSetDeadline.Load().(error); ok && err == nil && err2 != nil {
 		err = err2
 	}
+
 	return n, err
 }
 
-func (c *connCtx) WriteContext(ctx context.Context, b []byte) (int, error) {
+func (c *connCtx) WriteContext(ctx context.Context, b []byte) (int, error) { //nolint:cyclop
 	c.writeMu.Lock()
 	defer c.writeMu.Unlock()
 
@@ -129,6 +132,7 @@ func (c *connCtx) WriteContext(ctx context.Context, b []byte) (int, error) {
 			// context canceled
 			if err := c.nextConn.SetWriteDeadline(veryOld); err != nil {
 				errSetDeadline.Store(err)
+
 				return
 			}
 			<-done
@@ -149,6 +153,7 @@ func (c *connCtx) WriteContext(ctx context.Context, b []byte) (int, error) {
 	if err2, ok := errSetDeadline.Load().(error); ok && err == nil && err2 != nil {
 		err = err2
 	}
+
 	return n, err
 }
 
@@ -161,6 +166,7 @@ func (c *connCtx) Close() error {
 		c.readMu.Unlock()
 		c.writeMu.Unlock()
 	})
+
 	return err
 }
 

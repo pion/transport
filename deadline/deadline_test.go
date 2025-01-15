@@ -124,27 +124,29 @@ func collectCh(ch <-chan byte, n int, timeout time.Duration) []byte {
 			return calls
 		}
 	}
+
 	return calls
 }
 
-func TestContext(t *testing.T) {
+func TestContext(t *testing.T) { //nolint:cyclop
 	t.Run("Cancel", func(t *testing.T) {
-		d := New()
+		deadline := New()
+
 		select {
-		case <-d.Done():
+		case <-deadline.Done():
 			t.Fatal("Deadline unexpectedly done")
 		case <-time.After(50 * time.Millisecond):
 		}
-		if err := d.Err(); err != nil {
+		if err := deadline.Err(); err != nil {
 			t.Errorf("Wrong Err(), expected: nil, got: %v", err)
 		}
-		d.Set(time.Unix(0, 1)) // exceeded
+		deadline.Set(time.Unix(0, 1)) // exceeded
 		select {
-		case <-d.Done():
+		case <-deadline.Done():
 		case <-time.After(50 * time.Millisecond):
 			t.Fatal("Timeout")
 		}
-		if err := d.Err(); !errors.Is(err, context.DeadlineExceeded) {
+		if err := deadline.Err(); !errors.Is(err, context.DeadlineExceeded) {
 			t.Errorf("Wrong Err(), expected: %v, got: %v", context.DeadlineExceeded, err)
 		}
 	})

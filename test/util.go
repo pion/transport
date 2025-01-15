@@ -29,6 +29,8 @@ func TimeOut(t time.Duration) *time.Timer {
 }
 
 func tryCheckRoutinesLoop(tb testing.TB, failMessage string) {
+	tb.Helper()
+
 	try := 0
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
@@ -45,9 +47,11 @@ func tryCheckRoutinesLoop(tb testing.TB, failMessage string) {
 	}
 }
 
-// CheckRoutines is used to check for leaked go-routines
+// CheckRoutines is used to check for leaked go-routines.
 func CheckRoutines(t *testing.T) func() {
+	t.Helper()
 	tryCheckRoutinesLoop(t, "Unexpected routines on test startup")
+
 	return func() {
 		tryCheckRoutinesLoop(t, "Unexpected routines on test end")
 	}
@@ -68,7 +72,10 @@ func CheckRoutines(t *testing.T) func() {
 // best we can do is sleep a little bit and try to encourage the runtime
 // to run that goroutine (G) on the machine (M) it belongs to.
 func CheckRoutinesStrict(tb testing.TB) func() {
+	tb.Helper()
+
 	tryCheckRoutinesLoop(tb, "Unexpected routines on test startup")
+
 	return func() {
 		runtime.Gosched()
 		runtime.GC()
@@ -94,6 +101,7 @@ func CheckRoutinesStrict(tb testing.TB) func() {
 func getRoutines() []string {
 	buf := make([]byte, 2<<20)
 	buf = buf[:runtime.Stack(buf, true)]
+
 	return filterRoutines(strings.Split(string(buf), "\n\n"))
 }
 
@@ -109,6 +117,7 @@ func filterRoutines(routines []string) []string {
 		}
 		result = append(result, stack)
 	}
+
 	return result
 }
 
@@ -124,7 +133,7 @@ func GatherErrs(c chan error) []error {
 	return errs
 }
 
-// FlattenErrs flattens a slice of errors into a single error
+// FlattenErrs flattens a slice of errors into a single error.
 func FlattenErrs(errs []error) error {
 	var errStrings []string
 

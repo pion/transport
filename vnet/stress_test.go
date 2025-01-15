@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestStressTestUDP(t *testing.T) {
+func TestStressTestUDP(t *testing.T) { //nolint:cyclop
 	loggerFactory := logging.NewDefaultLoggerFactory()
 	log := loggerFactory.NewLogger("test")
 
@@ -95,9 +95,11 @@ func TestStressTestUDP(t *testing.T) {
 				switch addr := addr.(type) {
 				case *net.IPNet:
 					echoServerIP = addr.IP
+
 					break loop
 				case *net.IPAddr:
 					echoServerIP = addr.IP
+
 					break loop
 				}
 			}

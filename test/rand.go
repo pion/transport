@@ -22,6 +22,7 @@ func initRand() randomizer {
 	if _, err := crand.Read(randomness); err != nil {
 		fmt.Println("Failed to initiate randomness:", err) // nolint
 	}
+
 	return randomizer{
 		randomness: randomness,
 	}
@@ -34,5 +35,6 @@ func (r *randomizer) randBuf(size int) ([]byte, error) {
 	}
 
 	start := mrand.Intn(n) //nolint:gosec
+
 	return r.randomness[start : start+size], nil
 }

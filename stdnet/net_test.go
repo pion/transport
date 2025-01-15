@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestStdNet(t *testing.T) {
+func TestStdNet(t *testing.T) { //nolint:cyclop
 	log := logging.NewDefaultLoggerFactory().NewLogger("test")
 
 	t.Run("Interfaces", func(t *testing.T) {
@@ -202,6 +202,7 @@ func TestStdNet(t *testing.T) {
 		for _, ifc := range ifs {
 			if ifc.Flags&net.FlagLoopback != 0 {
 				loName = ifc.Name
+
 				break
 			}
 		}

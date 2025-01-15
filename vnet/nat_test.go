@@ -35,7 +35,7 @@ func TestNATTypeDefaults(t *testing.T) {
 	assert.Equal(t, defaultNATMappingLifeTime, nat.natType.MappingLifeTime, "should be false")
 }
 
-func TestNATMappingBehavior(t *testing.T) {
+func TestNATMappingBehavior(t *testing.T) { //nolint:maintidx
 	loggerFactory := logging.NewDefaultLoggerFactory()
 	log := loggerFactory.NewLogger("test")
 
@@ -442,8 +442,18 @@ func TestNATMappingBehavior(t *testing.T) {
 		log.Debugf("o-translated: %s", oec2.String())
 		log.Debugf("o-translated: %s", oec3.String())
 
-		assert.NotEqual(t, oec1.(*chunkUDP).sourcePort, oec2.(*chunkUDP).sourcePort, "should not match") //nolint:forcetypeassert
-		assert.Equal(t, oec1.(*chunkUDP).sourcePort, oec3.(*chunkUDP).sourcePort, "should match")        //nolint:forcetypeassert
+		assert.NotEqual(
+			t,
+			oec1.(*chunkUDP).sourcePort, //nolint:forcetypeassert
+			oec2.(*chunkUDP).sourcePort, //nolint:forcetypeassert
+			"should not match",
+		)
+		assert.Equal(
+			t,
+			oec1.(*chunkUDP).sourcePort, //nolint:forcetypeassert
+			oec3.(*chunkUDP).sourcePort, //nolint:forcetypeassert
+			"should match",
+		)
 	})
 
 	t.Run("symmetric NAT port dependent mapping", func(t *testing.T) { //nolint:dupl
@@ -512,8 +522,18 @@ func TestNATMappingBehavior(t *testing.T) {
 		log.Debugf("o-translated: %s", oec2.String())
 		log.Debugf("o-translated: %s", oec3.String())
 
-		assert.NotEqual(t, oec1.(*chunkUDP).sourcePort, oec2.(*chunkUDP).sourcePort, "should not match") //nolint:forcetypeassert
-		assert.NotEqual(t, oec1.(*chunkUDP).sourcePort, oec3.(*chunkUDP).sourcePort, "should match")     //nolint:forcetypeassert
+		assert.NotEqual(
+			t,
+			oec1.(*chunkUDP).sourcePort, //nolint:forcetypeassert
+			oec2.(*chunkUDP).sourcePort, //nolint:forcetypeassert
+			"should not match",
+		)
+		assert.NotEqual(
+			t,
+			oec1.(*chunkUDP).sourcePort, //nolint:forcetypeassert
+			oec3.(*chunkUDP).sourcePort, //nolint:forcetypeassert
+			"should match",
+		)
 	})
 }
 
@@ -581,7 +601,12 @@ func TestNATMappingTimeout(t *testing.T) {
 		log.Debugf("o-original  : %s", oic.String())
 		log.Debugf("o-translated: %s", oec.String())
 
-		assert.NotEqual(t, mapped, oec.(*chunkUDP).SourceAddr().String(), "mapped addr should not match") //nolint:forcetypeassert
+		assert.NotEqual(
+			t,
+			mapped,
+			oec.(*chunkUDP).SourceAddr().String(), //nolint:forcetypeassert
+			"mapped addr should not match",
+		)
 	})
 
 	t.Run("outbound detects timeout", func(t *testing.T) {

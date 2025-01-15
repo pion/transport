@@ -9,7 +9,7 @@ import (
 )
 
 // LossFilter is a wrapper around NICs, that drops some of the packets passed to
-// onInboundChunk
+// onInboundChunk.
 type LossFilter struct {
 	NIC
 	chance int
@@ -24,6 +24,7 @@ func NewLossFilter(nic NIC, chance int) (*LossFilter, error) {
 		chance: chance,
 	}
 	rand.Seed(time.Now().UTC().UnixNano())
+
 	return f, nil
 }
 

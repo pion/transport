@@ -189,26 +189,26 @@ var commonCases = map[string]testCase{ //nolint:gochecknoglobals
 }
 
 func TestReplayDetector(t *testing.T) {
-	for name, c := range commonCases {
-		c := c
+	for name, testCase := range commonCases {
+		testCase := testCase
 		t.Run(name, func(t *testing.T) {
-			det := New(c.windowSize, c.maxSeq)
+			det := New(testCase.windowSize, testCase.maxSeq)
 			var out []uint64
-			for i, seq := range c.input {
+			for i, seq := range testCase.input {
 				accept, ok := det.Check(seq)
-				if ok != c.valid[i] {
-					t.Errorf("Unexpected validity (%d):\nexpected: %v\ngot: %v", seq, c.valid[i], ok)
+				if ok != testCase.valid[i] {
+					t.Errorf("Unexpected validity (%d):\nexpected: %v\ngot: %v", seq, testCase.valid[i], ok)
 				}
 				if ok {
 					out = append(out, seq)
 				}
-				if latest := accept(); latest != c.latest[i] {
-					t.Errorf("Unexpected sequence latest status (%d):\nexpected: %v\ngot: %v", seq, c.latest[i], latest)
+				if latest := accept(); latest != testCase.latest[i] {
+					t.Errorf("Unexpected sequence latest status (%d):\nexpected: %v\ngot: %v", seq, testCase.latest[i], latest)
 				}
 			}
-			if !reflect.DeepEqual(c.expected, out) {
+			if !reflect.DeepEqual(testCase.expected, out) {
 				t.Errorf("Wrong replay detection result:\nexpected: %v\ngot:      %v",
-					c.expected, out,
+					testCase.expected, out,
 				)
 			}
 		})
@@ -258,25 +258,25 @@ func TestReplayDetectorWrapped(t *testing.T) {
 		cases[name] = c
 	}
 	for name, c := range cases {
-		c := c
+		testCase := c
 		t.Run(name, func(t *testing.T) {
-			det := WithWrap(c.windowSize, c.maxSeq)
+			det := WithWrap(testCase.windowSize, testCase.maxSeq)
 			var out []uint64
-			for i, seq := range c.input {
+			for i, seq := range testCase.input {
 				accept, ok := det.Check(seq)
-				if ok != c.valid[i] {
-					t.Errorf("Unexpected validity (%d):\nexpected: %v\ngot: %v", seq, c.valid[i], ok)
+				if ok != testCase.valid[i] {
+					t.Errorf("Unexpected validity (%d):\nexpected: %v\ngot: %v", seq, testCase.valid[i], ok)
 				}
 				if ok {
 					out = append(out, seq)
 				}
-				if latest := accept(); latest != c.latest[i] {
-					t.Errorf("Unexpected sequence latest status (%d):\nexpected: %v\ngot: %v", seq, c.latest[i], latest)
+				if latest := accept(); latest != testCase.latest[i] {
+					t.Errorf("Unexpected sequence latest status (%d):\nexpected: %v\ngot: %v", seq, testCase.latest[i], latest)
 				}
 			}
-			if !reflect.DeepEqual(c.expected, out) {
+			if !reflect.DeepEqual(testCase.expected, out) {
 				t.Errorf("Wrong replay detection result:\nexpected: %v\ngot:      %v",
-					c.expected, out,
+					testCase.expected, out,
 				)
 			}
 		})

@@ -50,6 +50,7 @@ type UDPProxy struct {
 // vnet.Net in this router and proxy all packets.
 func NewProxy(router *Router) (*UDPProxy, error) {
 	v := &UDPProxy{router: router, timeout: 2 * time.Minute}
+
 	return v, nil
 }
 
@@ -57,8 +58,10 @@ func NewProxy(router *Router) (*UDPProxy, error) {
 func (v *UDPProxy) Close() error {
 	v.workers.Range(func(_, value interface{}) bool {
 		_ = value.(*aUDPProxyWorker).Close() //nolint:forcetypeassert
+
 		return true
 	})
+
 	return nil
 }
 
@@ -111,7 +114,7 @@ func (v *aUDPProxyWorker) Close() error {
 	return nil
 }
 
-func (v *aUDPProxyWorker) Proxy(ctx context.Context, _ *Net, serverAddr *net.UDPAddr) error { // nolint:gocognit
+func (v *aUDPProxyWorker) Proxy(ctx context.Context, _ *Net, serverAddr *net.UDPAddr) error { // nolint:gocognit,cyclop
 	// Create vnet for real server by serverAddr.
 	nw, err := NewNet(&NetConfig{
 		StaticIP: serverAddr.IP.String(),

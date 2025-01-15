@@ -15,17 +15,17 @@ import (
 	"golang.org/x/net/ipv6"
 )
 
-// BatchWriter represents conn can write messages in batch
+// BatchWriter represents conn can write messages in batch.
 type BatchWriter interface {
 	WriteBatch(ms []ipv4.Message, flags int) (int, error)
 }
 
-// BatchReader represents conn can read messages in batch
+// BatchReader represents conn can read messages in batch.
 type BatchReader interface {
 	ReadBatch(msg []ipv4.Message, flags int) (int, error)
 }
 
-// BatchPacketConn represents conn can read/write messages in batch
+// BatchPacketConn represents conn can read/write messages in batch.
 type BatchPacketConn interface {
 	BatchWriter
 	BatchReader
@@ -90,7 +90,7 @@ func NewBatchConn(conn net.PacketConn, batchWriteSize int, batchWriteInterval ti
 	return bc
 }
 
-// Close batchConn and the underlying PacketConn
+// Close batchConn and the underlying PacketConn.
 func (c *BatchConn) Close() error {
 	atomic.StoreInt32(&c.closed, 1)
 	c.batchWriteMutex.Lock()
@@ -101,6 +101,7 @@ func (c *BatchConn) Close() error {
 	if c.batchConn != nil {
 		return c.batchConn.Close()
 	}
+
 	return c.PacketConn.Close()
 }
 
@@ -109,6 +110,7 @@ func (c *BatchConn) WriteTo(b []byte, addr net.Addr) (int, error) {
 	if c.batchConn == nil {
 		return c.PacketConn.WriteTo(b, addr)
 	}
+
 	return c.enqueueMessage(b, addr)
 }
 
@@ -136,6 +138,7 @@ func (c *BatchConn) enqueueMessage(buf []byte, raddr net.Addr) (int, error) {
 	if c.batchWritePos == c.batchWriteSize {
 		err = c.flush()
 	}
+
 	return len(buf), err
 }
 
@@ -146,10 +149,13 @@ func (c *BatchConn) ReadBatch(msgs []ipv4.Message, flags int) (int, error) {
 		if err == nil {
 			msgs[0].N = n
 			msgs[0].Addr = addr
+
 			return 1, nil
 		}
+
 		return 0, err
 	}
+
 	return c.batchConn.ReadBatch(msgs, flags)
 }
 
@@ -160,11 +166,13 @@ func (c *BatchConn) flush() error {
 		n, err := c.batchConn.WriteBatch(c.batchWriteMessages[txN:c.batchWritePos], 0)
 		if err != nil {
 			writeErr = err
+
 			break
 		}
 		txN += n
 	}
 	c.batchWritePos = 0
 	c.batchWriteLast = time.Now()
+
 	return writeErr
 }

@@ -14,7 +14,7 @@ import (
 	"github.com/pion/transport/v3/vnet"
 )
 
-func main() {
+func main() { //nolint:cyclop
 	address := flag.String("address", "", "Destination address that three separate vnet clients will send too")
 	flag.Parse()
 

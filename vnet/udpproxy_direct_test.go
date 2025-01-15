@@ -27,7 +27,7 @@ import (
 //	192.168.1.10:8000
 //
 // We should get a reply if directly deliver to proxy.
-func TestUDPProxyDirectDeliverTypical(t *testing.T) {
+func TestUDPProxyDirectDeliverTypical(t *testing.T) { //nolint:cyclop
 	ctx, cancel := context.WithCancel(context.Background())
 
 	var r0, r1, r2 error
@@ -146,6 +146,7 @@ func TestUDPProxyDirectDeliverTypical(t *testing.T) {
 				if errors.Is(selfKill.Err(), context.Canceled) {
 					return nil
 				}
+
 				return err
 			} else if n != 5 || addr == nil {
 				return fmt.Errorf("n=%v, addr=%v", n, addr) // nolint:goerr113
@@ -163,6 +164,7 @@ func TestUDPProxyDirectDeliverTypical(t *testing.T) {
 				if errors.Is(selfKill.Err(), context.Canceled) {
 					return nil
 				}
+
 				return err
 			} else if n != 5 || addr == nil {
 				return fmt.Errorf("n=%v, addr=%v", n, addr) // nolint:goerr113
@@ -180,7 +182,7 @@ func TestUDPProxyDirectDeliverTypical(t *testing.T) {
 }
 
 // Error if deliver to invalid address.
-func TestUDPProxyDirectDeliverBadCase(t *testing.T) {
+func TestUDPProxyDirectDeliverBadCase(t *testing.T) { //nolint:cyclop
 	ctx, cancel := context.WithCancel(context.Background())
 
 	var r0, r1, r2 error
@@ -299,6 +301,7 @@ func TestUDPProxyDirectDeliverBadCase(t *testing.T) {
 				if errors.Is(selfKill.Err(), context.Canceled) {
 					return nil
 				}
+
 				return err
 			} else if n != 5 || addr == nil {
 				return fmt.Errorf("n=%v, addr=%v", n, addr) // nolint:goerr113
@@ -333,8 +336,10 @@ func TestUDPProxyDirectDeliverBadCase(t *testing.T) {
 				//nolint:forcetypeassert
 				value.(*aUDPProxyWorker).endpoints.Range(func(_, value interface{}) bool {
 					_ = value.(*net.UDPConn).Close() //nolint:forcetypeassert
+
 					return true
 				})
+
 				return true
 			})
 

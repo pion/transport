@@ -11,52 +11,52 @@ import (
 )
 
 func TestChunkQueue(t *testing.T) {
-	c := newChunkUDP(&net.UDPAddr{
+	chunk := newChunkUDP(&net.UDPAddr{
 		IP:   net.ParseIP("192.188.0.2"),
 		Port: 1234,
 	}, &net.UDPAddr{
 		IP:   net.ParseIP(demoIP),
 		Port: 5678,
 	})
-	c.userData = make([]byte, 1200)
+	chunk.userData = make([]byte, 1200)
 
 	var ok bool
-	var q *chunkQueue
-	var d Chunk
+	var queue *chunkQueue
+	var chunk2 Chunk
 
-	q = newChunkQueue(0, 0)
+	queue = newChunkQueue(0, 0)
 
-	d = q.peek()
-	assert.Nil(t, d, "should return nil")
+	chunk2 = queue.peek()
+	assert.Nil(t, chunk2, "should return nil")
 
-	ok = q.push(c)
+	ok = queue.push(chunk)
 	assert.True(t, ok, "should succeed")
 
-	d, ok = q.pop()
+	chunk2, ok = queue.pop()
 	assert.True(t, ok, "should succeed")
-	assert.Equal(t, c, d, "should be the same")
+	assert.Equal(t, chunk, chunk2, "should be the same")
 
-	d, ok = q.pop()
+	chunk2, ok = queue.pop()
 	assert.False(t, ok, "should fail")
-	assert.Nil(t, d, "should be nil")
+	assert.Nil(t, chunk2, "should be nil")
 
-	q = newChunkQueue(1, 0)
-	ok = q.push(c)
+	queue = newChunkQueue(1, 0)
+	ok = queue.push(chunk)
 	assert.True(t, ok, "should succeed")
 
-	ok = q.push(c)
-	assert.False(t, ok, "should fail")
-
-	d = q.peek()
-	assert.Equal(t, c, d, "should be the same")
-
-	q = newChunkQueue(0, 1500)
-	ok = q.push(c)
-	assert.True(t, ok, "should succeed")
-
-	ok = q.push(c)
+	ok = queue.push(chunk)
 	assert.False(t, ok, "should fail")
 
-	d = q.peek()
-	assert.Equal(t, c, d, "should be the same")
+	chunk2 = queue.peek()
+	assert.Equal(t, chunk, chunk2, "should be the same")
+
+	queue = newChunkQueue(0, 1500)
+	ok = queue.push(chunk)
+	assert.True(t, ok, "should succeed")
+
+	ok = queue.push(chunk)
+	assert.False(t, ok, "should fail")
+
+	chunk2 = queue.peek()
+	assert.Equal(t, chunk, chunk2, "should be the same")
 }

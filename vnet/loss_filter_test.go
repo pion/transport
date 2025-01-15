@@ -35,9 +35,12 @@ func (n *mockNIC) setRouter(r *Router) error {
 }
 
 func newMockNIC(t *testing.T) *mockNIC {
+	t.Helper()
+
 	return &mockNIC{
 		mockGetInterface: func(string) (*transport.Interface, error) {
 			assert.Fail(t, "unexpected call to mockGetInterface")
+
 			return nil, nil
 		},
 		mockOnInboundChunk: func(Chunk) {
@@ -45,10 +48,12 @@ func newMockNIC(t *testing.T) *mockNIC {
 		},
 		mockGetStaticIPs: func() []net.IP {
 			assert.Fail(t, "unexpected call to mockGetStaticIPs")
+
 			return nil
 		},
 		mockSetRouter: func(*Router) error {
 			assert.Fail(t, "unexpected call to mockSetRouter")
+
 			return nil
 		},
 	}
