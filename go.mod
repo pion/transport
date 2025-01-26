@@ -3,7 +3,7 @@ module github.com/pion/transport/v3
 go 1.20
 
 require (
-	github.com/pion/logging v0.2.2
+	github.com/pion/logging v0.2.3
 	github.com/stretchr/testify v1.10.0
 	github.com/wlynxg/anet v0.0.5
 	golang.org/x/net v0.33.0
