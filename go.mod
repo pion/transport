@@ -1,13 +1,15 @@
 module github.com/pion/transport/v3
 
-go 1.20
+go 1.23.0
+
+toolchain go1.24.1
 
 require (
 	github.com/pion/logging v0.2.3
 	github.com/stretchr/testify v1.10.0
 	github.com/wlynxg/anet v0.0.5
-	golang.org/x/net v0.34.0
-	golang.org/x/sys v0.29.0
+	golang.org/x/net v0.37.0
+	golang.org/x/sys v0.31.0
 )
 
 require (
