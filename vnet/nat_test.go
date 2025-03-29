@@ -660,8 +660,8 @@ func TestNATMappingTimeout(t *testing.T) {
 
 		_, err = nat.translateInbound(iec)
 		assert.NotNil(t, err, "should drop")
-		assert.Equal(t, 0, len(nat.outboundMap), "should have no binding")
-		assert.Equal(t, 0, len(nat.inboundMap), "should have no binding")
+		assert.Empty(t, nat.outboundMap, "should have no binding")
+		assert.Empty(t, nat.inboundMap, "should have no binding")
 	})
 }
 
@@ -695,8 +695,8 @@ func TestNAT1To1Behavior(t *testing.T) {
 
 		oec, err := nat.translateOutbound(oic)
 		assert.Nil(t, err, "should succeed")
-		assert.Equal(t, 0, len(nat.outboundMap), "should match")
-		assert.Equal(t, 0, len(nat.inboundMap), "should match")
+		assert.Empty(t, nat.outboundMap, "should match")
+		assert.Empty(t, nat.inboundMap, "should match")
 
 		log.Debugf("o-original  : %s", oic.String())
 		log.Debugf("o-translated: %s", oec.String())

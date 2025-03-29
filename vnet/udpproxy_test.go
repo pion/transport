@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/pion/logging"
+	"github.com/stretchr/testify/assert"
 )
 
 type MockUDPEchoServer struct {
@@ -92,7 +93,7 @@ var testTimeout = flag.Int("timeout", 5000, "For each case, the timeout in ms") 
 
 func TestMain(m *testing.M) {
 	flag.Parse()
-	os.Exit(m.Run())
+	os.Exit(m.Run()) //nolint:forbidigo
 }
 
 // vnet client:
@@ -109,9 +110,9 @@ func TestUDPProxyOne2One(t *testing.T) { //nolint:gocyclo,cyclop
 
 	var r0, r1, r2 error
 	defer func() {
-		if r0 != nil || r1 != nil || r2 != nil {
-			t.Errorf("fail for ctx=%v, r0=%v, r1=%v, r2=%v", ctx.Err(), r0, r1, r2)
-		}
+		assert.NoErrorf(t, r0, "fail for ctx=%v, r0=%v", ctx.Err(), r0)
+		assert.NoErrorf(t, r1, "fail for ctx=%v, r1=%v", ctx.Err(), r1)
+		assert.NoErrorf(t, r2, "fail for ctx=%v, r2=%v", ctx.Err(), r2)
 	}()
 
 	var wg sync.WaitGroup
@@ -263,9 +264,10 @@ func TestUDPProxyTwo2One(t *testing.T) { //nolint:gocyclo,cyclop
 
 	var r0, r1, r2, r3 error
 	defer func() {
-		if r0 != nil || r1 != nil || r2 != nil || r3 != nil {
-			t.Errorf("fail for ctx=%v, r0=%v, r1=%v, r2=%v, r3=%v", ctx.Err(), r0, r1, r2, r3)
-		}
+		assert.NoErrorf(t, r0, "fail for ctx=%v, r0=%v", ctx.Err(), r0)
+		assert.NoErrorf(t, r1, "fail for ctx=%v, r1=%v", ctx.Err(), r1)
+		assert.NoErrorf(t, r2, "fail for ctx=%v, r2=%v", ctx.Err(), r2)
+		assert.NoErrorf(t, r3, "fail for ctx=%v, r3=%v", ctx.Err(), r3)
 	}()
 
 	var wg sync.WaitGroup
@@ -452,9 +454,10 @@ func TestUDPProxyProxyTwice(t *testing.T) { //nolint:gocyclo,cyclop
 
 	var r0, r1, r2, r3 error
 	defer func() {
-		if r0 != nil || r1 != nil || r2 != nil || r3 != nil {
-			t.Errorf("fail for ctx=%v, r0=%v, r1=%v, r2=%v, r3=%v", ctx.Err(), r0, r1, r2, r3)
-		}
+		assert.NoErrorf(t, r0, "fail for ctx=%v, r0=%v", ctx.Err(), r0)
+		assert.NoErrorf(t, r1, "fail for ctx=%v, r1=%v", ctx.Err(), r1)
+		assert.NoErrorf(t, r2, "fail for ctx=%v, r2=%v", ctx.Err(), r2)
+		assert.NoErrorf(t, r3, "fail for ctx=%v, r3=%v", ctx.Err(), r3)
 	}()
 
 	var wg sync.WaitGroup

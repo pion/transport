@@ -447,6 +447,7 @@ func (br *Bridge) SetLossChance(chance int) error {
 		return errBadLossChanceRange
 	}
 
+	//nolint:staticcheck
 	rand.Seed(time.Now().UTC().UnixNano())
 	br.conn0.lossChance = chance
 	br.conn1.lossChance = chance

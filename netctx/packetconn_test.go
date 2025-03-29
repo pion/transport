@@ -4,13 +4,14 @@
 package netctx
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"io"
 	"net"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 var _ net.PacketConn = wrapConn{}
@@ -76,20 +77,10 @@ func TestReadFrom(t *testing.T) {
 	c := NewPacketConn(ca)
 	b := make([]byte, 100)
 	n, _, err := c.ReadFromContext(context.Background(), b)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n != len(data) {
-		t.Errorf("Wrong data length, expected %d, got %d", len(data), n)
-	}
-	if !bytes.Equal(data, b[:n]) {
-		t.Errorf("Wrong data, expected %v, got %v", data, b)
-	}
-
-	err = <-chErr
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
+	assert.Len(t, data, n, "Wrong data length")
+	assert.Equal(t, data, b[:n])
+	assert.NoError(t, <-chErr)
 }
 
 func TestReadFromTimeout(t *testing.T) {
@@ -104,12 +95,8 @@ func TestReadFromTimeout(t *testing.T) {
 	c := NewPacketConn(ca)
 	b := make([]byte, 100)
 	n, _, err := c.ReadFromContext(ctx, b)
-	if err == nil {
-		t.Error("Read unexpectedly succeeded")
-	}
-	if n != 0 {
-		t.Errorf("Wrong data length, expected %d, got %d", 0, n)
-	}
+	assert.Error(t, err)
+	assert.Empty(t, n, "Wrong data length")
 }
 
 func TestReadFromCancel(t *testing.T) {
@@ -127,12 +114,8 @@ func TestReadFromCancel(t *testing.T) {
 	c := NewPacketConn(ca)
 	b := make([]byte, 100)
 	n, _, err := c.ReadFromContext(ctx, b)
-	if err == nil {
-		t.Error("Read unexpectedly succeeded")
-	}
-	if n != 0 {
-		t.Errorf("Wrong data length, expected %d, got %d", 0, n)
-	}
+	assert.Error(t, err)
+	assert.Empty(t, n, "Wrong data length")
 }
 
 func TestReadFromClosed(t *testing.T) {
@@ -143,12 +126,8 @@ func TestReadFromClosed(t *testing.T) {
 
 	b := make([]byte, 100)
 	n, _, err := c.ReadFromContext(context.Background(), b)
-	if !errors.Is(err, net.ErrClosed) {
-		t.Errorf("Expected error '%v', got '%v'", net.ErrClosed, err)
-	}
-	if n != 0 {
-		t.Errorf("Wrong data length, expected %d, got %d", 0, n)
-	}
+	assert.ErrorIs(t, err, net.ErrClosed)
+	assert.Empty(t, n, "Wrong data length")
 }
 
 func TestWriteTo(t *testing.T) {
@@ -170,21 +149,13 @@ func TestWriteTo(t *testing.T) {
 	c := NewPacketConn(ca)
 	data := []byte{0x01, 0x02, 0xFF}
 	n, err := c.WriteToContext(context.Background(), data, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n != len(data) {
-		t.Errorf("Wrong data length, expected %d, got %d", len(data), n)
-	}
+	assert.NoError(t, err)
+	assert.Len(t, data, n, "Wrong data length")
 
 	err = <-chErr
 	b := <-chRead
-	if !bytes.Equal(data, b) {
-		t.Errorf("Wrong data, expected %v, got %v", data, b)
-	}
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, data, b)
 }
 
 func TestWriteToTimeout(t *testing.T) {
@@ -199,12 +170,8 @@ func TestWriteToTimeout(t *testing.T) {
 	c := NewPacketConn(ca)
 	b := make([]byte, 100)
 	n, err := c.WriteToContext(ctx, b, nil)
-	if err == nil {
-		t.Error("Write unexpectedly succeeded")
-	}
-	if n != 0 {
-		t.Errorf("Wrong data length, expected %d, got %d", 0, n)
-	}
+	assert.Error(t, err)
+	assert.Empty(t, n, "Wrong data length")
 }
 
 func TestWriteToCancel(t *testing.T) {
@@ -222,12 +189,8 @@ func TestWriteToCancel(t *testing.T) {
 	c := NewPacketConn(ca)
 	b := make([]byte, 100)
 	n, err := c.WriteToContext(ctx, b, nil)
-	if err == nil {
-		t.Error("Write unexpectedly succeeded")
-	}
-	if n != 0 {
-		t.Errorf("Wrong data length, expected %d, got %d", 0, n)
-	}
+	assert.Error(t, err)
+	assert.Empty(t, n, "Wrong data length")
 }
 
 func TestWriteToClosed(t *testing.T) {
@@ -238,31 +201,25 @@ func TestWriteToClosed(t *testing.T) {
 
 	b := make([]byte, 100)
 	n, err := c.WriteToContext(context.Background(), b, nil)
-	if !errors.Is(err, ErrClosing) {
-		t.Errorf("Expected error '%v', got '%v'", ErrClosing, err)
-	}
-	if n != 0 {
-		t.Errorf("Wrong data length, expected %d, got %d", 0, n)
-	}
+	assert.ErrorIs(t, err, ErrClosing)
+	assert.Empty(t, n, "Wrong data length")
 }
 
 type packetConnAddrMock struct{}
 
 func (*packetConnAddrMock) LocalAddr() net.Addr                    { return stringAddr{"local_net", "local_addr"} }
-func (*packetConnAddrMock) ReadFrom([]byte) (int, net.Addr, error) { panic("unimplemented") }
-func (*packetConnAddrMock) WriteTo([]byte, net.Addr) (int, error)  { panic("unimplemented") }
-func (*packetConnAddrMock) Close() error                           { panic("unimplemented") }
-func (*packetConnAddrMock) SetDeadline(_ time.Time) error          { panic("unimplemented") }
-func (*packetConnAddrMock) SetReadDeadline(_ time.Time) error      { panic("unimplemented") }
-func (*packetConnAddrMock) SetWriteDeadline(_ time.Time) error     { panic("unimplemented") }
+func (*packetConnAddrMock) ReadFrom([]byte) (int, net.Addr, error) { panic("unimplemented") } //nolint:forbidigo
+func (*packetConnAddrMock) WriteTo([]byte, net.Addr) (int, error)  { panic("unimplemented") } //nolint:forbidigo
+func (*packetConnAddrMock) Close() error                           { panic("unimplemented") } //nolint:forbidigo
+func (*packetConnAddrMock) SetDeadline(_ time.Time) error          { panic("unimplemented") } //nolint:forbidigo
+func (*packetConnAddrMock) SetReadDeadline(_ time.Time) error      { panic("unimplemented") } //nolint:forbidigo
+func (*packetConnAddrMock) SetWriteDeadline(_ time.Time) error     { panic("unimplemented") } //nolint:forbidigo
 
 func TestPacketConnLocalAddrAndRemoteAddr(t *testing.T) {
 	c := NewPacketConn(&packetConnAddrMock{})
 	al := c.LocalAddr()
 
-	if al.String() != "local_addr" {
-		t.Error("Wrong LocalAddr implementation")
-	}
+	assert.Equal(t, "local_addr", al.String())
 }
 
 func BenchmarkPacketConnBase(b *testing.B) {

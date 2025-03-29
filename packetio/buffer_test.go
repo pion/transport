@@ -38,9 +38,8 @@ func TestBuffer(t *testing.T) {
 	assert.NoError(err)
 	n, err = buffer.Read(packet)
 	var e net.Error
-	if !errors.As(err, &e) || !e.Timeout() {
-		t.Errorf("Unexpected error: %v", err)
-	}
+	assert.ErrorAs(err, &e)
+	assert.True(e.Timeout())
 	assert.Equal(0, n)
 
 	// Reset deadline
@@ -376,7 +375,7 @@ func TestBufferLimitSizes(t *testing.T) {
 				assert.NoError(err)
 				assert.Equal(packetSize, n)
 				if err != nil {
-					t.FailNow()
+					assert.FailNow("Read failed", err)
 				}
 			}
 		})
@@ -415,11 +414,7 @@ func TestBufferAlloc(t *testing.T) {
 			t.Helper()
 
 			allocs := testing.AllocsPerRun(3, f(count))
-			if allocs > maxVal {
-				t.Errorf("count=%v, max=%v, got %v",
-					count, maxVal, allocs,
-				)
-			}
+			assert.LessOrEqualf(t, allocs, maxVal, "count=%v, max=%v, got %v", count, maxVal, allocs)
 		}
 	}
 
@@ -428,11 +423,7 @@ func TestBufferAlloc(t *testing.T) {
 			buffer := NewBuffer()
 			for i := 0; i < count; i++ {
 				_, err := buffer.Write(packet)
-				if err != nil {
-					t.Errorf("Write: %v", err)
-
-					break
-				}
+				assert.NoError(t, err, "Write")
 			}
 		}
 	}
@@ -447,13 +438,9 @@ func TestBufferAlloc(t *testing.T) {
 			buffer := NewBuffer()
 			for i := 0; i < count; i++ {
 				_, err := buffer.Write(packet)
-				if err != nil {
-					t.Fatalf("Write: %v", err)
-				}
+				assert.NoError(t, err, "Write")
 				_, err = buffer.Read(packet)
-				if err != nil {
-					t.Fatalf("Read: %v", err)
-				}
+				assert.NoError(t, err, "Read")
 			}
 		}
 	}

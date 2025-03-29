@@ -4,11 +4,11 @@
 package deadline
 
 import (
-	"bytes"
 	"context"
-	"errors"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestDeadline(t *testing.T) {
@@ -32,9 +32,7 @@ func TestDeadline(t *testing.T) {
 
 		calls := collectCh(ch, 3, 100*time.Millisecond)
 		expectedCalls := []byte{0, 2, 1}
-		if !bytes.Equal(calls, expectedCalls) {
-			t.Errorf("Wrong order of deadline signal, expected: %v, got: %v", expectedCalls, calls)
-		}
+		assert.Equal(t, expectedCalls, calls, "Wrong order of deadline signal")
 	})
 
 	t.Run("DeadlineExtend", func(t *testing.T) { //nolint:dupl
@@ -55,9 +53,7 @@ func TestDeadline(t *testing.T) {
 
 		calls := collectCh(ch, 3, 100*time.Millisecond)
 		expectedCalls := []byte{0, 1, 2}
-		if !bytes.Equal(calls, expectedCalls) {
-			t.Errorf("Wrong order of deadline signal, expected: %v, got: %v", expectedCalls, calls)
-		}
+		assert.Equal(t, expectedCalls, calls, "Wrong order of deadline signal")
 	})
 
 	t.Run("DeadlinePretend", func(t *testing.T) { //nolint:dupl
@@ -78,9 +74,7 @@ func TestDeadline(t *testing.T) {
 
 		calls := collectCh(ch, 3, 100*time.Millisecond)
 		expectedCalls := []byte{2, 0, 1}
-		if !bytes.Equal(calls, expectedCalls) {
-			t.Errorf("Wrong order of deadline signal, expected: %v, got: %v", expectedCalls, calls)
-		}
+		assert.Equal(t, expectedCalls, calls, "Wrong order of deadline signal")
 	})
 
 	t.Run("DeadlineCancel", func(t *testing.T) {
@@ -98,9 +92,7 @@ func TestDeadline(t *testing.T) {
 
 		calls := collectCh(ch, 2, 60*time.Millisecond)
 		expectedCalls := []byte{0}
-		if !bytes.Equal(calls, expectedCalls) {
-			t.Errorf("Wrong order of deadline signal, expected: %v, got: %v", expectedCalls, calls)
-		}
+		assert.Equal(t, expectedCalls, calls, "Wrong order of deadline signal")
 	})
 }
 
@@ -134,42 +126,30 @@ func TestContext(t *testing.T) { //nolint:cyclop
 
 		select {
 		case <-deadline.Done():
-			t.Fatal("Deadline unexpectedly done")
+			assert.Fail(t, "Deadline unexpectedly done")
 		case <-time.After(50 * time.Millisecond):
 		}
-		if err := deadline.Err(); err != nil {
-			t.Errorf("Wrong Err(), expected: nil, got: %v", err)
-		}
+		assert.NoError(t, deadline.Err())
 		deadline.Set(time.Unix(0, 1)) // exceeded
 		select {
 		case <-deadline.Done():
 		case <-time.After(50 * time.Millisecond):
-			t.Fatal("Timeout")
+			assert.Fail(t, "Timeout")
 		}
-		if err := deadline.Err(); !errors.Is(err, context.DeadlineExceeded) {
-			t.Errorf("Wrong Err(), expected: %v, got: %v", context.DeadlineExceeded, err)
-		}
+		assert.ErrorIs(t, deadline.Err(), context.DeadlineExceeded)
 	})
 	t.Run("Deadline", func(t *testing.T) {
 		d := New()
 		t0, expired0 := d.Deadline()
-		if !t0.IsZero() {
-			t.Errorf("Initial Deadline is expected to be 0, got %v", t0)
-		}
-		if expired0 {
-			t.Error("Deadline is not expected to be expired at initial state")
-		}
+		assert.True(t, t0.IsZero(), "Initial Deadline is expected to be 0")
+		assert.False(t, expired0, "Deadline is not expected to be expired at initial state")
 
 		dl := time.Unix(12345, 0)
 		d.Set(dl) // exceeded
 
 		t1, expired1 := d.Deadline()
-		if !t1.Equal(dl) {
-			t.Errorf("Initial Deadline is expected to be %v, got %v", dl, t1)
-		}
-		if !expired1 {
-			t.Error("Deadline is expected to be expired")
-		}
+		assert.True(t, t1.Equal(dl), "Initial Deadline is expected to be %v, got %v", dl, t1)
+		assert.True(t, expired1, "Deadline is expected to be expired")
 	})
 }
 

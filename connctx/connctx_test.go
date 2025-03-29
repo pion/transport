@@ -4,13 +4,14 @@
 package connctx
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"io"
 	"net"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestRead(t *testing.T) {
@@ -30,20 +31,12 @@ func TestRead(t *testing.T) {
 	c := New(ca)
 	b := make([]byte, 100)
 	n, err := c.ReadContext(context.Background(), b)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n != len(data) {
-		t.Errorf("Wrong data length, expected %d, got %d", len(data), n)
-	}
-	if !bytes.Equal(data, b[:n]) {
-		t.Errorf("Wrong data, expected %v, got %v", data, b)
-	}
+	assert.NoError(t, err)
+	assert.Len(t, data, n)
+	assert.Equal(t, data, b[:n])
 
 	err = <-chErr
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 }
 
 func TestReadTimeout(t *testing.T) {
@@ -58,12 +51,8 @@ func TestReadTimeout(t *testing.T) {
 	c := New(ca)
 	b := make([]byte, 100)
 	n, err := c.ReadContext(ctx, b)
-	if err == nil {
-		t.Error("Read unexpectedly succeeded")
-	}
-	if n != 0 {
-		t.Errorf("Wrong data length, expected %d, got %d", 0, n)
-	}
+	assert.Error(t, err)
+	assert.Empty(t, n)
 }
 
 func TestReadCancel(t *testing.T) {
@@ -81,12 +70,8 @@ func TestReadCancel(t *testing.T) {
 	c := New(ca)
 	b := make([]byte, 100)
 	n, err := c.ReadContext(ctx, b)
-	if err == nil {
-		t.Error("Read unexpectedly succeeded")
-	}
-	if n != 0 {
-		t.Errorf("Wrong data length, expected %d, got %d", 0, n)
-	}
+	assert.Error(t, err)
+	assert.Empty(t, n)
 }
 
 func TestReadClosed(t *testing.T) {
@@ -97,12 +82,8 @@ func TestReadClosed(t *testing.T) {
 
 	b := make([]byte, 100)
 	n, err := c.ReadContext(context.Background(), b)
-	if !errors.Is(err, io.EOF) {
-		t.Errorf("Expected error '%v', got '%v'", io.EOF, err)
-	}
-	if n != 0 {
-		t.Errorf("Wrong data length, expected %d, got %d", 0, n)
-	}
+	assert.ErrorIs(t, err, io.EOF)
+	assert.Empty(t, n)
 }
 
 func TestWrite(t *testing.T) {
@@ -124,21 +105,13 @@ func TestWrite(t *testing.T) {
 	c := New(ca)
 	data := []byte{0x01, 0x02, 0xFF}
 	n, err := c.WriteContext(context.Background(), data)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n != len(data) {
-		t.Errorf("Wrong data length, expected %d, got %d", len(data), n)
-	}
+	assert.NoError(t, err)
+	assert.Len(t, data, n)
 
 	err = <-chErr
 	b := <-chRead
-	if !bytes.Equal(data, b) {
-		t.Errorf("Wrong data, expected %v, got %v", data, b)
-	}
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.Equal(t, b, data)
+	assert.NoError(t, err)
 }
 
 func TestWriteTimeout(t *testing.T) {
@@ -153,12 +126,8 @@ func TestWriteTimeout(t *testing.T) {
 	c := New(ca)
 	b := make([]byte, 100)
 	n, err := c.WriteContext(ctx, b)
-	if err == nil {
-		t.Error("Write unexpectedly succeeded")
-	}
-	if n != 0 {
-		t.Errorf("Wrong data length, expected %d, got %d", 0, n)
-	}
+	assert.Error(t, err)
+	assert.Empty(t, n)
 }
 
 func TestWriteCancel(t *testing.T) {
@@ -176,12 +145,8 @@ func TestWriteCancel(t *testing.T) {
 	c := New(ca)
 	b := make([]byte, 100)
 	n, err := c.WriteContext(ctx, b)
-	if err == nil {
-		t.Error("Write unexpectedly succeeded")
-	}
-	if n != 0 {
-		t.Errorf("Wrong data length, expected %d, got %d", 0, n)
-	}
+	assert.Error(t, err)
+	assert.Empty(t, n)
 }
 
 func TestWriteClosed(t *testing.T) {
@@ -192,12 +157,8 @@ func TestWriteClosed(t *testing.T) {
 
 	b := make([]byte, 100)
 	n, err := c.WriteContext(context.Background(), b)
-	if !errors.Is(err, ErrClosing) {
-		t.Errorf("Expected error '%v', got '%v'", ErrClosing, err)
-	}
-	if n != 0 {
-		t.Errorf("Wrong data length, expected %d, got %d", 0, n)
-	}
+	assert.ErrorIs(t, err, ErrClosing)
+	assert.Empty(t, n)
 }
 
 // Test for TestLocalAddrAndRemoteAddr.
@@ -211,26 +172,39 @@ func (a stringAddr) String() string  { return a.addr }
 
 type connAddrMock struct{}
 
-func (*connAddrMock) RemoteAddr() net.Addr               { return stringAddr{"remote_net", "remote_addr"} }
-func (*connAddrMock) LocalAddr() net.Addr                { return stringAddr{"local_net", "local_addr"} }
-func (*connAddrMock) Read(_ []byte) (n int, err error)   { panic("unimplemented") }
-func (*connAddrMock) Write(_ []byte) (n int, err error)  { panic("unimplemented") }
-func (*connAddrMock) Close() error                       { panic("unimplemented") }
-func (*connAddrMock) SetDeadline(_ time.Time) error      { panic("unimplemented") }
-func (*connAddrMock) SetReadDeadline(_ time.Time) error  { panic("unimplemented") }
-func (*connAddrMock) SetWriteDeadline(_ time.Time) error { panic("unimplemented") }
+func (*connAddrMock) RemoteAddr() net.Addr { return stringAddr{"remote_net", "remote_addr"} }
+func (*connAddrMock) LocalAddr() net.Addr  { return stringAddr{"local_net", "local_addr"} }
+func (*connAddrMock) Read(_ []byte) (n int, err error) {
+	panic("unimplemented") //nolint
+}
+
+func (*connAddrMock) Write(_ []byte) (n int, err error) {
+	panic("unimplemented") //nolint
+}
+
+func (*connAddrMock) Close() error {
+	panic("unimplemented") //nolint
+}
+
+func (*connAddrMock) SetDeadline(_ time.Time) error {
+	panic("unimplemented") //nolint
+}
+
+func (*connAddrMock) SetReadDeadline(_ time.Time) error {
+	panic("unimplemented") //nolint
+}
+
+func (*connAddrMock) SetWriteDeadline(_ time.Time) error {
+	panic("unimplemented") //nolint
+}
 
 func TestLocalAddrAndRemoteAddr(t *testing.T) {
 	c := New(&connAddrMock{})
 	al := c.LocalAddr()
 	ar := c.RemoteAddr()
 
-	if al.String() != "local_addr" {
-		t.Error("Wrong LocalAddr implementation")
-	}
-	if ar.String() != "remote_addr" {
-		t.Error("Wrong RemoteAddr implementation")
-	}
+	assert.Equal(t, "local_addr", al.String())
+	assert.Equal(t, "remote_addr", ar.String())
 }
 
 func BenchmarkBase(b *testing.B) {

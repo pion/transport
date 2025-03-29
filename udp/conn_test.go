@@ -7,7 +7,6 @@
 package udp
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -59,23 +58,15 @@ func stressDuplex(t *testing.T) {
 	t.Helper()
 
 	listener, ca, cb, err := pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 
 	defer func() {
 		err = ca.Close()
-		if err != nil {
-			t.Fatal(err)
-		}
+		assert.NoError(t, err)
 		err = cb.Close()
-		if err != nil {
-			t.Fatal(err)
-		}
+		assert.NoError(t, err)
 		err = listener.Close()
-		if err != nil {
-			t.Fatal(err)
-		}
+		assert.NoError(t, err)
 	}()
 
 	opt := test.Options{
@@ -84,9 +75,7 @@ func stressDuplex(t *testing.T) {
 	}
 
 	err = test.StressDuplex(ca, cb, opt)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 }
 
 func TestListenerCloseTimeout(t *testing.T) {
@@ -99,20 +88,14 @@ func TestListenerCloseTimeout(t *testing.T) {
 	defer report()
 
 	listener, ca, _, err := pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 
 	err = listener.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 
 	// Close client after server closes to cleanup
 	err = ca.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 }
 
 func TestListenerCloseUnaccepted(t *testing.T) {
@@ -130,31 +113,20 @@ func TestListenerCloseUnaccepted(t *testing.T) {
 	listener, err := (&ListenConfig{
 		Backlog: backlog,
 	}).Listen(network, addr)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 
 	for i := 0; i < backlog; i++ {
-		conn, dErr := net.DialUDP(network, nil, listener.Addr().(*net.UDPAddr))
-		if dErr != nil {
-			t.Error(dErr)
-
-			continue
-		}
-		if _, wErr := conn.Write([]byte{byte(i)}); wErr != nil {
-			t.Error(wErr)
-		}
-		if cErr := conn.Close(); cErr != nil {
-			t.Error(cErr)
-		}
+		conn, err := net.DialUDP(network, nil, listener.Addr().(*net.UDPAddr))
+		assert.NoError(t, err)
+		_, err = conn.Write([]byte{byte(i)})
+		assert.NoError(t, err)
+		assert.NoError(t, conn.Close())
 	}
 
 	time.Sleep(100 * time.Millisecond) // Wait all packets being processed by readLoop
 
 	// Unaccepted connections must be closed by listener.Close()
-	if err = listener.Close(); err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, listener.Close())
 }
 
 func TestListenerAcceptFilter(t *testing.T) { //nolint:cyclop
@@ -189,30 +161,21 @@ func TestListenerAcceptFilter(t *testing.T) { //nolint:cyclop
 					return pkt[0] == 0xAA
 				},
 			}).Listen(network, addr)
-			if err != nil {
-				t.Fatal(err)
-			}
+			assert.NoError(t, err)
 
 			var wgAcceptLoop sync.WaitGroup
 			wgAcceptLoop.Add(1)
 			defer func() {
-				if lErr := listener.Close(); lErr != nil {
-					t.Fatal(lErr)
-				}
+				assert.NoError(t, listener.Close())
 				wgAcceptLoop.Wait()
 			}()
 
 			conn, err := net.DialUDP(network, nil, listener.Addr().(*net.UDPAddr))
-			if err != nil {
-				t.Fatal(err)
-			}
-			if _, err := conn.Write(testCase.packet); err != nil {
-				t.Fatal(err)
-			}
+			assert.NoError(t, err)
+			_, err = conn.Write(testCase.packet)
+			assert.NoError(t, err)
 			defer func() {
-				if err := conn.Close(); err != nil {
-					t.Error(err)
-				}
+				assert.NoError(t, conn.Close())
 			}()
 
 			chAccepted := make(chan struct{})
@@ -221,16 +184,12 @@ func TestListenerAcceptFilter(t *testing.T) { //nolint:cyclop
 
 				conn, aArr := listener.Accept()
 				if aArr != nil {
-					if !errors.Is(aArr, ErrClosedListener) {
-						t.Error(aArr)
-					}
+					assert.ErrorIs(t, aArr, ErrClosedListener)
 
 					return
 				}
 				close(chAccepted)
-				if err := conn.Close(); err != nil {
-					t.Error(err)
-				}
+				assert.NoError(t, conn.Close())
 			}()
 
 			var accepted bool
@@ -240,12 +199,10 @@ func TestListenerAcceptFilter(t *testing.T) { //nolint:cyclop
 			case <-time.After(10 * time.Millisecond):
 			}
 
-			if accepted != testCase.accept {
-				if testCase.accept {
-					t.Error("Packet should create new conn")
-				} else {
-					t.Error("Packet should not create new conn")
-				}
+			if testCase.accept {
+				assert.Equal(t, testCase.accept, accepted, "Packet should create new conn")
+			} else {
+				assert.Equal(t, testCase.accept, accepted, "Packet should not create new conn")
 			}
 		})
 	}
@@ -266,63 +223,43 @@ func TestListenerConcurrent(t *testing.T) { //nolint:cyclop
 	listener, err := (&ListenConfig{
 		Backlog: backlog,
 	}).Listen(network, addr)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 
 	for i := 0; i < backlog+1; i++ {
-		conn, dErr := net.DialUDP(network, nil, listener.Addr().(*net.UDPAddr))
-		if dErr != nil {
-			t.Error(dErr)
-
-			continue
-		}
-		if _, wErr := conn.Write([]byte{byte(i)}); wErr != nil {
-			t.Error(wErr)
-		}
-		if cErr := conn.Close(); cErr != nil {
-			t.Error(cErr)
-		}
+		conn, connErr := net.DialUDP(network, nil, listener.Addr().(*net.UDPAddr))
+		assert.NoError(t, connErr)
+		_, connErr = conn.Write([]byte{byte(i)})
+		assert.NoError(t, connErr)
+		assert.NoError(t, conn.Close())
 	}
 
 	time.Sleep(100 * time.Millisecond) // Wait all packets being processed by readLoop
 
 	for i := 0; i < backlog; i++ {
-		conn, lErr := listener.Accept()
-		if lErr != nil {
-			t.Error(lErr)
-
-			continue
-		}
+		conn, connErr := listener.Accept()
+		assert.NoError(t, connErr)
 		b := make([]byte, 1)
-		n, lErr := conn.Read(b)
-		if lErr != nil {
-			t.Error(lErr)
-		} else if !bytes.Equal([]byte{byte(i)}, b[:n]) {
-			t.Errorf("Packet from connection %d is wrong, expected: [%d], got: %v", i, i, b[:n])
-		}
-		if lErr = conn.Close(); lErr != nil {
-			t.Error(lErr)
-		}
+		n, connErr := conn.Read(b)
+		assert.NoError(t, connErr)
+		assert.Equalf(t, []byte{byte(i)}, b[:n], "Packet from connection %d is wrong", i)
+		assert.NoError(t, conn.Close())
 	}
 
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if conn, lErr := listener.Accept(); !errors.Is(lErr, ErrClosedListener) {
-			t.Errorf("Connection exceeding backlog limit must be discarded: %v", lErr)
-			if lErr == nil {
-				_ = conn.Close()
-			}
+		conn, connErr := listener.Accept()
+		assert.ErrorIs(t, connErr, ErrClosedListener, "Connection exceeding backlog limit must be discarded")
+
+		if connErr == nil {
+			_ = conn.Close()
 		}
 	}()
 
 	time.Sleep(100 * time.Millisecond) // Last Accept should be discarded
 	err = listener.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 
 	wg.Wait()
 }
@@ -383,67 +320,43 @@ func TestConnClose(t *testing.T) { //nolint:cyclop
 		report := test.CheckRoutines(t)
 		defer report()
 
-		l, ca, cb, errPipe := pipe()
-		if errPipe != nil {
-			t.Fatal(errPipe)
-		}
-		if err := ca.Close(); err != nil {
-			t.Errorf("Failed to close A side: %v", err)
-		}
-		if err := cb.Close(); err != nil {
-			t.Errorf("Failed to close B side: %v", err)
-		}
-		if err := l.Close(); err != nil {
-			t.Errorf("Failed to close listener: %v", err)
-		}
+		l, ca, cb, err := pipe()
+		assert.NoError(t, err)
+		assert.NoError(t, ca.Close(), "Failed to close A side")
+		assert.NoError(t, cb.Close(), "Failed to close B side")
+		assert.NoError(t, l.Close(), "Failed to close listener")
 	})
 	t.Run("CloseError1", func(t *testing.T) {
 		// Check for leaking routines
 		report := test.CheckRoutines(t)
 		defer report()
 
-		listn, ca, cb, errPipe := pipe()
-		if errPipe != nil {
-			t.Fatal(errPipe)
-		}
+		listn, ca, cb, err := pipe()
+		assert.NoError(t, err)
 		// Close l.pConn to inject error.
-		if err := listn.(*listener).pConn.Close(); err != nil { //nolint:forcetypeassert
-			t.Error(err)
-		}
+		list, ok := listn.(*listener)
+		assert.True(t, ok)
+		assert.NoError(t, list.pConn.Close())
 
-		if err := cb.Close(); err != nil {
-			t.Errorf("Failed to close A side: %v", err)
-		}
-		if err := ca.Close(); err != nil {
-			t.Errorf("Failed to close B side: %v", err)
-		}
-		if err := listn.Close(); err == nil {
-			t.Errorf("Error is not propagated to Listener.Close")
-		}
+		assert.NoError(t, ca.Close(), "Failed to close A side")
+		assert.NoError(t, cb.Close(), "Failed to close B side")
+		assert.Error(t, listn.Close(), "Error is not propagated to Listener.Close")
 	})
 	t.Run("CloseError2", func(t *testing.T) {
 		// Check for leaking routines
 		report := test.CheckRoutines(t)
 		defer report()
 
-		l, ca, cb, errPipe := pipe()
-		if errPipe != nil {
-			t.Fatal(errPipe)
-		}
+		l, ca, cb, err := pipe()
+		assert.NoError(t, err)
 		// Close l.pConn to inject error.
-		if err := l.(*listener).pConn.Close(); err != nil { //nolint:forcetypeassert
-			t.Error(err)
-		}
+		list, ok := l.(*listener)
+		assert.True(t, ok)
+		assert.NoError(t, list.pConn.Close())
 
-		if err := cb.Close(); err != nil {
-			t.Errorf("Failed to close A side: %v", err)
-		}
-		if err := l.Close(); err != nil {
-			t.Errorf("Failed to close listener: %v", err)
-		}
-		if err := ca.Close(); err == nil {
-			t.Errorf("Error is not propagated to Conn.Close")
-		}
+		assert.NoError(t, cb.Close(), "Failed to close B side")
+		assert.NoError(t, l.Close(), "Failed to close listener")
+		assert.Error(t, ca.Close(), "Error is not propagated to Conn.Close")
 	})
 	t.Run("CancelRead", func(t *testing.T) {
 		// Limit runtime in case of deadlocks
@@ -454,10 +367,8 @@ func TestConnClose(t *testing.T) { //nolint:cyclop
 		report := test.CheckRoutines(t)
 		defer report()
 
-		listn, ca, cb, errPipe := pipe()
-		if errPipe != nil {
-			t.Fatal(errPipe)
-		}
+		listn, ca, cb, err := pipe()
+		assert.NoError(t, err)
 
 		errC := make(chan error, 1)
 		go func() {
@@ -468,22 +379,13 @@ func TestConnClose(t *testing.T) { //nolint:cyclop
 			errC <- err
 		}()
 
-		if err := ca.Close(); err != nil { // Trigger Read cancellation.
-			t.Errorf("Failed to close B side: %v", err)
-		}
+		assert.NoError(t, ca.Close(), "Failed to close A side")
 
 		// Main test condition, Read should return
 		// after ca.Close() by closing the buffer.
-		if err := <-errC; !errors.Is(err, io.EOF) {
-			t.Errorf("expected err to be io.EOF but got %v", err)
-		}
-
-		if err := cb.Close(); err != nil {
-			t.Errorf("Failed to close A side: %v", err)
-		}
-		if err := listn.Close(); err != nil {
-			t.Errorf("Failed to close listener: %v", err)
-		}
+		assert.ErrorIs(t, <-errC, io.EOF)
+		assert.NoError(t, cb.Close(), "Failed to close A side")
+		assert.NoError(t, listn.Close(), "Failed to close listener")
 	})
 }
 
@@ -501,9 +403,7 @@ func TestBatchIO(t *testing.T) {
 
 	laddr := &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 15678}
 	listener, err := lc.Listen("udp", laddr)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 
 	var serverConnWg sync.WaitGroup
 	serverConnWg.Add(1)

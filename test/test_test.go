@@ -7,6 +7,8 @@ import (
 	"io"
 	"net"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestStressIOPipe(t *testing.T) {
@@ -17,10 +19,7 @@ func TestStressIOPipe(t *testing.T) {
 		MsgCount: 100,
 	}
 
-	err := Stress(w, r, opt)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, Stress(w, r, opt))
 }
 
 func TestStressDuplexNetPipe(t *testing.T) {
@@ -31,10 +30,7 @@ func TestStressDuplexNetPipe(t *testing.T) {
 		MsgCount: 100,
 	}
 
-	err := StressDuplex(ca, cb, opt)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, StressDuplex(ca, cb, opt))
 }
 
 func BenchmarkPipe(b *testing.B) {
@@ -47,11 +43,5 @@ func BenchmarkPipe(b *testing.B) {
 		MsgCount: b.N,
 	}
 
-	check(Stress(ca, cb, opt))
-}
-
-func check(err error) {
-	if err != nil {
-		panic(err)
-	}
+	assert.NoError(b, Stress(ca, cb, opt))
 }

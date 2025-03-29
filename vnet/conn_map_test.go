@@ -46,7 +46,7 @@ func TestUDPConnMap(t *testing.T) {
 
 		err = connMap.delete(connIn.LocalAddr())
 		assert.NoError(t, err, "should succeed")
-		assert.Equal(t, 0, len(connMap.portMap), "should match")
+		assert.Empty(t, connMap.portMap, "should match")
 
 		err = connMap.delete(connIn.LocalAddr())
 		assert.Error(t, err, "should fail")

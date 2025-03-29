@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/pion/logging"
+	"github.com/stretchr/testify/assert"
 )
 
 // The vnet client:
@@ -32,9 +33,9 @@ func TestUDPProxyDirectDeliverTypical(t *testing.T) { //nolint:cyclop
 
 	var r0, r1, r2 error
 	defer func() {
-		if r0 != nil || r1 != nil || r2 != nil {
-			t.Errorf("fail for ctx=%v, r0=%v, r1=%v, r2=%v", ctx.Err(), r0, r1, r2)
-		}
+		assert.NoErrorf(t, r0, "fail for ctx=%v, r0=%v", ctx.Err(), r0)
+		assert.NoErrorf(t, r1, "fail for ctx=%v, r1=%v", ctx.Err(), r1)
+		assert.NoErrorf(t, r2, "fail for ctx=%v, r2=%v", ctx.Err(), r2)
 	}()
 
 	var wg sync.WaitGroup
@@ -187,9 +188,9 @@ func TestUDPProxyDirectDeliverBadCase(t *testing.T) { //nolint:cyclop
 
 	var r0, r1, r2 error
 	defer func() {
-		if r0 != nil || r1 != nil || r2 != nil {
-			t.Errorf("fail for ctx=%v, r0=%v, r1=%v, r2=%v", ctx.Err(), r0, r1, r2)
-		}
+		assert.NoErrorf(t, r0, "fail for ctx=%v, r0=%v", ctx.Err(), r0)
+		assert.NoErrorf(t, r1, "fail for ctx=%v, r1=%v", ctx.Err(), r1)
+		assert.NoErrorf(t, r2, "fail for ctx=%v, r2=%v", ctx.Err(), r2)
 	}()
 
 	var wg sync.WaitGroup

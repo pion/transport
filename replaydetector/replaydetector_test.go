@@ -4,8 +4,9 @@
 package replaydetector
 
 import (
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 type testCase struct {
@@ -196,21 +197,13 @@ func TestReplayDetector(t *testing.T) {
 			var out []uint64
 			for i, seq := range testCase.input {
 				accept, ok := det.Check(seq)
-				if ok != testCase.valid[i] {
-					t.Errorf("Unexpected validity (%d):\nexpected: %v\ngot: %v", seq, testCase.valid[i], ok)
-				}
+				assert.Equal(t, testCase.valid[i], ok, "Unexpected validity")
 				if ok {
 					out = append(out, seq)
 				}
-				if latest := accept(); latest != testCase.latest[i] {
-					t.Errorf("Unexpected sequence latest status (%d):\nexpected: %v\ngot: %v", seq, testCase.latest[i], latest)
-				}
+				assert.Equal(t, testCase.latest[i], accept(), "Unexpected sequence latest status")
 			}
-			if !reflect.DeepEqual(testCase.expected, out) {
-				t.Errorf("Wrong replay detection result:\nexpected: %v\ngot:      %v",
-					testCase.expected, out,
-				)
-			}
+			assert.Equal(t, testCase.expected, out, "Wrong replay detection result")
 		})
 	}
 }
@@ -252,9 +245,8 @@ func TestReplayDetectorWrapped(t *testing.T) {
 		},
 	}
 	for name, c := range commonCases {
-		if _, ok := cases[name]; ok {
-			t.Fatalf("Duplicate test case name: %q", name)
-		}
+		_, ok := cases[name]
+		assert.False(t, ok, "Duplicate test case name: %q", name)
 		cases[name] = c
 	}
 	for name, c := range cases {
@@ -264,21 +256,13 @@ func TestReplayDetectorWrapped(t *testing.T) {
 			var out []uint64
 			for i, seq := range testCase.input {
 				accept, ok := det.Check(seq)
-				if ok != testCase.valid[i] {
-					t.Errorf("Unexpected validity (%d):\nexpected: %v\ngot: %v", seq, testCase.valid[i], ok)
-				}
+				assert.Equal(t, testCase.valid[i], ok, "Unexpected validity")
 				if ok {
 					out = append(out, seq)
 				}
-				if latest := accept(); latest != testCase.latest[i] {
-					t.Errorf("Unexpected sequence latest status (%d):\nexpected: %v\ngot: %v", seq, testCase.latest[i], latest)
-				}
+				assert.Equal(t, testCase.latest[i], accept(), "Unexpected sequence latest status")
 			}
-			if !reflect.DeepEqual(testCase.expected, out) {
-				t.Errorf("Wrong replay detection result:\nexpected: %v\ngot:      %v",
-					testCase.expected, out,
-				)
-			}
+			assert.Equal(t, testCase.expected, out, "Wrong replay detection result")
 		})
 	}
 }

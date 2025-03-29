@@ -5,9 +5,10 @@ package test
 
 import (
 	"fmt"
-	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestCheckRoutines(t *testing.T) {
@@ -35,12 +36,8 @@ func TestCheckRoutinesStrict(t *testing.T) {
 	report := CheckRoutinesStrict(mock)
 	defer func() {
 		report()
-		if len(mock.fatalfCalled) == 0 {
-			t.Error("expected Fatalf to be called")
-		}
-		if !strings.Contains(mock.fatalfCalled[0], "Unexpected routines") {
-			t.Error("expected 'Unexpected routines'")
-		}
+		assert.NotEmpty(t, mock.fatalfCalled, "expected Fatalf to be called")
+		assert.Contains(t, mock.fatalfCalled[0], "Unexpected routines")
 	}()
 
 	go func() {

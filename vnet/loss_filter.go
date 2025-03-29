@@ -23,6 +23,7 @@ func NewLossFilter(nic NIC, chance int) (*LossFilter, error) {
 		NIC:    nic,
 		chance: chance,
 	}
+	//nolint:staticcheck
 	rand.Seed(time.Now().UTC().UnixNano())
 
 	return f, nil

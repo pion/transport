@@ -4,11 +4,12 @@
 package xor
 
 import (
-	"bytes"
 	"crypto/rand"
 	"fmt"
 	"io"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestXOR(t *testing.T) { //nolint:cyclop
@@ -25,28 +26,17 @@ func TestXOR(t *testing.T) { //nolint:cyclop
 					d0[j+alignD] = 42
 					d1 := d0[alignD : j+alignD]
 					d2 := make([]byte, j+alignD)[alignD:]
-					if _, err := io.ReadFull(rand.Reader, p); err != nil {
-						t.Fatal(err)
-					}
-					if _, err := io.ReadFull(rand.Reader, q); err != nil {
-						t.Fatal(err)
-					}
+					_, err := io.ReadFull(rand.Reader, p)
+					assert.NoError(t, err)
+					_, err = io.ReadFull(rand.Reader, q)
+					assert.NoError(t, err)
 					XorBytes(d1, p, q)
 					n := minInt(p, q)
 					for i := 0; i < n; i++ {
 						d2[i] = p[i] ^ q[i]
 					}
-					if !bytes.Equal(d1, d2) {
-						t.Errorf(
-							"p: %#v, q: %#v, "+
-								"expect: %#v, "+
-								"result: %#v",
-							p, q, d2, d1,
-						)
-					}
-					if d0[j+alignD] != 42 {
-						t.Error("guard overwritten")
-					}
+					assert.Equalf(t, d1, d2, "p: %#v, q: %#v", p, q)
+					assert.Equal(t, byte(42), d0[j+alignD], "guard overwritten")
 				}
 			}
 		}

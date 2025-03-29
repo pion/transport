@@ -305,7 +305,7 @@ func TestNetVirtual(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 
 		assert.Equal(t, 1, nw.udpConns.size(), "should match")
 		assert.NoError(t, conn.Close(), "should succeed")
-		assert.Equal(t, 0, nw.udpConns.size(), "should match")
+		assert.Empty(t, nw.udpConns.size(), "should match")
 	})
 
 	t.Run("ListenPacket random port", func(t *testing.T) {
@@ -322,7 +322,7 @@ func TestNetVirtual(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 
 		assert.Equal(t, 1, nw.udpConns.size(), "should match")
 		assert.NoError(t, conn.Close(), "should succeed")
-		assert.Equal(t, 0, nw.udpConns.size(), "should match")
+		assert.Empty(t, nw.udpConns.size(), "should match")
 	})
 
 	t.Run("ListenPacket specific port", func(t *testing.T) {
@@ -339,7 +339,7 @@ func TestNetVirtual(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 
 		assert.Equal(t, 1, nw.udpConns.size(), "should match")
 		assert.NoError(t, conn.Close(), "should succeed")
-		assert.Equal(t, 0, nw.udpConns.size(), "should match")
+		assert.Empty(t, nw.udpConns.size(), "should match")
 	})
 
 	t.Run("ListenUDP random port", func(t *testing.T) {
@@ -359,7 +359,7 @@ func TestNetVirtual(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 
 		assert.Equal(t, 1, nw.udpConns.size(), "should match")
 		assert.NoError(t, conn.Close(), "should succeed")
-		assert.Equal(t, 0, nw.udpConns.size(), "should match")
+		assert.Empty(t, nw.udpConns.size(), "should match")
 	})
 
 	t.Run("ListenUDP specific port", func(t *testing.T) {
@@ -380,7 +380,7 @@ func TestNetVirtual(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 
 		assert.Equal(t, 1, nw.udpConns.size(), "should match")
 		assert.NoError(t, conn.Close(), "should succeed")
-		assert.Equal(t, 0, nw.udpConns.size(), "should match")
+		assert.Empty(t, nw.udpConns.size(), "should match")
 	})
 
 	t.Run("Dial (UDP) lo0", func(t *testing.T) {
@@ -403,7 +403,7 @@ func TestNetVirtual(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 		assert.Equal(t, "127.0.0.1:1234", raddr.String(), "should match")
 		assert.Equal(t, 1, nw.udpConns.size(), "should match")
 		assert.NoError(t, conn.Close(), "should succeed")
-		assert.Equal(t, 0, nw.udpConns.size(), "should match")
+		assert.Empty(t, nw.udpConns.size(), "should match")
 	})
 
 	t.Run("Dial (UDP) eth0", func(t *testing.T) {
@@ -434,7 +434,7 @@ func TestNetVirtual(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 		assert.Equal(t, "27.3.4.5:1234", raddr.String(), "should match")
 		assert.Equal(t, 1, nw.udpConns.size(), "should match")
 		assert.NoError(t, conn.Close(), "should succeed")
-		assert.Equal(t, 0, nw.udpConns.size(), "should match")
+		assert.Empty(t, nw.udpConns.size(), "should match")
 	})
 
 	t.Run("DialUDP", func(t *testing.T) {
@@ -467,7 +467,7 @@ func TestNetVirtual(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 		assert.Equal(t, "127.0.0.1:1234", raddr.String(), "should match")
 		assert.Equal(t, 1, nw.udpConns.size(), "should match")
 		assert.NoError(t, conn.Close(), "should succeed")
-		assert.Equal(t, 0, nw.udpConns.size(), "should match")
+		assert.Empty(t, nw.udpConns.size(), "should match")
 	})
 
 	t.Run("Resolver", func(t *testing.T) {
@@ -503,7 +503,7 @@ func TestNetVirtual(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 		assert.Equal(t, "30.31.32.33:1234", raddr.String(), "should match")
 		assert.Equal(t, 1, nw.udpConns.size(), "should match")
 		assert.NoError(t, conn.Close(), "should succeed")
-		assert.Equal(t, 0, nw.udpConns.size(), "should match")
+		assert.Empty(t, nw.udpConns.size(), "should match")
 	})
 
 	t.Run("Loopback", func(t *testing.T) {
@@ -567,7 +567,7 @@ func TestNetVirtual(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 			}
 		}
 
-		assert.Equal(t, 0, nw.udpConns.size(), "should match")
+		assert.Empty(t, nw.udpConns.size(), "should match")
 		assert.True(t, hasReceived, "should have received data")
 	})
 
@@ -707,7 +707,7 @@ func TestNetVirtual(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 		assert.Equal(t, "127.0.0.1:1234", raddr.String(), "should match")
 		assert.Equal(t, 1, nw.udpConns.size(), "should match")
 		assert.NoError(t, conn.Close(), "should succeed")
-		assert.Equal(t, 0, nw.udpConns.size(), "should match")
+		assert.Empty(t, nw.udpConns.size(), "should match")
 	})
 
 	t.Run("Two IPs on a NIC", func(t *testing.T) {

@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/nettest"
 )
 
@@ -45,29 +46,14 @@ func TestBridge(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 		conn0 := br.GetConn0()
 		conn1 := br.GetConn1()
 
-		if conn0.LocalAddr().String() != "a0" {
-			t.Error("conn0 local addr name should be a0")
-		}
-
-		if conn1.LocalAddr().String() != "a1" {
-			t.Error("conn0 local addr name should be a1")
-		}
-
-		if conn0.LocalAddr().Network() != "udp" {
-			t.Error("conn0 local addr name should be a0")
-		}
-
-		if conn1.LocalAddr().Network() != "udp" {
-			t.Error("conn0 local addr name should be a1")
-		}
+		assert.Equal(t, "a0", conn0.LocalAddr().String())
+		assert.Equal(t, "a1", conn1.LocalAddr().String())
+		assert.Equal(t, "udp", conn0.LocalAddr().Network())
+		assert.Equal(t, "udp", conn1.LocalAddr().Network())
 
 		n, err := conn0.Write([]byte(msg1))
-		if err != nil {
-			t.Error(err.Error())
-		}
-		if n != len(msg1) {
-			t.Error("unexpected length")
-		}
+		assert.NoError(t, err)
+		assert.Len(t, msg1, n, "unexpected length")
 
 		go func() {
 			nInner, errInner := conn1.Read(buf)
@@ -77,15 +63,9 @@ func TestBridge(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 		br.Process()
 
 		ar := <-readRes
-		if ar.err != nil {
-			t.Error(err.Error())
-		}
-		if ar.n != len(msg1) {
-			t.Error("unexpected length")
-		}
-		if err = closeBridge(br); err != nil {
-			t.Error(err)
-		}
+		assert.NoError(t, ar.err)
+		assert.Len(t, msg1, ar.n, "unexpected length")
+		assert.NoError(t, closeBridge(br))
 	})
 
 	t.Run("drop 1st packet from conn0", func(t *testing.T) { //nolint:dupl
@@ -95,19 +75,11 @@ func TestBridge(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 		conn1 := br.GetConn1()
 
 		n, err := conn0.Write([]byte(msg1))
-		if err != nil {
-			t.Error(err.Error())
-		}
-		if n != len(msg1) {
-			t.Error("unexpected length")
-		}
+		assert.NoError(t, err)
+		assert.Len(t, msg1, n, "unexpected length")
 		n, err = conn0.Write([]byte(msg2))
-		if err != nil {
-			t.Error(err.Error())
-		}
-		if n != len(msg2) {
-			t.Error("unexpected length")
-		}
+		assert.NoError(t, err)
+		assert.Len(t, msg2, n, "unexpected length")
 
 		go func() {
 			nInner, errInner := conn1.Read(buf)
@@ -118,15 +90,9 @@ func TestBridge(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 		br.Process()
 
 		ar := <-readRes
-		if ar.err != nil {
-			t.Error(err.Error())
-		}
-		if ar.n != len(msg2) {
-			t.Error("unexpected length")
-		}
-		if err = closeBridge(br); err != nil {
-			t.Error(err)
-		}
+		assert.NoError(t, ar.err)
+		assert.Len(t, msg2, ar.n, "unexpected length")
+		assert.NoError(t, closeBridge(br))
 	})
 
 	t.Run("drop 2nd packet from conn0", func(t *testing.T) { //nolint:dupl
@@ -136,19 +102,11 @@ func TestBridge(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 		conn1 := br.GetConn1()
 
 		n, err := conn0.Write([]byte(msg1))
-		if err != nil {
-			t.Error(err.Error())
-		}
-		if n != len(msg1) {
-			t.Error("unexpected length")
-		}
+		assert.NoError(t, err)
+		assert.Len(t, msg1, n, "unexpected length")
 		n, err = conn0.Write([]byte(msg2))
-		if err != nil {
-			t.Error(err.Error())
-		}
-		if n != len(msg2) {
-			t.Error("unexpected length")
-		}
+		assert.NoError(t, err)
+		assert.Len(t, msg2, n, "unexpected length")
 
 		go func() {
 			nInner, errInner := conn1.Read(buf)
@@ -159,15 +117,9 @@ func TestBridge(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 		br.Process()
 
 		ar := <-readRes
-		if ar.err != nil {
-			t.Error(err.Error())
-		}
-		if ar.n != len(msg1) {
-			t.Error("unexpected length")
-		}
-		if err = closeBridge(br); err != nil {
-			t.Error(err)
-		}
+		assert.NoError(t, ar.err)
+		assert.Len(t, msg1, ar.n, "unexpected length")
+		assert.NoError(t, closeBridge(br))
 	})
 
 	t.Run("drop 1st packet from conn1", func(t *testing.T) { //nolint:dupl
@@ -177,19 +129,11 @@ func TestBridge(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 		conn1 := br.GetConn1()
 
 		n, err := conn1.Write([]byte(msg1))
-		if err != nil {
-			t.Error(err.Error())
-		}
-		if n != len(msg1) {
-			t.Error("unexpected length")
-		}
+		assert.NoError(t, err)
+		assert.Len(t, msg1, n, "unexpected length")
 		n, err = conn1.Write([]byte(msg2))
-		if err != nil {
-			t.Error(err.Error())
-		}
-		if n != len(msg2) {
-			t.Error("unexpected length")
-		}
+		assert.NoError(t, err)
+		assert.Len(t, msg2, n, "unexpected length")
 
 		go func() {
 			nInner, errInner := conn0.Read(buf)
@@ -200,15 +144,9 @@ func TestBridge(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 		br.Process()
 
 		ar := <-readRes
-		if ar.err != nil {
-			t.Error(err.Error())
-		}
-		if ar.n != len(msg2) {
-			t.Error("unexpected length")
-		}
-		if err = closeBridge(br); err != nil {
-			t.Error(err)
-		}
+		assert.NoError(t, ar.err)
+		assert.Len(t, msg2, ar.n, "unexpected length")
+		assert.NoError(t, closeBridge(br))
 	})
 
 	t.Run("drop 2nd packet from conn1", func(t *testing.T) { //nolint:dupl
@@ -218,19 +156,11 @@ func TestBridge(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 		conn1 := br.GetConn1()
 
 		n, err := conn1.Write([]byte(msg1))
-		if err != nil {
-			t.Error(err.Error())
-		}
-		if n != len(msg1) {
-			t.Error("unexpected length")
-		}
+		assert.NoError(t, err)
+		assert.Len(t, msg1, n, "unexpected length")
 		n, err = conn1.Write([]byte(msg2))
-		if err != nil {
-			t.Error(err.Error())
-		}
-		if n != len(msg2) {
-			t.Error("unexpected length")
-		}
+		assert.NoError(t, err)
+		assert.Len(t, msg2, n, "unexpected length")
 
 		go func() {
 			nInner, errInner := conn0.Read(buf)
@@ -241,15 +171,9 @@ func TestBridge(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 		br.Process()
 
 		ar := <-readRes
-		if ar.err != nil {
-			t.Error(err.Error())
-		}
-		if ar.n != len(msg1) {
-			t.Error("unexpected length")
-		}
-		if err = closeBridge(br); err != nil {
-			t.Error(err)
-		}
+		assert.NoError(t, ar.err)
+		assert.Len(t, msg1, ar.n, "unexpected length")
+		assert.NoError(t, closeBridge(br))
 	})
 
 	t.Run("reorder packets from conn0", func(t *testing.T) { //nolint:dupl
@@ -258,49 +182,29 @@ func TestBridge(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 		conn1 := br.GetConn1()
 
 		n, err := conn0.Write([]byte(msg1))
-		if err != nil {
-			t.Error(err.Error())
-		}
-		if n != len(msg1) {
-			t.Error("unexpected length")
-		}
+		assert.NoError(t, err)
+		assert.Len(t, msg1, n, "unexpected length")
 		n, err = conn0.Write([]byte(msg2))
-		if err != nil {
-			t.Error(err.Error())
-		}
-		if n != len(msg2) {
-			t.Error("unexpected length")
-		}
+		assert.NoError(t, err)
+		assert.Len(t, msg2, n, "unexpected length")
 
 		done := make(chan bool)
 
 		go func() {
 			nInner, errInner := conn1.Read(buf)
-			if errInner != nil {
-				t.Error(errInner.Error())
-			}
-			if nInner != len(msg2) {
-				t.Error("unexpected length")
-			}
+			assert.NoError(t, errInner)
+			assert.Len(t, msg2, nInner, "unexpected length")
 			nInner, errInner = conn1.Read(buf)
-			if errInner != nil {
-				t.Error(errInner.Error())
-			}
-			if nInner != len(msg1) {
-				t.Error("unexpected length")
-			}
+			assert.NoError(t, errInner)
+			assert.Len(t, msg1, nInner, "unexpected length")
 			done <- true
 		}()
 
 		err = br.Reorder(0)
-		if err != nil {
-			t.Error(err.Error())
-		}
+		assert.NoError(t, err)
 		br.Process()
 		<-done
-		if err = closeBridge(br); err != nil {
-			t.Error(err)
-		}
+		assert.NoError(t, closeBridge(br))
 	})
 
 	t.Run("reorder packets from conn1", func(t *testing.T) { //nolint:dupl
@@ -309,57 +213,35 @@ func TestBridge(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 		conn1 := br.GetConn1()
 
 		n, err := conn1.Write([]byte(msg1))
-		if err != nil {
-			t.Error(err.Error())
-		}
-		if n != len(msg1) {
-			t.Error("unexpected length")
-		}
+		assert.NoError(t, err)
+		assert.Len(t, msg1, n, "unexpected length")
 		n, err = conn1.Write([]byte(msg2))
-		if err != nil {
-			t.Error(err.Error())
-		}
-		if n != len(msg2) {
-			t.Error("unexpected length")
-		}
+		assert.NoError(t, err)
+		assert.Len(t, msg2, n, "unexpected length")
 
 		done := make(chan bool)
 
 		go func() {
 			nInner, errInner := conn0.Read(buf)
-			if errInner != nil {
-				t.Error(errInner.Error())
-			}
-			if nInner != len(msg2) {
-				t.Error("unexpected length")
-			}
+			assert.NoError(t, errInner)
+			assert.Len(t, msg2, nInner, "unexpected length")
 			nInner, errInner = conn0.Read(buf)
-			if errInner != nil {
-				t.Error(errInner.Error())
-			}
-			if nInner != len(msg1) {
-				t.Error("unexpected length")
-			}
+			assert.NoError(t, errInner)
+			assert.Len(t, msg1, nInner, "unexpected length")
 			done <- true
 		}()
 
 		err = br.Reorder(1)
-		if err != nil {
-			t.Error(err.Error())
-		}
+		assert.NoError(t, err)
 		br.Process()
 		<-done
-		if err = closeBridge(br); err != nil {
-			t.Error(err)
-		}
+		assert.NoError(t, closeBridge(br))
 	})
 
 	t.Run("inverse error", func(t *testing.T) {
 		q := [][]byte{}
 		q = append(q, []byte("ABC"))
-		if err := inverse(q); err == nil {
-			t.Error("inverse should fail if less than 2 pkts")
-		}
+		assert.Error(t, inverse(q), "inverse should fail if less than 2 pkts")
 	})
 
 	t.Run("drop next N packets", func(t *testing.T) {
@@ -405,35 +287,23 @@ func TestBridge(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 				msg := fmt.Sprintf("msg%d", i)
 				msgs = append(msgs, msg)
 				n, err := srcConn.Write([]byte(msg))
-				if err != nil {
-					t.Errorf("[%d] %s", fromID, err.Error())
-				}
-				if n != len(msg) {
-					t.Errorf("[%d] unexpected length", fromID)
-				}
+				assert.NoErrorf(t, err, "Test: %d", fromID)
+				assert.Len(t, msg, n, "[%d] unexpected length", fromID)
 
 				br.Process()
 			}
 
-			if err := closeBridge(br); err != nil {
-				t.Errorf("[%d] %s", fromID, err.Error())
-			}
+			assert.NoErrorf(t, closeBridge(br), "Test: %d", fromID)
 			br.Process()
 			wg.Wait()
 
-			nResults := len(readRes)
-			if nResults != 2 {
-				t.Errorf("[%d] unexpected number of packets, expected %v, got %v", fromID, 2, nResults)
-			}
+			assert.Lenf(t, readRes, 2, "[%d] unexpected number of packets", fromID)
 
 			for i := 0; i < 2; i++ {
 				ar := <-readRes
-				if ar.err != nil {
-					t.Errorf("[%d] %s", fromID, ar.err.Error())
-				}
-				if ar.n != len(msgs[i+3]) {
-					t.Errorf("[%d] unexpected length", fromID)
-				}
+				assert.NoErrorf(t, ar.err, "Test: %d", fromID)
+
+				assert.Len(t, msgs[i+3], ar.n, "[%d] unexpected length", fromID)
 			}
 		}
 

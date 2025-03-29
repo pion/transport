@@ -7,14 +7,13 @@
 package dpipe
 
 import (
-	"bytes"
-	"errors"
 	"fmt"
 	"io"
 	"net"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/nettest"
 )
 
@@ -68,57 +67,42 @@ func TestPipe(t *testing.T) { //nolint:cyclop
 		c0 := cond.ca
 		c1 := cond.cb
 		t.Run(name, func(t *testing.T) {
-			switch n, err := c0.Write(testData); {
-			case err != nil:
-				t.Errorf("Unexpected error on Write: %v", err)
-			case n != len(testData):
-				t.Errorf("Expected to write %d bytes, wrote %d bytes", len(testData), n)
-			}
+			n, err := c0.Write(testData)
+			assert.NoError(t, err)
+			assert.Equal(t, len(testData), n)
 
 			readData := make([]byte, 4)
-			switch n, err := c1.Read(readData); {
-			case err != nil:
-				t.Errorf("Unexpected error on Write: %v", err)
-			case n != len(testData):
-				t.Errorf("Expected to read %d bytes, got %d bytes", len(testData), n)
-			case !bytes.Equal(testData, readData[0:n]):
-				t.Errorf("Expected to read %v, got %v", testData, readData[0:n])
-			}
+			n, err = c1.Read(readData)
+			assert.NoError(t, err)
+			assert.Len(t, testData, n)
+			assert.Equal(t, testData, readData[:n])
 		})
 	}
 
-	if err := ca.Close(); err != nil {
-		t.Errorf("Unexpected error on Close: %v", err)
-	}
-	if _, err := ca.Write(testData); !errors.Is(err, io.ErrClosedPipe) {
-		t.Errorf("Write to closed conn should fail with %v, got %v", io.ErrClosedPipe, err)
-	}
+	assert.NoError(t, ca.Close())
+	_, err := ca.Write(testData)
+	assert.ErrorIs(t, err, io.ErrClosedPipe, "Write to closed conn should fail")
 
 	// Other side should be writable.
-	if _, err := cb.Write(testData); err != nil {
-		t.Errorf("Unexpected error on Write: %v", err)
-	}
+	_, err = cb.Write(testData)
+	assert.NoError(t, err)
 
 	readData := make([]byte, 4)
-	if _, err := ca.Read(readData); !errors.Is(err, io.EOF) {
-		t.Errorf("Read from closed conn should fail with %v, got %v", io.EOF, err)
-	}
+	_, err = ca.Read(readData)
+	assert.ErrorIs(t, err, io.EOF, "Read from closed conn should fail with io.EOF")
 
 	// Other side should be readable.
 	readDone := make(chan struct{})
 	go func() {
 		readData := make([]byte, 4)
-		if n, err := cb.Read(readData); err == nil {
-			t.Errorf("Unexpected data %v was arrived to orphaned conn", readData[:n])
-		}
+		n, err := cb.Read(readData)
+		assert.Errorf(t, err, "Unexpected data %v was arrived to orphaned conn", readData[:n])
 		close(readDone)
 	}()
 	select {
 	case <-readDone:
-		t.Errorf("Read should be blocked if the other side is closed")
+		assert.Fail(t, "Read should be blocked if the other side is closed")
 	case <-time.After(10 * time.Millisecond):
 	}
-	if err := cb.Close(); err != nil {
-		t.Errorf("Unexpected error on Close: %v", err)
-	}
+	assert.NoError(t, cb.Close())
 }
