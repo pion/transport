@@ -243,6 +243,17 @@ func TestReplayDetectorWrapped(t *testing.T) {
 			},
 			[]uint64{0xFFFD, 0xFFFC, 0x0002, 0xFFFE, 0x0000, 0x0001, 0xFFFF, 0x0003},
 		},
+		"BeforeWrapReplayed": {
+			64, 0xFFFF,
+			[]uint64{0x0, 0xFFFF, 0xFFFF},
+			[]bool{
+				true, true, false,
+			},
+			[]bool{
+				true, false, false,
+			},
+			[]uint64{0x0, 0xFFFF},
+		},
 	}
 	for name, c := range commonCases {
 		_, ok := cases[name]
