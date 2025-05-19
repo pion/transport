@@ -126,8 +126,10 @@ func (d *wrappedSlidingWindowDetector) Check(seq uint64) (func() bool, bool) {
 			d.mask.Lsh(uint(-diff))
 			d.latestSeq = seq
 			latest = true
+			d.mask.SetBit(0)
+		} else {
+			d.mask.SetBit(uint(diff))
 		}
-		d.mask.SetBit(uint(d.latestSeq - seq))
 
 		return latest
 	}, true
