@@ -406,48 +406,104 @@ func TestBufferMisc(t *testing.T) {
 	assert.NoError(err)
 }
 
+var errTooManyCallOfGetBuffer = errors.New("too many call of getBuffer")
+
 func TestBufferAlloc(t *testing.T) {
 	packet := make([]byte, 1024)
 
-	test := func(f func(count int) func(), count int, maxVal float64) func(t *testing.T) {
+	const countTolerance = 1
+
+	test := func(fn func(func() (*Buffer, error), int, *error) func(), count int, maxVal float64) func(t *testing.T) {
 		return func(t *testing.T) {
 			t.Helper()
 
-			allocs := testing.AllocsPerRun(3, f(count))
-			assert.LessOrEqualf(t, allocs, maxVal, "count=%v, max=%v, got %v", count, maxVal, allocs)
+			const nRuns = 100
+
+			// Create buffers in advance to avoid measuring allocs in NewBuffer()
+			// +1 buffer for warm-up run
+			buffers := make([]*Buffer, 0, nRuns+1)
+			for i := 0; i < nRuns+1; i++ {
+				buffers = append(buffers, NewBuffer())
+			}
+			var iBuffer int
+			getBuffer := func() (*Buffer, error) {
+				if iBuffer >= len(buffers) {
+					return nil, errTooManyCallOfGetBuffer
+				}
+				ret := buffers[iBuffer]
+				iBuffer++
+
+				return ret, nil
+			}
+
+			var err error
+			// AllocsPerRun calls the func once as a warm-up and then call it specified times
+			allocs := testing.AllocsPerRun(nRuns, fn(getBuffer, count, &err))
+			assert.NoError(t, err)
+			assert.LessOrEqualf(t, allocs, maxVal+countTolerance,
+				"count=%d, max=%f+%d, got %f", count, maxVal, countTolerance, allocs)
 		}
 	}
 
-	writer := func(count int) func() {
+	// Write (1024+2)*count bytes
+	writer := func(getBuffer func() (*Buffer, error), count int, errOut *error) func() {
 		return func() {
-			buffer := NewBuffer()
+			// Call only buffer.Write() on the non-error paths to avoid wrong count of allocs
+			buffer, err := getBuffer() // getBuffer doesn't alloc
+			if err != nil {
+				*errOut = err
+
+				return
+			}
 			for i := 0; i < count; i++ {
-				_, err := buffer.Write(packet)
-				assert.NoError(t, err, "Write")
+				if _, err := buffer.Write(packet); err != nil {
+					*errOut = fmt.Errorf("write: %w", err)
+
+					return
+				}
 			}
 		}
 	}
 
-	t.Run("100 writes", test(writer, 100, 11))
-	t.Run("200 writes", test(writer, 200, 14))
-	t.Run("400 writes", test(writer, 400, 17))
-	t.Run("1000 writes", test(writer, 1000, 21))
+	// Buffer size will be grown as
+	// 2048 -> 4096 -> 8192 -> 16384 -> 32768 -> 65536 -> 131072 -> 163840 -> 204800
+	//   -> 256000 -> 320000 -> 400000 -> 500000 -> 625000 -> 781250 -> 976562 -> 1220702
+	// based on the logic in Buffer.grow()
+	t.Run("10 writes", test(writer, 10, 4))      // 10260 bytes
+	t.Run("100 writes", test(writer, 100, 7))    // 102600 bytes
+	t.Run("200 writes", test(writer, 200, 10))   // 205200 bytes
+	t.Run("400 writes", test(writer, 400, 13))   // 410400 bytes
+	t.Run("1000 writes", test(writer, 1000, 17)) // 1026000 bytes
 
-	wr := func(count int) func() {
+	// Read and write same times, so the buffer size should never grow
+	wr := func(getBuffer func() (*Buffer, error), count int, errOut *error) func() {
 		return func() {
-			buffer := NewBuffer()
+			// Call only buffer.Write() on the non-error paths to avoid wrong count of allocs
+			buffer, err := getBuffer() // getBuffer doesn't alloc
+			if err != nil {
+				*errOut = err
+
+				return
+			}
 			for i := 0; i < count; i++ {
-				_, err := buffer.Write(packet)
-				assert.NoError(t, err, "Write")
-				_, err = buffer.Read(packet)
-				assert.NoError(t, err, "Read")
+				if _, err := buffer.Write(packet); err != nil {
+					*errOut = fmt.Errorf("write: %w", err)
+
+					return
+				}
+				if _, err := buffer.Read(packet); err != nil {
+					*errOut = fmt.Errorf("read: %w", err)
+
+					return
+				}
 			}
 		}
 	}
 
-	t.Run("100 writes and reads", test(wr, 100, 5))
-	t.Run("1000 writes and reads", test(wr, 1000, 5))
-	t.Run("10000 writes and reads", test(wr, 10000, 5))
+	t.Run("10 writes and reads", test(wr, 10, 1))
+	t.Run("100 writes and reads", test(wr, 100, 1))
+	t.Run("1000 writes and reads", test(wr, 1000, 1))
+	t.Run("10000 writes and reads", test(wr, 10000, 1))
 }
 
 func benchmarkBufferWR(b *testing.B, size int64, write bool, grow int) { // nolint:unparam
