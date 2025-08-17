@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -116,7 +117,9 @@ func TestListenerCloseUnaccepted(t *testing.T) {
 	assert.NoError(t, err)
 
 	for i := 0; i < backlog; i++ {
-		conn, err := net.DialUDP(network, nil, listener.Addr().(*net.UDPAddr))
+		addr, ok := listener.Addr().(*net.UDPAddr)
+		assert.True(t, ok)
+		conn, err := net.DialUDP(network, nil, addr)
 		assert.NoError(t, err)
 		_, err = conn.Write([]byte{byte(i)})
 		assert.NoError(t, err)
@@ -170,7 +173,9 @@ func TestListenerAcceptFilter(t *testing.T) { //nolint:cyclop
 				wgAcceptLoop.Wait()
 			}()
 
-			conn, err := net.DialUDP(network, nil, listener.Addr().(*net.UDPAddr))
+			addr, ok := listener.Addr().(*net.UDPAddr)
+			assert.True(t, ok)
+			conn, err := net.DialUDP(network, nil, addr)
 			assert.NoError(t, err)
 			_, err = conn.Write(testCase.packet)
 			assert.NoError(t, err)
@@ -226,7 +231,9 @@ func TestListenerConcurrent(t *testing.T) { //nolint:cyclop
 	assert.NoError(t, err)
 
 	for i := 0; i < backlog+1; i++ {
-		conn, connErr := net.DialUDP(network, nil, listener.Addr().(*net.UDPAddr))
+		addr, ok := listener.Addr().(*net.UDPAddr)
+		assert.True(t, ok)
+		conn, connErr := net.DialUDP(network, nil, addr)
 		assert.NoError(t, connErr)
 		_, connErr = conn.Write([]byte{byte(i)})
 		assert.NoError(t, connErr)
@@ -274,7 +281,12 @@ func pipe() (net.Listener, net.Conn, *net.UDPConn, error) {
 
 	// Open a connection
 	var dConn *net.UDPConn
-	dConn, err = net.DialUDP(network, nil, listener.Addr().(*net.UDPAddr))
+	addr, ok := listener.Addr().(*net.UDPAddr)
+	if !ok {
+		return nil, nil, nil, fmt.Errorf("failed to get listener addr: %w", os.ErrInvalid)
+	}
+
+	dConn, err = net.DialUDP(network, nil, addr)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to dial: %w", err)
 	}

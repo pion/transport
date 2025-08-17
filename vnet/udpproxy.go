@@ -56,7 +56,7 @@ func NewProxy(router *Router) (*UDPProxy, error) {
 
 // Close the proxy, stop all workers.
 func (v *UDPProxy) Close() error {
-	v.workers.Range(func(_, value interface{}) bool {
+	v.workers.Range(func(_, value any) bool {
 		_ = value.(*aUDPProxyWorker).Close() //nolint:forcetypeassert
 
 		return true

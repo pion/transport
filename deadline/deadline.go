@@ -125,6 +125,6 @@ func (d *Deadline) Deadline() (time.Time, bool) {
 }
 
 // Value returns nil.
-func (d *Deadline) Value(interface{}) interface{} {
+func (d *Deadline) Value(any) any {
 	return nil
 }

@@ -71,17 +71,17 @@ func (v *MockUDPEchoServer) doMockUDPServer(ctx context.Context) error { //nolin
 
 			return err
 		} else if n == 0 || addr == nil {
-			return fmt.Errorf("n=%v, addr=%v", n, addr) // nolint:goerr113
+			return fmt.Errorf("n=%v, addr=%v", n, addr) // nolint:err113
 		} else if nn, err := conn.WriteTo(buf[:n], addr); err != nil {
 			return err
 		} else if nn != n {
-			return fmt.Errorf("nn=%v, n=%v", nn, n) // nolint:goerr113
+			return fmt.Errorf("nn=%v, n=%v", nn, n) // nolint:err113
 		}
 
 		// Check the address, should not change, use content as ID.
 		clientID := string(buf[:n])
 		if oldAddr, ok := addrs[clientID]; ok && oldAddr.String() != addr.String() {
-			return fmt.Errorf("address change %v to %v", oldAddr.String(), addr.String()) // nolint:goerr113
+			return fmt.Errorf("address change %v to %v", oldAddr.String(), addr.String()) // nolint:err113
 		}
 		addrs[clientID] = addr
 	}
@@ -127,7 +127,7 @@ func TestUDPProxyOne2One(t *testing.T) { //nolint:gocyclo,cyclop
 		select {
 		case <-ctx.Done():
 		case <-time.After(time.Duration(*testTimeout) * time.Millisecond):
-			r2 = fmt.Errorf("timeout") // nolint:goerr113
+			r2 = fmt.Errorf("timeout") // nolint:err113
 		}
 	}()
 
@@ -229,9 +229,9 @@ func TestUDPProxyOne2One(t *testing.T) { //nolint:gocyclo,cyclop
 
 					return err
 				} else if n != 5 || addr == nil {
-					return fmt.Errorf("n=%v, addr=%v", n, addr) // nolint:goerr113
+					return fmt.Errorf("n=%v, addr=%v", n, addr) // nolint:err113
 				} else if string(buf[:n]) != "Hello" {
-					return fmt.Errorf("data %v", buf[:n]) // nolint:goerr113
+					return fmt.Errorf("data %v", buf[:n]) // nolint:err113
 				}
 
 				// Wait for awhile for each UDP packet, to simulate real network.
@@ -282,7 +282,7 @@ func TestUDPProxyTwo2One(t *testing.T) { //nolint:gocyclo,cyclop
 		select {
 		case <-ctx.Done():
 		case <-time.After(time.Duration(*testTimeout) * time.Millisecond):
-			r2 = fmt.Errorf("timeout") // nolint:goerr113
+			r2 = fmt.Errorf("timeout") // nolint:err113
 		}
 	}()
 
@@ -385,9 +385,9 @@ func TestUDPProxyTwo2One(t *testing.T) { //nolint:gocyclo,cyclop
 
 						return err
 					} else if n != len(echoData) || addr == nil {
-						return fmt.Errorf("n=%v, addr=%v", n, addr) // nolint:goerr113
+						return fmt.Errorf("n=%v, addr=%v", n, addr) // nolint:err113
 					} else if string(buf[:n]) != echoData {
-						return fmt.Errorf("check data %v", buf[:n]) // nolint:goerr113
+						return fmt.Errorf("check data %v", buf[:n]) // nolint:err113
 					}
 
 					// Wait for awhile for each UDP packet, to simulate real network.
@@ -472,7 +472,7 @@ func TestUDPProxyProxyTwice(t *testing.T) { //nolint:gocyclo,cyclop
 		select {
 		case <-ctx.Done():
 		case <-time.After(time.Duration(*testTimeout) * time.Millisecond):
-			r2 = fmt.Errorf("timeout") // nolint:goerr113
+			r2 = fmt.Errorf("timeout") // nolint:err113
 		}
 	}()
 
@@ -575,9 +575,9 @@ func TestUDPProxyProxyTwice(t *testing.T) { //nolint:gocyclo,cyclop
 
 						return handClientErr
 					} else if n != len(echoData) || addr == nil {
-						return fmt.Errorf("n=%v, addr=%v", n, addr) // nolint:goerr113
+						return fmt.Errorf("n=%v, addr=%v", n, addr) // nolint:err113
 					} else if string(buf[:n]) != echoData {
-						return fmt.Errorf("verify data %v", buf[:n]) // nolint:goerr113
+						return fmt.Errorf("verify data %v", buf[:n]) // nolint:err113
 					}
 
 					// Wait for awhile for each UDP packet, to simulate real network.
@@ -614,7 +614,7 @@ func TestUDPProxyProxyTwice(t *testing.T) { //nolint:gocyclo,cyclop
 
 				address := "10.0.0.11:5788"
 				if err = handClient(address, "World"); err != nil {
-					r3 = fmt.Errorf("client %v err %w", address, err) // nolint:goerr113
+					r3 = fmt.Errorf("client %v err %w", address, err) // nolint:err113
 				}
 			}()
 

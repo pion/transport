@@ -114,8 +114,7 @@ func (c *UDPConn) SetDeadline(t time.Time) error {
 // A zero value for t means ReadFrom will not time out.
 func (c *UDPConn) SetReadDeadline(t time.Time) error {
 	var d time.Duration
-	var noDeadline time.Time
-	if t == noDeadline {
+	if t.IsZero() {
 		d = time.Duration(math.MaxInt64)
 	} else {
 		d = time.Until(t)

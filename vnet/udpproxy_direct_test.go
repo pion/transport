@@ -50,7 +50,7 @@ func TestUDPProxyDirectDeliverTypical(t *testing.T) { //nolint:cyclop
 		select {
 		case <-ctx.Done():
 		case <-time.After(time.Duration(*testTimeout) * time.Millisecond):
-			r2 = fmt.Errorf("timeout") // nolint:goerr113
+			r2 = fmt.Errorf("timeout") // nolint:err113
 		}
 	}()
 
@@ -150,9 +150,9 @@ func TestUDPProxyDirectDeliverTypical(t *testing.T) { //nolint:cyclop
 
 				return err
 			} else if n != 5 || addr == nil {
-				return fmt.Errorf("n=%v, addr=%v", n, addr) // nolint:goerr113
+				return fmt.Errorf("n=%v, addr=%v", n, addr) // nolint:err113
 			} else if string(buf[:n]) != "Hello" { // nolint:goconst
-				return fmt.Errorf("data %v", buf[:n]) // nolint:goerr113
+				return fmt.Errorf("data %v", buf[:n]) // nolint:err113
 			}
 
 			// Directly write, simulate the ARQ packet.
@@ -168,9 +168,9 @@ func TestUDPProxyDirectDeliverTypical(t *testing.T) { //nolint:cyclop
 
 				return err
 			} else if n != 5 || addr == nil {
-				return fmt.Errorf("n=%v, addr=%v", n, addr) // nolint:goerr113
+				return fmt.Errorf("n=%v, addr=%v", n, addr) // nolint:err113
 			} else if string(buf[:n]) != "Hello" {
-				return fmt.Errorf("data %v", buf[:n]) // nolint:goerr113
+				return fmt.Errorf("data %v", buf[:n]) // nolint:err113
 			}
 
 			return err
@@ -205,7 +205,7 @@ func TestUDPProxyDirectDeliverBadCase(t *testing.T) { //nolint:cyclop
 		select {
 		case <-ctx.Done():
 		case <-time.After(time.Duration(*testTimeout) * time.Millisecond):
-			r2 = fmt.Errorf("timeout") // nolint:goerr113
+			r2 = fmt.Errorf("timeout") // nolint:err113
 		}
 	}()
 
@@ -305,9 +305,9 @@ func TestUDPProxyDirectDeliverBadCase(t *testing.T) { //nolint:cyclop
 
 				return err
 			} else if n != 5 || addr == nil {
-				return fmt.Errorf("n=%v, addr=%v", n, addr) // nolint:goerr113
+				return fmt.Errorf("n=%v, addr=%v", n, addr) // nolint:err113
 			} else if string(buf[:n]) != "Hello" { // nolint:goconst
-				return fmt.Errorf("data %v", buf[:n]) // nolint:goerr113
+				return fmt.Errorf("data %v", buf[:n]) // nolint:err113
 			}
 
 			// BadCase: Invalid address, error and ignore.
@@ -317,7 +317,7 @@ func TestUDPProxyDirectDeliverBadCase(t *testing.T) { //nolint:cyclop
 			}
 
 			if _, err = proxy.Deliver(tcpAddr, serverAddr, []byte("Hello")); err == nil {
-				return fmt.Errorf("should err") // nolint:goerr113
+				return fmt.Errorf("should err") // nolint:err113
 			}
 
 			// BadCase: Invalid target address, ignore.
@@ -329,13 +329,13 @@ func TestUDPProxyDirectDeliverBadCase(t *testing.T) { //nolint:cyclop
 			if nn, err := proxy.Deliver(udpAddr, serverAddr, []byte("Hello")); err != nil { // nolint:govet
 				return err
 			} else if nn != 0 {
-				return fmt.Errorf("invalid %v", nn) // nolint:goerr113
+				return fmt.Errorf("invalid %v", nn) // nolint:err113
 			}
 
 			// BadCase: Write on closed socket, error and ignore.
-			proxy.workers.Range(func(_, value interface{}) bool {
+			proxy.workers.Range(func(_, value any) bool {
 				//nolint:forcetypeassert
-				value.(*aUDPProxyWorker).endpoints.Range(func(_, value interface{}) bool {
+				value.(*aUDPProxyWorker).endpoints.Range(func(_, value any) bool {
 					_ = value.(*net.UDPConn).Close() //nolint:forcetypeassert
 
 					return true
@@ -345,7 +345,7 @@ func TestUDPProxyDirectDeliverBadCase(t *testing.T) { //nolint:cyclop
 			})
 
 			if _, err = proxy.Deliver(client.LocalAddr(), serverAddr, []byte("Hello")); err == nil {
-				return fmt.Errorf("should error") // nolint:goerr113
+				return fmt.Errorf("should error") // nolint:err113
 			}
 
 			return nil
