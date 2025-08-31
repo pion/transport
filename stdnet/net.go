@@ -98,7 +98,7 @@ func (n *Net) InterfaceByName(name string) (*transport.Interface, error) {
 
 // ListenPacket announces on the local network address.
 func (n *Net) ListenPacket(network string, address string) (net.PacketConn, error) {
-	return net.ListenPacket(network, address)
+	return net.ListenPacket(network, address) //nolint: noctx
 }
 
 // ListenUDP acts like ListenPacket for UDP networks.
@@ -108,7 +108,7 @@ func (n *Net) ListenUDP(network string, locAddr *net.UDPAddr) (transport.UDPConn
 
 // Dial connects to the address on the named network.
 func (n *Net) Dial(network, address string) (net.Conn, error) {
-	return net.Dial(network, address)
+	return net.Dial(network, address) //nolint: noctx
 }
 
 // DialUDP acts like Dial for UDP networks.
