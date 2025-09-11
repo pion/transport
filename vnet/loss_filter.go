@@ -4,10 +4,16 @@
 package vnet
 
 import (
-	"fmt"
+	"errors"
 	"math/rand"
 	"sync"
 	"time"
+)
+
+// Static errors for better error handling.
+var (
+	ErrInvalidChance           = errors.New("chance must be between 0 and 100 inclusive")
+	ErrInvalidShuffleBlockSize = errors.New("shuffleBlockSize must be greater than 0")
 )
 
 type LossFilterHandler interface {
@@ -31,7 +37,7 @@ type RandomLossHandler struct {
 // NewRandomLossHandler creates a new RandomLossHandler with the given drop chance.
 func NewRandomLossHandler(chance int) (*RandomLossHandler, error) {
 	if !validateChance(chance) {
-		return nil, fmt.Errorf("chance must be between 0 and 100 inclusive")
+		return nil, ErrInvalidChance
 	}
 
 	return &RandomLossHandler{
@@ -43,17 +49,18 @@ func (r *RandomLossHandler) shouldDrop() bool {
 	r.mutex.RLock()
 	chance := r.chance
 	r.mutex.RUnlock()
-	return rand.Intn(100) < chance
+
+	return rand.Intn(100) < chance //nolint:gosec
 }
 
-func (r *RandomLossHandler) setLossRate(chance int, resetImmediately bool) {
+func (r *RandomLossHandler) setLossRate(chance int, _ bool) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 	r.chance = chance
 }
 
 // RandomShuffleLossHandler drops packets with a deterministic probability for every 100 packets
-// That is, for every 100 packets, it guarentees that the number of packets dropped is equal to the chance parameter.
+// That is, for every 100 packets, it guarantees that the number of packets dropped is equal to the chance parameter.
 type RandomShuffleLossHandler struct {
 	blockIdx      int
 	shuffledBlock []bool
@@ -65,13 +72,12 @@ type RandomShuffleLossHandler struct {
 // NewRandomShuffleLossHandler creates a new RandomShuffleLossHandler with the given drop chance and shuffle block size.
 // The default shuffle block size should be 100.
 func NewRandomShuffleLossHandler(chance int, shuffleBlockSize int) (*RandomShuffleLossHandler, error) {
-
 	if !validateChance(chance) {
-		return nil, fmt.Errorf("chance must be between 0 and 100 inclusive")
+		return nil, ErrInvalidChance
 	}
 
 	if shuffleBlockSize < 1 {
-		return nil, fmt.Errorf("shuffleBlockSize must be greater than 0")
+		return nil, ErrInvalidShuffleBlockSize
 	}
 
 	filter := RandomShuffleLossHandler{
@@ -86,11 +92,11 @@ func NewRandomShuffleLossHandler(chance int, shuffleBlockSize int) (*RandomShuff
 	}
 
 	filter.shuffleBlock()
+
 	return &filter, nil
 }
 
 func (r *RandomShuffleLossHandler) setLossRate(chance int, resetImmediately bool) {
-
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
@@ -102,18 +108,20 @@ func (r *RandomShuffleLossHandler) setLossRate(chance int, resetImmediately bool
 }
 
 func (r *RandomShuffleLossHandler) shuffleBlock() {
-
 	for i := 0; i < len(r.shuffledBlock); i++ {
-		if r.pendingChance == r.currentChance {
-			break
-		} else if r.pendingChance > r.currentChance && !r.shuffledBlock[i] {
+		switch {
+		case r.pendingChance == r.currentChance:
+			goto shuffleComplete
+		case r.pendingChance > r.currentChance && !r.shuffledBlock[i]:
 			r.shuffledBlock[i] = true
 			r.currentChance++
-		} else if r.pendingChance < r.currentChance && r.shuffledBlock[i] {
+		case r.pendingChance < r.currentChance && r.shuffledBlock[i]:
 			r.shuffledBlock[i] = false
 			r.currentChance--
 		}
 	}
+
+shuffleComplete:
 
 	rand.Shuffle(len(r.shuffledBlock), func(i, j int) {
 		r.shuffledBlock[i], r.shuffledBlock[j] = r.shuffledBlock[j], r.shuffledBlock[i]
@@ -122,7 +130,6 @@ func (r *RandomShuffleLossHandler) shuffleBlock() {
 }
 
 func (r *RandomShuffleLossHandler) shouldDrop() bool {
-
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
@@ -132,19 +139,20 @@ func (r *RandomShuffleLossHandler) shouldDrop() bool {
 
 	res := r.shuffledBlock[r.blockIdx]
 	r.blockIdx++
+
 	return res
 }
 
 // NewLossFilter creates a new LossFilter that drops every packet with a
-// probability of chance/100 by default. You can provide a custom handler to
-// override the default behavior.
+// probability of chance/100. You can provide a custom handler to
+// override the default behavior. This maintains the new API while
+// supporting backward compatibility when no handler is provided.
 func NewLossFilter(nic NIC, chance int, handler ...LossFilterHandler) (*LossFilter, error) {
-
 	var lossHandler LossFilterHandler
 	var err error
 
 	if !validateChance(chance) {
-		return nil, fmt.Errorf("chance must be between 0 and 100 inclusive")
+		return nil, ErrInvalidChance
 	}
 
 	if len(handler) > 0 {
@@ -156,19 +164,19 @@ func NewLossFilter(nic NIC, chance int, handler ...LossFilterHandler) (*LossFilt
 		}
 	}
 
-	f := &LossFilter{
+	lossFilter := &LossFilter{
 		NIC:               nic,
 		LossFilterHandler: lossHandler,
 	}
 	//nolint:staticcheck
 	rand.Seed(time.Now().UTC().UnixNano())
 
-	f.LossFilterHandler.setLossRate(chance, false)
-	return f, nil
+	lossFilter.LossFilterHandler.setLossRate(chance, false)
+
+	return lossFilter, nil
 }
 
 func (f *LossFilter) onInboundChunk(c Chunk) {
-
 	if f.LossFilterHandler.shouldDrop() {
 		return
 	}
@@ -181,13 +189,15 @@ func (f *LossFilter) onInboundChunk(c Chunk) {
 // The resetImmediately parameter is a boolean that indicates whether to reset the loss rate immediately.
 // If resetImmediately is true, the loss rate will be reset immediately.
 // If resetImmediately is false, the loss rate will be reset after the next shuffle for RandomShuffleLossHandler
-// Note that for random loss handler, the loss rate will be reset immediately regardless of the resetImmediately parameter.
+// Note that for random loss handler, the loss rate will be reset immediately
+// regardless of the resetImmediately parameter.
 func (f *LossFilter) SetLossRate(chance int, resetImmediately bool) error {
 	if !validateChance(chance) {
-		return fmt.Errorf("chance must be between 0 and 100 inclusive")
+		return ErrInvalidChance
 	}
 
 	f.LossFilterHandler.setLossRate(chance, resetImmediately)
+
 	return nil
 }
 
