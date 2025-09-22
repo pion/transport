@@ -8,6 +8,7 @@ package vnet
 
 import (
 	"context"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -134,7 +135,7 @@ func TestTokenBucketFilter(t *testing.T) {
 				tbf.onInboundChunk(c)
 				bytesSent += len(c.UserData())
 				packetsSent++
-				time.Sleep(1 * time.Millisecond)
+				runtime.Gosched()
 			}
 			bits := float64(bytesSent) * 8.0
 			rate := bits / time.Since(start).Seconds()
