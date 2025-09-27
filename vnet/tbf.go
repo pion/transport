@@ -139,10 +139,10 @@ func (t *TokenBucketFilter) run() {
 }
 
 func (t *TokenBucketFilter) refillTokens(dt time.Duration) {
-	m := 1000.0 / float64(dt.Milliseconds())
-	add := (float64(t.rate) / m) / 8.0
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
+	m := 1000.0 / float64(dt.Milliseconds())
+	add := (float64(t.rate) / m) / 8.0
 	t.currentTokensInBucket = math.Min(float64(t.maxBurst), t.currentTokensInBucket+add)
 	t.log.Tracef(
 		"add=(%v / %v) / 8 = %v, currentTokensInBucket=%v, maxBurst=%v",
