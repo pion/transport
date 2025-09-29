@@ -59,22 +59,225 @@ func newMockNIC(t *testing.T) *mockNIC {
 	}
 }
 
-func TestLossFilter(t *testing.T) {
-	t.Run("FullLossDefaultHandler", func(t *testing.T) {
+func TestLossFilterFullLoss(t *testing.T) {
+	mnic := newMockNIC(t)
+
+	lossFilter, err := NewLossFilter(mnic, 100)
+	if !assert.NoError(t, err, "should succeed") {
+		return
+	}
+
+	lossFilter.onInboundChunk(&chunkUDP{})
+}
+
+func TestLossFilterNoLoss(t *testing.T) {
+	mnic := newMockNIC(t)
+
+	lossFilter, err := NewLossFilter(mnic, 0)
+	if !assert.NoError(t, err, "should succeed") {
+		return
+	}
+
+	packets := 100
+	received := 0
+	mnic.mockOnInboundChunk = func(Chunk) {
+		received++
+	}
+
+	for i := 0; i < packets; i++ {
+		lossFilter.onInboundChunk(&chunkUDP{})
+	}
+
+	assert.Equal(t, packets, received)
+}
+
+func TestLossFilterSomeLoss(t *testing.T) {
+	mnic := newMockNIC(t)
+
+	lossFilter, err := NewLossFilter(mnic, 50)
+	if !assert.NoError(t, err, "should succeed") {
+		return
+	}
+
+	packets := 1000
+	received := 0
+	mnic.mockOnInboundChunk = func(Chunk) {
+		received++
+	}
+
+	for i := 0; i < packets; i++ {
+		lossFilter.onInboundChunk(&chunkUDP{})
+	}
+
+	// One of the following could technically fail, but very unlikely
+	assert.Less(t, 0, received)
+	assert.Greater(t, packets, received)
+}
+
+func TestLossFilterLossRateChangeRandomShuffleHandler(t *testing.T) {
+	mnic := newMockNIC(t)
+
+	lossHandler, err := NewRandomShuffleLossHandler(10, 100)
+	if !assert.NoError(t, err, "should succeed") {
+		return
+	}
+
+	lossFilter, err := NewLossFilterWithOptions(mnic, 0, WithLossHandler(lossHandler))
+	if !assert.NoError(t, err, "should succeed") {
+		return
+	}
+
+	packets := 100
+	received := 0
+	mnic.mockOnInboundChunk = func(Chunk) {
+		received++
+	}
+
+	for i := 0; i < packets; i++ {
+		lossFilter.onInboundChunk(&chunkUDP{})
+	}
+
+	assert.Equal(t, 90, received)
+
+	err = lossFilter.SetLossRate(50, true)
+	if !assert.NoError(t, err, "should succeed") {
+		return
+	}
+	received = 0
+	for i := 0; i < packets; i++ {
+		lossFilter.onInboundChunk(&chunkUDP{})
+	}
+
+	assert.Equal(t, 50, received)
+
+	err = lossFilter.SetLossRate(99, true)
+	if !assert.NoError(t, err, "should succeed") {
+		return
+	}
+	received = 0
+	for i := 0; i < packets; i++ {
+		lossFilter.onInboundChunk(&chunkUDP{})
+	}
+
+	assert.Equal(t, 1, received)
+}
+
+func TestLossFilterImmediateLossRateChangeRandomShuffleHandler(t *testing.T) {
+	mnic := newMockNIC(t)
+
+	lossHandler, err := NewRandomShuffleLossHandler(10, 100)
+	if !assert.NoError(t, err, "should succeed") {
+		return
+	}
+
+	lossFilter, err := NewLossFilterWithOptions(mnic, 0, WithLossHandler(lossHandler))
+	if !assert.NoError(t, err, "should succeed") {
+		return
+	}
+
+	packets := 100
+	received := 0
+	mnic.mockOnInboundChunk = func(Chunk) {
+		received++
+	}
+
+	// send 50 dummy packets to partially fill shuffle block
+	for i := 0; i < 50; i++ {
+		lossFilter.onInboundChunk(&chunkUDP{})
+	}
+
+	// should trigger an immediate shuffle that sets the loss rate to 50%
+	err = lossFilter.SetLossRate(50, true)
+	if !assert.NoError(t, err, "should succeed") {
+		return
+	}
+
+	received = 0
+	for i := 0; i < packets; i++ {
+		lossFilter.onInboundChunk(&chunkUDP{})
+	}
+
+	assert.Equal(t, 50, received)
+}
+
+func TestLossFilterNonImmediateLossRateChangeRandomShuffleHandler(t *testing.T) {
+	mnic := newMockNIC(t)
+
+	lossHandler, err := NewRandomShuffleLossHandler(10, 100)
+	if !assert.NoError(t, err, "should succeed") {
+		return
+	}
+
+	lossFilter, err := NewLossFilterWithOptions(mnic, 0, WithLossHandler(lossHandler))
+	if !assert.NoError(t, err, "should succeed") {
+		return
+	}
+
+	received := 0
+	mnic.mockOnInboundChunk = func(Chunk) {
+		received++
+	}
+
+	// send 50 dummy packets to partially fill shuffle block
+	for i := 0; i < 50; i++ {
+		lossFilter.onInboundChunk(&chunkUDP{})
+	}
+
+	_ = lossFilter.SetLossRate(100, false)
+
+	// the loss rate should not be changed until the shuffle block is full
+	for i := 0; i < 50; i++ {
+		lossFilter.onInboundChunk(&chunkUDP{})
+	}
+
+	assert.Equal(t, 90, received)
+
+	received = 0
+
+	// the new loss rate should be applied to this block
+	for i := 0; i < 100; i++ {
+		lossFilter.onInboundChunk(&chunkUDP{})
+	}
+
+	assert.Equal(t, 0, received)
+}
+
+func TestLossFilterOptionsPattern(t *testing.T) {
+	t.Run("WithLossHandler option", func(t *testing.T) {
 		mnic := newMockNIC(t)
 
-		f, err := NewLossFilter(mnic, 100)
+		customHandler, err := NewRandomShuffleLossHandler(10, 100)
 		if !assert.NoError(t, err, "should succeed") {
 			return
 		}
 
-		f.onInboundChunk(&chunkUDP{})
+		// Using options pattern
+		lossFilter, err := NewLossFilterWithOptions(mnic, 50, WithLossHandler(customHandler))
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+
+		// Test that the custom handler is used
+		packets := 100
+		received := 0
+		mnic.mockOnInboundChunk = func(Chunk) {
+			received++
+		}
+
+		for i := 0; i < packets; i++ {
+			lossFilter.onInboundChunk(&chunkUDP{})
+		}
+
+		// Should use the custom handler's behavior (10% loss from handler creation)
+		// not the 50% from NewLossFilterWithOptions chance parameter
+		assert.Equal(t, 90, received)
 	})
 
-	t.Run("NoLossDefaultHandler", func(t *testing.T) {
+	t.Run("WithShuffleLossHandler option", func(t *testing.T) {
 		mnic := newMockNIC(t)
 
-		f, err := NewLossFilter(mnic, 0)
+		// Using options pattern with shuffle handler
+		lossFilter, err := NewLossFilterWithOptions(mnic, 25, WithShuffleLossHandler(100))
 		if !assert.NoError(t, err, "should succeed") {
 			return
 		}
@@ -86,16 +289,18 @@ func TestLossFilter(t *testing.T) {
 		}
 
 		for i := 0; i < packets; i++ {
-			f.onInboundChunk(&chunkUDP{})
+			lossFilter.onInboundChunk(&chunkUDP{})
 		}
 
-		assert.Equal(t, packets, received)
+		// Should use shuffle handler behavior with 25% loss rate
+		assert.Equal(t, 75, received)
 	})
 
-	t.Run("SomeLossDefaultHandler", func(t *testing.T) {
+	t.Run("Backward compatibility - no options", func(t *testing.T) {
 		mnic := newMockNIC(t)
 
-		f, err := NewLossFilter(mnic, 50)
+		// Old API should still work
+		lossFilter, err := NewLossFilter(mnic, 20)
 		if !assert.NoError(t, err, "should succeed") {
 			return
 		}
@@ -107,131 +312,11 @@ func TestLossFilter(t *testing.T) {
 		}
 
 		for i := 0; i < packets; i++ {
-			f.onInboundChunk(&chunkUDP{})
+			lossFilter.onInboundChunk(&chunkUDP{})
 		}
 
-		// One of the following could technically fail, but very unlikely
+		// Should work as before with random loss handler
 		assert.Less(t, 0, received)
 		assert.Greater(t, packets, received)
-	})
-
-	t.Run("LossRateChangeRandomShuffleHandler", func(t *testing.T) {
-		mnic := newMockNIC(t)
-
-		lossHandler, err := NewRandomShuffleLossHandler(10, 100)
-		if !assert.NoError(t, err, "should succeed") {
-			return
-		}
-
-		f, err := NewLossFilter(mnic, 0, lossHandler)
-		if !assert.NoError(t, err, "should succeed") {
-			return
-		}
-
-		packets := 100
-		received := 0
-		mnic.mockOnInboundChunk = func(Chunk) {
-			received++
-		}
-
-		for i := 0; i < packets; i++ {
-			f.onInboundChunk(&chunkUDP{})
-		}
-
-		assert.Equal(t, 90, received)
-
-		f.SetLossRate(50, true)
-		received = 0
-		for i := 0; i < packets; i++ {
-			f.onInboundChunk(&chunkUDP{})
-		}
-
-		assert.Equal(t, 50, received)
-
-		f.SetLossRate(99, true)
-		received = 0
-		for i := 0; i < packets; i++ {
-			f.onInboundChunk(&chunkUDP{})
-		}
-
-		assert.Equal(t, 1, received)
-	})
-
-	t.Run("ImmediateLossRateChangeRandomShuffleHandler", func(t *testing.T) {
-		mnic := newMockNIC(t)
-
-		lossHandler, err := NewRandomShuffleLossHandler(10, 100)
-		if !assert.NoError(t, err, "should succeed") {
-			return
-		}
-
-		f, err := NewLossFilter(mnic, 0, lossHandler)
-		if !assert.NoError(t, err, "should succeed") {
-			return
-		}
-
-		packets := 100
-		received := 0
-		mnic.mockOnInboundChunk = func(Chunk) {
-			received++
-		}
-
-		// send 50 dummy packets to partially fill shuffle block
-		for i := 0; i < 50; i++ {
-			f.onInboundChunk(&chunkUDP{})
-		}
-
-		// should trigger an immediate shuffle that sets the loss rate to 50%
-		f.SetLossRate(50, true)
-
-		received = 0
-		for i := 0; i < packets; i++ {
-			f.onInboundChunk(&chunkUDP{})
-		}
-
-		assert.Equal(t, 50, received)
-	})
-
-	t.Run("NonImmediateLossRateChangeRandomShuffleHandler", func(t *testing.T) {
-		mnic := newMockNIC(t)
-
-		lossHandler, err := NewRandomShuffleLossHandler(10, 100)
-		if !assert.NoError(t, err, "should succeed") {
-			return
-		}
-
-		f, err := NewLossFilter(mnic, 0, lossHandler)
-		if !assert.NoError(t, err, "should succeed") {
-			return
-		}
-
-		received := 0
-		mnic.mockOnInboundChunk = func(Chunk) {
-			received++
-		}
-
-		// send 50 dummy packets to partially fill shuffle block
-		for i := 0; i < 50; i++ {
-			f.onInboundChunk(&chunkUDP{})
-		}
-
-		f.SetLossRate(100, false)
-
-		// the loss rate should not be changed until the shuffle block is full
-		for i := 0; i < 50; i++ {
-			f.onInboundChunk(&chunkUDP{})
-		}
-
-		assert.Equal(t, 90, received)
-
-		received = 0
-
-		// the new loss rate should be applied to this block
-		for i := 0; i < 100; i++ {
-			f.onInboundChunk(&chunkUDP{})
-		}
-
-		assert.Equal(t, 0, received)
-
 	})
 }
