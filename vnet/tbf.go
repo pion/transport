@@ -112,7 +112,10 @@ func NewTokenBucketFilter(n NIC, opts ...TBFOption) (*TokenBucketFilter, error) 
 }
 
 func (t *TokenBucketFilter) onInboundChunk(c Chunk) {
-	t.c <- c
+	select {
+	case t.c <- c:
+	case <-t.done:
+	}
 }
 
 func (t *TokenBucketFilter) run() {
