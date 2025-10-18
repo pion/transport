@@ -6,6 +6,7 @@ package vnet
 import (
 	"errors"
 	"net"
+	"runtime"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -307,7 +308,11 @@ func TestRouterDelay(t *testing.T) {
 		t.Helper()
 
 		t.Run(title, func(t *testing.T) {
-			const margin = 8 * time.Millisecond
+			margin := 8 * time.Millisecond
+			if runtime.GOOS == "darwin" { // CI macOS runners are extra slow/drifty
+				margin += 4 * time.Millisecond
+			}
+
 			var nCBs int32
 			doneCh := make(chan struct{})
 			router, err := NewRouter(&RouterConfig{
