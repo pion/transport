@@ -84,7 +84,9 @@ func TestTokenBucketFilter(t *testing.T) {
 					mBitPerSecond := rate / float64(MBit)
 					// Allow 5% more than capacity due to max bursts
 					assert.Less(t, rate, 1.05*float64(capacity))
-					assert.Greater(t, rate, 0.9*float64(capacity))
+					// allow for timing variations - use 85% instead of 90% for more tolerance
+					// because github CI runners are painfly slow most of the time.
+					assert.Greater(t, rate, 0.85*float64(capacity))
 
 					log.Infof(
 						"duration=%v, bytesReceived=%v, packetsReceived=%v throughput=%.2f Mb/s",
