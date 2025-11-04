@@ -28,50 +28,81 @@ type LossFilter struct {
 	LossFilterHandler
 }
 
-// RandomLossHandler drops packets randomly with a probability determined by the chance parameter.
-type RandomLossHandler struct {
-	chance int
-	mutex  sync.RWMutex
+// lossFilterConfig holds the configuration for creating a LossFilter.
+type lossFilterConfig struct {
+	nic              NIC
+	chance           int
+	handler          LossFilterHandler
+	shuffleBlockSize int
 }
 
-// NewRandomLossHandler creates a new RandomLossHandler with the given drop chance.
-func NewRandomLossHandler(chance int) (*RandomLossHandler, error) {
+// LossFilterOption represents a configuration option for LossFilter creation.
+type LossFilterOption func(cfg *lossFilterConfig) error
+
+// WithLossHandler sets a custom loss handler for the LossFilter.
+// This option takes precedence over WithShuffleLossHandler if both are provided.
+func WithLossHandler(handler LossFilterHandler) LossFilterOption {
+	return func(cfg *lossFilterConfig) error {
+		cfg.handler = handler
+
+		return nil
+	}
+}
+
+// WithShuffleLossHandler configures the LossFilter to use deterministic shuffle-based packet loss
+// with the specified block size. When set, for every blockSize packets, it guarantees that the
+// number of packets dropped equals round(blockSize * chance / 100), where chance is a percentage (0-100).
+func WithShuffleLossHandler(blockSize int) LossFilterOption {
+	return func(cfg *lossFilterConfig) error {
+		if blockSize < 1 {
+			return ErrInvalidShuffleBlockSize
+		}
+		cfg.shuffleBlockSize = blockSize
+
+		return nil
+	}
+}
+
+// lossHandle drops packets with configurable behavior: random or deterministic shuffle-based.
+// When shuffleBlockSize is 0, it uses pure random dropping.
+// When shuffleBlockSize > 0, it uses deterministic shuffle-based dropping for better distribution.
+type lossHandle struct {
+	// percentage (0-100) - used in random mode, stored for consistency in shuffle mode
+	chance int
+	mutex  sync.RWMutex
+
+	// Shuffle mode fields (only used when shuffleBlockSize > 0)
+	shuffleBlockSize int
+	blockIdx         int
+	shuffledBlock    []bool
+	// current number of drops per block (calculated from chance percentage)
+	currentDrops int
+	pendingDrops int
+	shuffleMutex sync.Mutex
+}
+
+// calculateDropsPerBlock calculates the number of packets to drop per block based on percentage chance.
+// Uses rounding: (chance * blockSize + 50) / 100.
+func calculateDropsPerBlock(chancePercent int, blockSize int) int {
+	return (chancePercent*blockSize + 50) / 100
+}
+
+// NewRandomLossHandler creates a new LossHandler with random packet dropping.
+func NewRandomLossHandler(chance int) (LossFilterHandler, error) {
 	if !validateChance(chance) {
 		return nil, ErrInvalidChance
 	}
 
-	return &RandomLossHandler{
-		chance: chance,
+	return &lossHandle{
+		chance:           chance,
+		shuffleBlockSize: 0, // 0 means random mode
 	}, nil
 }
 
-func (r *RandomLossHandler) shouldDrop() bool {
-	r.mutex.RLock()
-	chance := r.chance
-	r.mutex.RUnlock()
-
-	return rand.Intn(100) < chance //nolint:gosec
-}
-
-func (r *RandomLossHandler) setLossRate(chance int, _ bool) {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-	r.chance = chance
-}
-
-// RandomShuffleLossHandler drops packets with a deterministic probability for every 100 packets
-// That is, for every 100 packets, it guarantees that the number of packets dropped is equal to the chance parameter.
-type RandomShuffleLossHandler struct {
-	blockIdx      int
-	shuffledBlock []bool
-	currentChance int
-	pendingChance int
-	mutex         sync.Mutex
-}
-
-// NewRandomShuffleLossHandler creates a new RandomShuffleLossHandler with the given drop chance and shuffle block size.
-// The default shuffle block size should be 100.
-func NewRandomShuffleLossHandler(chance int, shuffleBlockSize int) (*RandomShuffleLossHandler, error) {
+// NewRandomShuffleLossHandler creates a new LossHandler with shuffle-based deterministic packet loss.
+// The chance parameter is a percentage (0-100). For every shuffleBlockSize packets, it guarantees that
+// the number of packets dropped equals round(shuffleBlockSize * chance / 100).
+func NewRandomShuffleLossHandler(chance int, shuffleBlockSize int) (LossFilterHandler, error) {
 	if !validateChance(chance) {
 		return nil, ErrInvalidChance
 	}
@@ -80,58 +111,39 @@ func NewRandomShuffleLossHandler(chance int, shuffleBlockSize int) (*RandomShuff
 		return nil, ErrInvalidShuffleBlockSize
 	}
 
-	filter := RandomShuffleLossHandler{
-		shuffledBlock: make([]bool, shuffleBlockSize),
-		blockIdx:      0,
-		currentChance: chance,
-		pendingChance: chance,
+	dropsPerBlock := calculateDropsPerBlock(chance, shuffleBlockSize)
+	handler := &lossHandle{
+		chance:           chance,
+		shuffleBlockSize: shuffleBlockSize,
+		shuffledBlock:    make([]bool, shuffleBlockSize),
+		currentDrops:     dropsPerBlock,
+		pendingDrops:     dropsPerBlock,
 	}
 
-	for i := 0; i < filter.currentChance; i++ {
-		filter.shuffledBlock[i] = true
+	for i := 0; i < handler.currentDrops; i++ {
+		handler.shuffledBlock[i] = true
 	}
 
-	filter.shuffleBlock()
+	handler.shuffleBlock()
 
-	return &filter, nil
+	return handler, nil
 }
 
-func (r *RandomShuffleLossHandler) setLossRate(chance int, resetImmediately bool) {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-
-	r.pendingChance = chance
-
-	if resetImmediately {
-		r.shuffleBlock()
-	}
-}
-
-func (r *RandomShuffleLossHandler) shuffleBlock() {
-	for idx := 0; idx < len(r.shuffledBlock); idx++ {
-		switch {
-		case r.pendingChance == r.currentChance:
-			goto shuffleComplete
-		case r.pendingChance > r.currentChance && !r.shuffledBlock[idx]:
-			r.shuffledBlock[idx] = true
-			r.currentChance++
-		case r.pendingChance < r.currentChance && r.shuffledBlock[idx]:
-			r.shuffledBlock[idx] = false
-			r.currentChance--
-		}
+func (r *lossHandle) shouldDrop() bool {
+	if r.shuffleBlockSize > 0 {
+		return r.shouldDropShuffle()
 	}
 
-shuffleComplete:
+	r.mutex.RLock()
+	chance := r.chance
+	r.mutex.RUnlock()
 
-	rand.Shuffle(len(r.shuffledBlock), func(i, j int) {
-		r.shuffledBlock[i], r.shuffledBlock[j] = r.shuffledBlock[j], r.shuffledBlock[i]
-	})
-	r.blockIdx = 0
+	return rand.Intn(100) < chance //nolint:gosec
 }
 
-func (r *RandomShuffleLossHandler) shouldDrop() bool {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
+func (r *lossHandle) shouldDropShuffle() bool {
+	r.shuffleMutex.Lock()
+	defer r.shuffleMutex.Unlock()
 
 	if r.blockIdx == len(r.shuffledBlock) {
 		r.shuffleBlock()
@@ -143,29 +155,53 @@ func (r *RandomShuffleLossHandler) shouldDrop() bool {
 	return res
 }
 
-// LossFilterOption represents a configuration option for LossFilter creation.
-type LossFilterOption func(nic NIC, chance int) (LossFilterHandler, error)
-
-// WithLossHandler sets a custom loss handler for the LossFilter.
-func WithLossHandler(handler LossFilterHandler) LossFilterOption {
-	return func(_ NIC, chance int) (LossFilterHandler, error) {
-		// Set the chance on the provided handler
-		handler.setLossRate(chance, false)
-
-		return handler, nil
+func (r *lossHandle) setLossRate(chance int, resetImmediately bool) {
+	if r.shuffleBlockSize > 0 {
+		r.setLossRateShuffle(chance, resetImmediately)
+	} else {
+		r.mutex.Lock()
+		defer r.mutex.Unlock()
+		r.chance = chance
 	}
 }
 
-// WithShuffleLossHandler creates a LossFilter with a RandomShuffleLossHandler
-// with the specified block size for deterministic packet loss distribution.
-func WithShuffleLossHandler(blockSize int) LossFilterOption {
-	return func(_ NIC, chance int) (LossFilterHandler, error) {
-		return NewRandomShuffleLossHandler(chance, blockSize)
+func (r *lossHandle) setLossRateShuffle(chance int, resetImmediately bool) {
+	r.shuffleMutex.Lock()
+	defer r.shuffleMutex.Unlock()
+
+	r.chance = chance // store percentage for consistency
+	r.pendingDrops = calculateDropsPerBlock(chance, r.shuffleBlockSize)
+
+	if resetImmediately {
+		r.shuffleBlock()
 	}
+}
+
+func (r *lossHandle) shuffleBlock() {
+	// Update shuffled block to match pending drops count
+	for idx := 0; idx < len(r.shuffledBlock); idx++ {
+		switch {
+		case r.pendingDrops == r.currentDrops:
+			goto shuffleComplete
+		case r.pendingDrops > r.currentDrops && !r.shuffledBlock[idx]:
+			r.shuffledBlock[idx] = true
+			r.currentDrops++
+		case r.pendingDrops < r.currentDrops && r.shuffledBlock[idx]:
+			r.shuffledBlock[idx] = false
+			r.currentDrops--
+		}
+	}
+
+shuffleComplete:
+
+	rand.Shuffle(len(r.shuffledBlock), func(i, j int) {
+		r.shuffledBlock[i], r.shuffledBlock[j] = r.shuffledBlock[j], r.shuffledBlock[i]
+	})
+	r.blockIdx = 0
 }
 
 // NewLossFilter creates a new LossFilter that drops every packet with a
-// probability of chance/100 using the default RandomLossHandler.
+// probability of chance/100 using the default random LossHandler.
 // This maintains backward compatibility with the original API.
 func NewLossFilter(nic NIC, chance int) (*LossFilter, error) {
 	return NewLossFilterWithOptions(nic, chance)
@@ -174,25 +210,47 @@ func NewLossFilter(nic NIC, chance int) (*LossFilter, error) {
 // NewLossFilterWithOptions creates a new LossFilter that drops every packet with a
 // probability of chance/100. You can provide custom options to override the
 // default behavior. This follows the Pion options pattern for extensibility.
+//
+// Option precedence: If WithLossHandler is provided, it takes precedence and any
+// WithShuffleLossHandler option will be ignored.
 func NewLossFilterWithOptions(nic NIC, chance int, options ...LossFilterOption) (*LossFilter, error) {
 	if !validateChance(chance) {
 		return nil, ErrInvalidChance
 	}
 
-	var lossHandler LossFilterHandler
-	var err error
+	// Initialize config with defaults
+	cfg := &lossFilterConfig{
+		nic:              nic,
+		chance:           chance,
+		shuffleBlockSize: 0, // 0 means random mode
+	}
 
-	// If options are provided, use the first one to create the handler
-	if len(options) > 0 {
-		lossHandler, err = options[0](nic, chance)
+	for _, option := range options {
+		if err := option(cfg); err != nil {
+			return nil, err
+		}
+	}
+
+	// Create handler based on config
+	// Precedence: WithLossHandler > WithShuffleLossHandler > default random handler
+	var lossHandler LossFilterHandler
+
+	switch {
+	case cfg.handler != nil:
+		// Use provided handler (WithLossHandler takes precedence over WithShuffleLossHandler)
+		cfg.handler.setLossRate(cfg.chance, false)
+		lossHandler = cfg.handler
+	case cfg.shuffleBlockSize > 0:
+		var err error
+		lossHandler, err = NewRandomShuffleLossHandler(cfg.chance, cfg.shuffleBlockSize)
 		if err != nil {
 			return nil, err
 		}
-	} else {
-		// Create default handler
-		lossHandler, err = NewRandomLossHandler(chance)
-		if err != nil {
-			return nil, err
+	default:
+		// Random mode
+		lossHandler = &lossHandle{
+			chance:           cfg.chance,
+			shuffleBlockSize: 0,
 		}
 	}
 
@@ -219,8 +277,8 @@ func (f *LossFilter) onInboundChunk(c Chunk) {
 // The chance parameter is an integer out of 100.
 // The resetImmediately parameter is a boolean that indicates whether to reset the loss rate immediately.
 // If resetImmediately is true, the loss rate will be reset immediately.
-// If resetImmediately is false, the loss rate will be reset after the next shuffle for RandomShuffleLossHandler
-// Note that for random loss handler, the loss rate will be reset immediately
+// If resetImmediately is false, the loss rate will be reset after the next shuffle for shuffle-based handlers.
+// Note that for random loss handlers (when shuffleBlockSize is 0), the loss rate will be reset immediately
 // regardless of the resetImmediately parameter.
 func (f *LossFilter) SetLossRate(chance int, resetImmediately bool) error {
 	if !validateChance(chance) {
