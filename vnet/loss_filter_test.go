@@ -320,3 +320,184 @@ func TestLossFilterOptionsPattern(t *testing.T) {
 		assert.Greater(t, packets, received)
 	})
 }
+
+func testShuffleRounding(t *testing.T, chance int, blockSize int, expectedReceived int) {
+	t.Helper()
+	mnic := newMockNIC(t)
+	lossFilter, err := NewLossFilterWithOptions(mnic, chance, WithShuffleLossHandler(blockSize))
+	if !assert.NoError(t, err, "should succeed") {
+		return
+	}
+
+	received := 0
+	mnic.mockOnInboundChunk = func(Chunk) {
+		received++
+	}
+
+	for i := 0; i < 100; i++ {
+		lossFilter.onInboundChunk(&chunkUDP{})
+	}
+
+	assert.Equal(t, expectedReceived, received)
+}
+
+func TestLossFilterShuffleRounding(t *testing.T) {
+	t.Run("1% with blockSize 10", func(t *testing.T) {
+		testShuffleRounding(t, 1, 10, 100)
+	})
+	t.Run("1% with blockSize 100", func(t *testing.T) {
+		testShuffleRounding(t, 1, 100, 99)
+	})
+	t.Run("49% with blockSize 10", func(t *testing.T) {
+		testShuffleRounding(t, 49, 10, 50)
+	})
+	t.Run("50% with blockSize 10", func(t *testing.T) {
+		testShuffleRounding(t, 50, 10, 50)
+	})
+	t.Run("51% with blockSize 10", func(t *testing.T) {
+		testShuffleRounding(t, 51, 10, 50)
+	})
+	t.Run("55% with blockSize 10", func(t *testing.T) {
+		testShuffleRounding(t, 55, 10, 40)
+	})
+}
+
+func setupLossFilterForResetTest(t *testing.T) (*LossFilter, *int) {
+	t.Helper()
+	mnic := newMockNIC(t)
+	lossFilter, err := NewLossFilterWithOptions(mnic, 10, WithShuffleLossHandler(100))
+	if !assert.NoError(t, err, "should succeed") {
+		return nil, nil
+	}
+
+	received := new(int)
+	mnic.mockOnInboundChunk = func(Chunk) {
+		(*received)++
+	}
+
+	return lossFilter, received
+}
+
+func TestLossFilterResetImmediately(t *testing.T) { //nolint:cyclop
+	t.Run("resetImmediately true - applies immediately mid-block", func(t *testing.T) {
+		lossFilter, received := setupLossFilterForResetTest(t)
+		if lossFilter == nil {
+			return
+		}
+
+		for i := 0; i < 30; i++ {
+			lossFilter.onInboundChunk(&chunkUDP{})
+		}
+		receivedBeforeReset := *received
+
+		err := lossFilter.SetLossRate(90, true)
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+
+		for i := 0; i < 100; i++ {
+			lossFilter.onInboundChunk(&chunkUDP{})
+		}
+		receivedAfterReset := *received
+
+		assert.GreaterOrEqual(t, receivedAfterReset, receivedBeforeReset+5)
+		assert.LessOrEqual(t, receivedAfterReset, receivedBeforeReset+15)
+	})
+
+	t.Run("resetImmediately false - applies after current block", func(t *testing.T) {
+		lossFilter, received := setupLossFilterForResetTest(t)
+		if lossFilter == nil {
+			return
+		}
+
+		for i := 0; i < 30; i++ {
+			lossFilter.onInboundChunk(&chunkUDP{})
+		}
+		receivedAt30 := *received
+
+		err := lossFilter.SetLossRate(90, false)
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+
+		for i := 0; i < 70; i++ {
+			lossFilter.onInboundChunk(&chunkUDP{})
+		}
+		receivedAt100 := *received
+
+		assert.GreaterOrEqual(t, receivedAt100, receivedAt30+60)
+		assert.LessOrEqual(t, receivedAt100, receivedAt30+70)
+
+		for i := 0; i < 100; i++ {
+			lossFilter.onInboundChunk(&chunkUDP{})
+		}
+		receivedAt200 := *received
+
+		assert.GreaterOrEqual(t, receivedAt200, receivedAt100+5)
+		assert.LessOrEqual(t, receivedAt200, receivedAt100+15)
+	})
+
+	t.Run("resetImmediately true multiple times", func(t *testing.T) {
+		lossFilter, received := setupLossFilterForResetTest(t)
+		if lossFilter == nil {
+			return
+		}
+
+		for i := 0; i < 20; i++ {
+			lossFilter.onInboundChunk(&chunkUDP{})
+		}
+
+		err := lossFilter.SetLossRate(50, true)
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+
+		for i := 0; i < 100; i++ {
+			lossFilter.onInboundChunk(&chunkUDP{})
+		}
+		receivedAt120 := *received
+
+		err = lossFilter.SetLossRate(0, true)
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+
+		for i := 0; i < 100; i++ {
+			lossFilter.onInboundChunk(&chunkUDP{})
+		}
+
+		assert.Equal(t, receivedAt120+100, *received)
+	})
+
+	t.Run("resetImmediately false then true", func(t *testing.T) {
+		lossFilter, received := setupLossFilterForResetTest(t)
+		if lossFilter == nil {
+			return
+		}
+
+		for i := 0; i < 50; i++ {
+			lossFilter.onInboundChunk(&chunkUDP{})
+		}
+
+		err := lossFilter.SetLossRate(90, false)
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+
+		for i := 0; i < 30; i++ {
+			lossFilter.onInboundChunk(&chunkUDP{})
+		}
+		receivedAt80 := *received
+
+		err = lossFilter.SetLossRate(0, true)
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+
+		for i := 0; i < 100; i++ {
+			lossFilter.onInboundChunk(&chunkUDP{})
+		}
+
+		assert.Equal(t, receivedAt80+100, *received)
+	})
+}
