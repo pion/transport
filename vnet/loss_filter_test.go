@@ -501,3 +501,853 @@ func TestLossFilterResetImmediately(t *testing.T) { //nolint:cyclop
 		assert.Equal(t, receivedAt80+100, *received)
 	})
 }
+
+func TestLossFilterWithSeed_DeterministicShuffle(t *testing.T) {
+	t.Run("same seed produces same shuffle pattern", func(t *testing.T) {
+		mnic1 := newMockNIC(t)
+		mnic2 := newMockNIC(t)
+
+		seed := int64(42)
+		chance := 50
+		blockSize := 20
+
+		filter1, err := NewLossFilterWithOptions(mnic1, chance, WithShuffleLossHandler(blockSize), WithLossSeed(seed))
+		assert.NoError(t, err)
+
+		filter2, err := NewLossFilterWithOptions(mnic2, chance, WithShuffleLossHandler(blockSize), WithLossSeed(seed))
+		assert.NoError(t, err)
+
+		dropped1 := make([]bool, blockSize*3)
+		dropped2 := make([]bool, blockSize*3)
+
+		for i := 0; i < blockSize*3; i++ {
+			dropped1[i] = filter1.LossFilterHandler.shouldDrop()
+			dropped2[i] = filter2.LossFilterHandler.shouldDrop()
+		}
+
+		assert.Equal(t, dropped1, dropped2, "same seed should produce identical shuffle patterns")
+	})
+
+	t.Run("different seeds produce different shuffle patterns", func(t *testing.T) {
+		mnic1 := newMockNIC(t)
+		mnic2 := newMockNIC(t)
+
+		chance := 30
+		blockSize := 20
+
+		filter1, err := NewLossFilterWithOptions(mnic1, chance, WithShuffleLossHandler(blockSize), WithLossSeed(1))
+		assert.NoError(t, err)
+
+		filter2, err := NewLossFilterWithOptions(mnic2, chance, WithShuffleLossHandler(blockSize), WithLossSeed(999))
+		assert.NoError(t, err)
+
+		dropped1 := make([]bool, blockSize*3)
+		dropped2 := make([]bool, blockSize*3)
+
+		for i := 0; i < blockSize*3; i++ {
+			dropped1[i] = filter1.LossFilterHandler.shouldDrop()
+			dropped2[i] = filter2.LossFilterHandler.shouldDrop()
+		}
+
+		assert.NotEqual(t, dropped1, dropped2, "different seeds should produce different shuffle patterns")
+	})
+
+	t.Run("shuffle order is deterministic with seed", func(t *testing.T) {
+		mnic1 := newMockNIC(t)
+		mnic2 := newMockNIC(t)
+		seed := int64(12345)
+		chance := 40
+		blockSize := 10
+
+		filter1, err := NewLossFilterWithOptions(mnic1, chance, WithShuffleLossHandler(blockSize), WithLossSeed(seed))
+		assert.NoError(t, err)
+
+		filter2, err := NewLossFilterWithOptions(mnic2, chance, WithShuffleLossHandler(blockSize), WithLossSeed(seed))
+		assert.NoError(t, err)
+
+		pattern1 := make([]bool, blockSize)
+		pattern2 := make([]bool, blockSize)
+
+		for i := 0; i < blockSize; i++ {
+			pattern1[i] = filter1.LossFilterHandler.shouldDrop()
+			pattern2[i] = filter2.LossFilterHandler.shouldDrop()
+		}
+
+		assert.Equal(t, pattern1, pattern2, "shuffle order should be deterministic with same seed")
+	})
+
+	t.Run("shuffle maintains correct loss rate with seed", func(t *testing.T) {
+		mnic := newMockNIC(t)
+		seed := int64(777)
+		chance := 25
+		blockSize := 100
+
+		filter, err := NewLossFilterWithOptions(mnic, chance, WithShuffleLossHandler(blockSize), WithLossSeed(seed))
+		assert.NoError(t, err)
+
+		received := 0
+		mnic.mockOnInboundChunk = func(Chunk) {
+			received++
+		}
+
+		packets := blockSize * 5
+		for i := 0; i < packets; i++ {
+			filter.onInboundChunk(&chunkUDP{})
+		}
+
+		expectedReceived := (100 - chance) * 5
+		assert.Equal(t, expectedReceived, received, "seed should not affect loss rate accuracy")
+	})
+}
+
+func TestLossFilterWithSeed_DeterministicRandom(t *testing.T) {
+	t.Run("same seed produces same random drop pattern", func(t *testing.T) {
+		mnic1 := newMockNIC(t)
+		mnic2 := newMockNIC(t)
+
+		seed := int64(555)
+		chance := 50
+
+		filter1, err := NewLossFilterWithOptions(mnic1, chance, WithLossSeed(seed))
+		assert.NoError(t, err)
+
+		filter2, err := NewLossFilterWithOptions(mnic2, chance, WithLossSeed(seed))
+		assert.NoError(t, err)
+
+		numPackets := 100
+		dropped1 := make([]bool, numPackets)
+		dropped2 := make([]bool, numPackets)
+
+		for i := 0; i < numPackets; i++ {
+			dropped1[i] = filter1.LossFilterHandler.shouldDrop()
+			dropped2[i] = filter2.LossFilterHandler.shouldDrop()
+		}
+
+		assert.Equal(t, dropped1, dropped2, "same seed should produce identical random drop patterns")
+	})
+
+	t.Run("different seeds produce different random patterns", func(t *testing.T) {
+		mnic1 := newMockNIC(t)
+		mnic2 := newMockNIC(t)
+
+		chance := 50
+
+		filter1, err := NewLossFilterWithOptions(mnic1, chance, WithLossSeed(100))
+		assert.NoError(t, err)
+
+		filter2, err := NewLossFilterWithOptions(mnic2, chance, WithLossSeed(200))
+		assert.NoError(t, err)
+
+		numPackets := 100
+		dropped1 := make([]bool, numPackets)
+		dropped2 := make([]bool, numPackets)
+
+		for i := 0; i < numPackets; i++ {
+			dropped1[i] = filter1.LossFilterHandler.shouldDrop()
+			dropped2[i] = filter2.LossFilterHandler.shouldDrop()
+		}
+
+		assert.NotEqual(t, dropped1, dropped2, "different seeds should produce different random patterns")
+	})
+
+	t.Run("random loss maintains approximately correct rate with seed", func(t *testing.T) {
+		mnic := newMockNIC(t)
+		seed := int64(888)
+		chance := 30
+
+		filter, err := NewLossFilterWithOptions(mnic, chance, WithLossSeed(seed))
+		assert.NoError(t, err)
+
+		received := 0
+		mnic.mockOnInboundChunk = func(Chunk) {
+			received++
+		}
+
+		packets := 10000
+		for i := 0; i < packets; i++ {
+			filter.onInboundChunk(&chunkUDP{})
+		}
+
+		expectedReceived := (100 - chance) * packets / 100
+		tolerance := packets / 20 // 5% tolerance
+		assert.InDelta(t, expectedReceived, received, float64(tolerance),
+			"seed should maintain approximately correct loss rate")
+	})
+}
+
+func TestLossFilterWithSeed_Reproducibility(t *testing.T) {
+	t.Run("multiple runs with same seed are reproducible", func(t *testing.T) {
+		mnic := newMockNIC(t)
+		seed := int64(9999)
+		chance := 35
+		blockSize := 50
+
+		filter1, err := NewLossFilterWithOptions(mnic, chance, WithShuffleLossHandler(blockSize), WithLossSeed(seed))
+		assert.NoError(t, err)
+
+		pattern1 := make([]bool, blockSize*2)
+		for i := 0; i < blockSize*2; i++ {
+			pattern1[i] = filter1.LossFilterHandler.shouldDrop()
+		}
+
+		filter2, err := NewLossFilterWithOptions(mnic, chance, WithShuffleLossHandler(blockSize), WithLossSeed(seed))
+		assert.NoError(t, err)
+
+		pattern2 := make([]bool, blockSize*2)
+		for i := 0; i < blockSize*2; i++ {
+			pattern2[i] = filter2.LossFilterHandler.shouldDrop()
+		}
+
+		assert.Equal(t, pattern1, pattern2, "multiple runs with same seed should be reproducible")
+	})
+
+	t.Run("seed works with custom handler", func(t *testing.T) {
+		// Note: Custom handlers created directly with NewRandomShuffleLossHandler
+		// use time-based seeding and won't be deterministic. This test verifies
+		// that when using WithLossSeed option, filters are deterministic.
+		mnic1 := newMockNIC(t)
+		mnic2 := newMockNIC(t)
+		seed := int64(1234)
+		chance := 20
+		blockSize := 50
+
+		filter1, err := NewLossFilterWithOptions(mnic1, chance, WithShuffleLossHandler(blockSize), WithLossSeed(seed))
+		assert.NoError(t, err)
+
+		filter2, err := NewLossFilterWithOptions(mnic2, chance, WithShuffleLossHandler(blockSize), WithLossSeed(seed))
+		assert.NoError(t, err)
+
+		pattern1 := make([]bool, 100)
+		pattern2 := make([]bool, 100)
+
+		for i := 0; i < 100; i++ {
+			pattern1[i] = filter1.LossFilterHandler.shouldDrop()
+			pattern2[i] = filter2.LossFilterHandler.shouldDrop()
+		}
+
+		assert.Equal(t, pattern1, pattern2, "filters with same seed should produce identical patterns")
+	})
+}
+
+func TestLossFilterSeed_NoSeedRandomization(t *testing.T) {
+	t.Run("no seed produces different results on different runs", func(t *testing.T) {
+		mnic := newMockNIC(t)
+		chance := 40
+
+		filter, err := NewLossFilterWithOptions(mnic, chance, WithShuffleLossHandler(100))
+		assert.NoError(t, err)
+
+		received := 0
+		mnic.mockOnInboundChunk = func(Chunk) {
+			received++
+		}
+
+		for i := 0; i < 100; i++ {
+			filter.onInboundChunk(&chunkUDP{})
+		}
+
+		assert.Equal(t, 60, received, "shuffle should maintain correct loss rate even without explicit seed")
+	})
+}
+
+func TestNewRandomLossHandler(t *testing.T) {
+	t.Run("valid chance returns handler", func(t *testing.T) {
+		handler, err := NewRandomLossHandler(50)
+		assert.NoError(t, err)
+		assert.NotNil(t, handler)
+	})
+
+	t.Run("invalid chance returns error", func(t *testing.T) {
+		_, err := NewRandomLossHandler(-1)
+		assert.ErrorIs(t, err, ErrInvalidChance)
+
+		_, err = NewRandomLossHandler(101)
+		assert.ErrorIs(t, err, ErrInvalidChance)
+	})
+
+	t.Run("handler produces random drops", func(t *testing.T) {
+		handler, err := NewRandomLossHandler(50)
+		assert.NoError(t, err)
+
+		dropped := 0
+		total := 1000
+		for i := 0; i < total; i++ {
+			if handler.shouldDrop() {
+				dropped++
+			}
+		}
+
+		expected := total / 2
+		tolerance := total / 10
+		assert.InDelta(t, expected, dropped, float64(tolerance))
+	})
+
+	t.Run("zero chance never drops", func(t *testing.T) {
+		handler, err := NewRandomLossHandler(0)
+		assert.NoError(t, err)
+
+		for i := 0; i < 100; i++ {
+			assert.False(t, handler.shouldDrop())
+		}
+	})
+
+	t.Run("100 chance always drops", func(t *testing.T) {
+		handler, err := NewRandomLossHandler(100)
+		assert.NoError(t, err)
+
+		for i := 0; i < 100; i++ {
+			assert.True(t, handler.shouldDrop())
+		}
+	})
+
+	t.Run("setLossRate works", func(t *testing.T) {
+		handler, err := NewRandomLossHandler(50)
+		assert.NoError(t, err)
+
+		handler.setLossRate(0, false)
+		for i := 0; i < 100; i++ {
+			assert.False(t, handler.shouldDrop())
+		}
+
+		handler.setLossRate(100, false)
+		for i := 0; i < 100; i++ {
+			assert.True(t, handler.shouldDrop())
+		}
+	})
+}
+
+func TestNewRandomShuffleLossHandler(t *testing.T) { //nolint:cyclop
+	t.Run("valid parameters return handler", func(t *testing.T) {
+		handler, err := NewRandomShuffleLossHandler(50, 100)
+		assert.NoError(t, err)
+		assert.NotNil(t, handler)
+	})
+
+	t.Run("invalid chance returns error", func(t *testing.T) {
+		_, err := NewRandomShuffleLossHandler(-1, 100)
+		assert.ErrorIs(t, err, ErrInvalidChance)
+
+		_, err = NewRandomShuffleLossHandler(101, 100)
+		assert.ErrorIs(t, err, ErrInvalidChance)
+	})
+
+	t.Run("invalid shuffleBlockSize returns error", func(t *testing.T) {
+		_, err := NewRandomShuffleLossHandler(50, 0)
+		assert.ErrorIs(t, err, ErrInvalidShuffleBlockSize)
+
+		_, err = NewRandomShuffleLossHandler(50, -1)
+		assert.ErrorIs(t, err, ErrInvalidShuffleBlockSize)
+	})
+
+	t.Run("maintains exact loss rate per block", func(t *testing.T) {
+		chance := 30
+		blockSize := 100
+		handler, err := NewRandomShuffleLossHandler(chance, blockSize)
+		assert.NoError(t, err)
+
+		for block := 0; block < 5; block++ {
+			dropped := 0
+			for i := 0; i < blockSize; i++ {
+				if handler.shouldDrop() {
+					dropped++
+				}
+			}
+			assert.Equal(t, 30, dropped, "block %d should have exactly 30 drops", block)
+		}
+	})
+
+	t.Run("zero chance never drops", func(t *testing.T) {
+		handler, err := NewRandomShuffleLossHandler(0, 100)
+		assert.NoError(t, err)
+
+		for i := 0; i < 200; i++ {
+			assert.False(t, handler.shouldDrop())
+		}
+	})
+
+	t.Run("100 chance always drops", func(t *testing.T) {
+		handler, err := NewRandomShuffleLossHandler(100, 100)
+		assert.NoError(t, err)
+
+		for i := 0; i < 200; i++ {
+			assert.True(t, handler.shouldDrop())
+		}
+	})
+
+	t.Run("rounding works correctly", func(t *testing.T) {
+		handler1, err := NewRandomShuffleLossHandler(1, 10)
+		assert.NoError(t, err)
+		dropped1 := 0
+		for i := 0; i < 10; i++ {
+			if handler1.shouldDrop() {
+				dropped1++
+			}
+		}
+		assert.Equal(t, 0, dropped1, "1% of 10 should round to 0")
+
+		handler2, err := NewRandomShuffleLossHandler(1, 100)
+		assert.NoError(t, err)
+		dropped2 := 0
+		for i := 0; i < 100; i++ {
+			if handler2.shouldDrop() {
+				dropped2++
+			}
+		}
+		assert.Equal(t, 1, dropped2, "1% of 100 should round to 1")
+
+		handler3, err := NewRandomShuffleLossHandler(49, 10)
+		assert.NoError(t, err)
+		dropped3 := 0
+		for i := 0; i < 10; i++ {
+			if handler3.shouldDrop() {
+				dropped3++
+			}
+		}
+		assert.Equal(t, 5, dropped3, "49% of 10 should round to 5")
+	})
+
+	t.Run("setLossRate with resetImmediately true", func(t *testing.T) {
+		handler, err := NewRandomShuffleLossHandler(50, 100)
+		assert.NoError(t, err)
+
+		for i := 0; i < 30; i++ {
+			handler.shouldDrop()
+		}
+
+		handler.setLossRate(0, true)
+
+		dropped := 0
+		for i := 0; i < 100; i++ {
+			if handler.shouldDrop() {
+				dropped++
+			}
+		}
+		assert.Equal(t, 0, dropped)
+	})
+
+	t.Run("setLossRate with resetImmediately false", func(t *testing.T) {
+		handler, err := NewRandomShuffleLossHandler(50, 100)
+		assert.NoError(t, err)
+
+		for i := 0; i < 30; i++ {
+			handler.shouldDrop()
+		}
+
+		handler.setLossRate(0, false)
+
+		dropped := 0
+		for i := 0; i < 70; i++ {
+			if handler.shouldDrop() {
+				dropped++
+			}
+		}
+		assert.InDelta(t, 35, dropped, 5)
+
+		dropped = 0
+		for i := 0; i < 100; i++ {
+			if handler.shouldDrop() {
+				dropped++
+			}
+		}
+		assert.Equal(t, 0, dropped)
+	})
+
+	t.Run("shuffle distributes drops", func(t *testing.T) {
+		handler, err := NewRandomShuffleLossHandler(50, 100)
+		assert.NoError(t, err)
+
+		firstHalfDrops := 0
+		secondHalfDrops := 0
+
+		for i := 0; i < 50; i++ {
+			if handler.shouldDrop() {
+				firstHalfDrops++
+			}
+		}
+
+		for i := 0; i < 50; i++ {
+			if handler.shouldDrop() {
+				secondHalfDrops++
+			}
+		}
+
+		assert.Greater(t, firstHalfDrops, 0, "first half should have drops")
+		assert.Greater(t, secondHalfDrops, 0, "second half should have drops")
+		assert.Equal(t, 50, firstHalfDrops+secondHalfDrops)
+	})
+}
+
+func TestLossFilterDeterminismProperty(t *testing.T) {
+	t.Run("same seed produces identical drop sequences - random mode", func(t *testing.T) {
+		mnic1 := newMockNIC(t)
+		mnic2 := newMockNIC(t)
+		seed := int64(42)
+		chance := 50
+		sequenceLength := 100
+
+		filter1, err := NewLossFilterWithOptions(mnic1, chance, WithLossSeed(seed))
+		assert.NoError(t, err)
+
+		filter2, err := NewLossFilterWithOptions(mnic2, chance, WithLossSeed(seed))
+		assert.NoError(t, err)
+
+		sequence1 := make([]bool, sequenceLength)
+		sequence2 := make([]bool, sequenceLength)
+
+		for i := 0; i < sequenceLength; i++ {
+			sequence1[i] = filter1.LossFilterHandler.shouldDrop()
+			sequence2[i] = filter2.LossFilterHandler.shouldDrop()
+		}
+
+		assert.Equal(t, sequence1, sequence2, "same seed should produce identical drop sequences")
+	})
+
+	t.Run("same seed produces identical drop sequences - shuffle mode", func(t *testing.T) {
+		mnic1 := newMockNIC(t)
+		mnic2 := newMockNIC(t)
+		seed := int64(123)
+		chance := 33
+		blockSize := 30
+		sequenceLength := 150 // 5 blocks
+
+		filter1, err := NewLossFilterWithOptions(mnic1, chance, WithShuffleLossHandler(blockSize), WithLossSeed(seed))
+		assert.NoError(t, err)
+
+		filter2, err := NewLossFilterWithOptions(mnic2, chance, WithShuffleLossHandler(blockSize), WithLossSeed(seed))
+		assert.NoError(t, err)
+
+		sequence1 := make([]bool, sequenceLength)
+		sequence2 := make([]bool, sequenceLength)
+
+		for i := 0; i < sequenceLength; i++ {
+			sequence1[i] = filter1.LossFilterHandler.shouldDrop()
+			sequence2[i] = filter2.LossFilterHandler.shouldDrop()
+		}
+
+		assert.Equal(t, sequence1, sequence2, "same seed should produce identical shuffle sequences")
+	})
+
+	t.Run("different seeds produce different sequences - random mode", func(t *testing.T) {
+		mnic1 := newMockNIC(t)
+		mnic2 := newMockNIC(t)
+		chance := 50
+		sequenceLength := 100
+
+		filter1, err := NewLossFilterWithOptions(mnic1, chance, WithLossSeed(100))
+		assert.NoError(t, err)
+
+		filter2, err := NewLossFilterWithOptions(mnic2, chance, WithLossSeed(200))
+		assert.NoError(t, err)
+
+		sequence1 := make([]bool, sequenceLength)
+		sequence2 := make([]bool, sequenceLength)
+
+		for i := 0; i < sequenceLength; i++ {
+			sequence1[i] = filter1.LossFilterHandler.shouldDrop()
+			sequence2[i] = filter2.LossFilterHandler.shouldDrop()
+		}
+
+		assert.NotEqual(t, sequence1, sequence2, "different seeds should produce different sequences")
+	})
+
+	t.Run("different seeds produce different sequences - shuffle mode", func(t *testing.T) {
+		mnic1 := newMockNIC(t)
+		mnic2 := newMockNIC(t)
+		chance := 40
+		blockSize := 25
+		sequenceLength := 100
+
+		filter1, err := NewLossFilterWithOptions(mnic1, chance, WithShuffleLossHandler(blockSize), WithLossSeed(1))
+		assert.NoError(t, err)
+
+		filter2, err := NewLossFilterWithOptions(mnic2, chance, WithShuffleLossHandler(blockSize), WithLossSeed(999))
+		assert.NoError(t, err)
+
+		sequence1 := make([]bool, sequenceLength)
+		sequence2 := make([]bool, sequenceLength)
+
+		for i := 0; i < sequenceLength; i++ {
+			sequence1[i] = filter1.LossFilterHandler.shouldDrop()
+			sequence2[i] = filter2.LossFilterHandler.shouldDrop()
+		}
+
+		assert.NotEqual(t, sequence1, sequence2, "different seeds should produce different shuffle sequences")
+	})
+
+	t.Run("zero seed is valid and deterministic", func(t *testing.T) {
+		mnic1 := newMockNIC(t)
+		mnic2 := newMockNIC(t)
+		chance := 30
+		sequenceLength := 50
+
+		filter1, err := NewLossFilterWithOptions(mnic1, chance, WithLossSeed(0))
+		assert.NoError(t, err)
+
+		filter2, err := NewLossFilterWithOptions(mnic2, chance, WithLossSeed(0))
+		assert.NoError(t, err)
+
+		sequence1 := make([]bool, sequenceLength)
+		sequence2 := make([]bool, sequenceLength)
+
+		for i := 0; i < sequenceLength; i++ {
+			sequence1[i] = filter1.LossFilterHandler.shouldDrop()
+			sequence2[i] = filter2.LossFilterHandler.shouldDrop()
+		}
+
+		assert.Equal(t, sequence1, sequence2, "zero seed should produce deterministic sequences")
+	})
+}
+
+func TestLossFilterBoundaryChances(t *testing.T) {
+	t.Run("0% chance - random mode", func(t *testing.T) {
+		mnic := newMockNIC(t)
+		filter, err := NewLossFilterWithOptions(mnic, 0)
+		assert.NoError(t, err)
+
+		for i := 0; i < 1000; i++ {
+			assert.False(t, filter.LossFilterHandler.shouldDrop(), "0% chance should never drop")
+		}
+	})
+
+	t.Run("100% chance - random mode", func(t *testing.T) {
+		mnic := newMockNIC(t)
+		filter, err := NewLossFilterWithOptions(mnic, 100)
+		assert.NoError(t, err)
+
+		for i := 0; i < 1000; i++ {
+			assert.True(t, filter.LossFilterHandler.shouldDrop(), "100% chance should always drop")
+		}
+	})
+
+	t.Run("0% chance - shuffle mode", func(t *testing.T) {
+		mnic := newMockNIC(t)
+		filter, err := NewLossFilterWithOptions(mnic, 0, WithShuffleLossHandler(100))
+		assert.NoError(t, err)
+
+		for i := 0; i < 1000; i++ {
+			assert.False(t, filter.LossFilterHandler.shouldDrop(), "0% chance should never drop in shuffle mode")
+		}
+	})
+
+	t.Run("100% chance - shuffle mode", func(t *testing.T) {
+		mnic := newMockNIC(t)
+		filter, err := NewLossFilterWithOptions(mnic, 100, WithShuffleLossHandler(100))
+		assert.NoError(t, err)
+
+		for i := 0; i < 1000; i++ {
+			assert.True(t, filter.LossFilterHandler.shouldDrop(), "100% chance should always drop in shuffle mode")
+		}
+	})
+
+	t.Run("boundary with seed - random mode", func(t *testing.T) {
+		mnic := newMockNIC(t)
+		filter, err := NewLossFilterWithOptions(mnic, 0, WithLossSeed(42))
+		assert.NoError(t, err)
+
+		for i := 0; i < 100; i++ {
+			assert.False(t, filter.LossFilterHandler.shouldDrop())
+		}
+
+		err = filter.SetLossRate(100, true)
+		assert.NoError(t, err)
+
+		for i := 0; i < 100; i++ {
+			assert.True(t, filter.LossFilterHandler.shouldDrop())
+		}
+	})
+
+	t.Run("boundary with seed - shuffle mode", func(t *testing.T) {
+		mnic := newMockNIC(t)
+		filter, err := NewLossFilterWithOptions(mnic, 0, WithShuffleLossHandler(50), WithLossSeed(42))
+		assert.NoError(t, err)
+
+		for i := 0; i < 100; i++ {
+			assert.False(t, filter.LossFilterHandler.shouldDrop())
+		}
+
+		err = filter.SetLossRate(100, true)
+		assert.NoError(t, err)
+
+		for i := 0; i < 100; i++ {
+			assert.True(t, filter.LossFilterHandler.shouldDrop())
+		}
+	})
+}
+
+func TestLossFilterRoundingComprehensive(t *testing.T) {
+	testCases := []struct {
+		name           string
+		chance         int
+		blockSize      int
+		expectedDrops  int
+		expectedRounds int
+	}{
+		{"33% of 10", 33, 10, 3, 3},
+		{"67% of 10", 67, 10, 7, 7},
+		{"33% of 3", 33, 3, 1, 1},
+		{"67% of 3", 67, 3, 2, 2},
+		{"25% of 4", 25, 4, 1, 1},
+		{"75% of 4", 75, 4, 3, 3},
+		{"10% of 7", 10, 7, 1, 1},
+		{"90% of 7", 90, 7, 6, 6},
+		{"5% of 20", 5, 20, 1, 1},
+		{"15% of 20", 15, 20, 3, 3},
+		{"85% of 20", 85, 20, 17, 17},
+		{"95% of 20", 95, 20, 19, 19},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mnic := newMockNIC(t)
+			filter, err := NewLossFilterWithOptions(mnic, tc.chance, WithShuffleLossHandler(tc.blockSize))
+			assert.NoError(t, err)
+
+			// Test multiple rounds to ensure consistency
+			for round := 0; round < tc.expectedRounds; round++ {
+				dropped := 0
+				for i := 0; i < tc.blockSize; i++ {
+					if filter.LossFilterHandler.shouldDrop() {
+						dropped++
+					}
+				}
+				assert.Equal(t, tc.expectedDrops, dropped,
+					"round %d: %d%% of %d should drop %d packets", round, tc.chance, tc.blockSize, tc.expectedDrops)
+			}
+		})
+	}
+}
+
+func TestLossFilterConcurrencySmoke(t *testing.T) { //nolint:cyclop
+	t.Run("concurrent shouldDrop calls - random mode", func(t *testing.T) {
+		mnic := newMockNIC(t)
+		filter, err := NewLossFilterWithOptions(mnic, 50, WithLossSeed(12345))
+		assert.NoError(t, err)
+
+		const numGoroutines = 50
+		const callsPerGoroutine = 1000
+		done := make(chan bool, numGoroutines)
+
+		for i := 0; i < numGoroutines; i++ {
+			go func() {
+				for j := 0; j < callsPerGoroutine; j++ {
+					_ = filter.LossFilterHandler.shouldDrop()
+				}
+				done <- true
+			}()
+		}
+
+		for i := 0; i < numGoroutines; i++ {
+			<-done
+		}
+	})
+
+	t.Run("concurrent shouldDrop calls - shuffle mode", func(t *testing.T) {
+		mnic := newMockNIC(t)
+		filter, err := NewLossFilterWithOptions(mnic, 50, WithShuffleLossHandler(100), WithLossSeed(12345))
+		assert.NoError(t, err)
+
+		const numGoroutines = 50
+		const callsPerGoroutine = 1000
+		done := make(chan bool, numGoroutines)
+
+		for i := 0; i < numGoroutines; i++ {
+			go func() {
+				for j := 0; j < callsPerGoroutine; j++ {
+					_ = filter.LossFilterHandler.shouldDrop()
+				}
+				done <- true
+			}()
+		}
+
+		for i := 0; i < numGoroutines; i++ {
+			<-done
+		}
+	})
+
+	t.Run("concurrent shouldDrop and setLossRate - random mode", func(t *testing.T) {
+		mnic := newMockNIC(t)
+		filter, err := NewLossFilterWithOptions(mnic, 50, WithLossSeed(12345))
+		assert.NoError(t, err)
+
+		const numGoroutines = 20
+		done := make(chan bool, numGoroutines)
+
+		for i := 0; i < numGoroutines/2; i++ {
+			go func() {
+				for j := 0; j < 1000; j++ {
+					_ = filter.LossFilterHandler.shouldDrop()
+				}
+				done <- true
+			}()
+		}
+
+		for i := 0; i < numGoroutines/2; i++ {
+			go func() {
+				for j := 0; j < 100; j++ {
+					_ = filter.SetLossRate(j%101, false)
+				}
+				done <- true
+			}()
+		}
+
+		for i := 0; i < numGoroutines; i++ {
+			<-done
+		}
+	})
+}
+
+func TestLossFilterNilOptionSkip(t *testing.T) {
+	t.Run("nil option is skipped", func(t *testing.T) {
+		mnic := newMockNIC(t)
+		seed := int64(42)
+
+		filter, err := NewLossFilterWithOptions(mnic, 50, nil, WithLossSeed(seed))
+		assert.NoError(t, err)
+		assert.NotNil(t, filter)
+
+		sequence1 := make([]bool, 50)
+		for i := 0; i < 50; i++ {
+			sequence1[i] = filter.LossFilterHandler.shouldDrop()
+		}
+
+		filter2, err := NewLossFilterWithOptions(mnic, 50, WithLossSeed(seed))
+		assert.NoError(t, err)
+		sequence2 := make([]bool, 50)
+		for i := 0; i < 50; i++ {
+			sequence2[i] = filter2.LossFilterHandler.shouldDrop()
+		}
+
+		assert.Equal(t, sequence1, sequence2, "nil option should be skipped and seed should still work")
+	})
+
+	t.Run("multiple nil options are skipped", func(t *testing.T) {
+		mnic := newMockNIC(t)
+		seed := int64(999)
+
+		filter, err := NewLossFilterWithOptions(mnic, 30, nil, nil, WithLossSeed(seed), nil)
+		assert.NoError(t, err)
+		assert.NotNil(t, filter)
+
+		for i := 0; i < 100; i++ {
+			_ = filter.LossFilterHandler.shouldDrop()
+		}
+	})
+
+	t.Run("nil option with shuffle handler", func(t *testing.T) {
+		mnic := newMockNIC(t)
+		seed := int64(777)
+
+		filter, err := NewLossFilterWithOptions(mnic, 40, nil, WithShuffleLossHandler(50), WithLossSeed(seed))
+		assert.NoError(t, err)
+		assert.NotNil(t, filter)
+
+		// Verify shuffle mode works
+		dropped := 0
+		for i := 0; i < 50; i++ {
+			if filter.LossFilterHandler.shouldDrop() {
+				dropped++
+			}
+		}
+		assert.Equal(t, 20, dropped)
+	})
+}

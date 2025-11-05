@@ -180,15 +180,7 @@ func NewDuplicationFilterWithOptions(router *Router, opts ...DuplicationOption) 
 		return nil, err
 	}
 
-	var rng *rand.Rand
-
-	if cfg.seed == nil {
-		// nolint:gosec // weak rand is intended
-		rng = rand.New(rand.NewSource(time.Now().UnixNano()))
-	} else {
-		// nolint:gosec // weak rand is intended
-		rng = rand.New(rand.NewSource(*cfg.seed))
-	}
+	rng := newRNG(cfg.seed)
 
 	return &DuplicationFilter{
 		router:  router,
