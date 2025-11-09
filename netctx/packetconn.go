@@ -10,6 +10,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/pion/transport/v3"
 )
 
 // ReaderFrom is an interface for context controlled packet reader.
@@ -28,11 +30,11 @@ type PacketConn interface {
 	WriterTo
 	io.Closer
 	LocalAddr() net.Addr
-	Conn() net.PacketConn
+	Conn() transport.PacketStreamPacketConn
 }
 
 type packetConn struct {
-	nextConn  net.PacketConn
+	nextConn  transport.PacketStreamPacketConn
 	closed    chan struct{}
 	closeOnce sync.Once
 	readMu    sync.Mutex
@@ -40,7 +42,7 @@ type packetConn struct {
 }
 
 // NewPacketConn creates a new PacketConn wrapping the given net.PacketConn.
-func NewPacketConn(pconn net.PacketConn) PacketConn {
+func NewPacketConn(pconn transport.PacketStreamPacketConn) PacketConn {
 	p := &packetConn{
 		nextConn: pconn,
 		closed:   make(chan struct{}),
@@ -176,6 +178,6 @@ func (p *packetConn) LocalAddr() net.Addr {
 }
 
 // Conn returns the underlying net.PacketConn.
-func (p *packetConn) Conn() net.PacketConn {
+func (p *packetConn) Conn() transport.PacketStreamPacketConn {
 	return p.nextConn
 }

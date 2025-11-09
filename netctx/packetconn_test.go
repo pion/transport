@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pion/transport/v3"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -24,6 +25,10 @@ func (w wrapConn) ReadFrom(p []byte) (int, net.Addr, error) {
 	n, err := w.c.Read(p)
 
 	return n, nil, err
+}
+
+func (w wrapConn) ReadFromWithAttributes(p []byte, attr *transport.PacketAttributes) (int, net.Addr, error) {
+	return w.ReadFrom(p)
 }
 
 func (w wrapConn) WriteTo(p []byte, _ net.Addr) (n int, err error) {
@@ -54,7 +59,7 @@ func (w wrapConn) SetWriteDeadline(t time.Time) error {
 	return w.c.SetWriteDeadline(t)
 }
 
-func pipe() (net.PacketConn, net.PacketConn) {
+func pipe() (transport.PacketStreamPacketConn, transport.PacketStreamPacketConn) {
 	a, b := net.Pipe()
 
 	return wrapConn{a}, wrapConn{b}
@@ -209,11 +214,14 @@ type packetConnAddrMock struct{}
 
 func (*packetConnAddrMock) LocalAddr() net.Addr                    { return stringAddr{"local_net", "local_addr"} }
 func (*packetConnAddrMock) ReadFrom([]byte) (int, net.Addr, error) { panic("unimplemented") } //nolint:forbidigo
-func (*packetConnAddrMock) WriteTo([]byte, net.Addr) (int, error)  { panic("unimplemented") } //nolint:forbidigo
-func (*packetConnAddrMock) Close() error                           { panic("unimplemented") } //nolint:forbidigo
-func (*packetConnAddrMock) SetDeadline(_ time.Time) error          { panic("unimplemented") } //nolint:forbidigo
-func (*packetConnAddrMock) SetReadDeadline(_ time.Time) error      { panic("unimplemented") } //nolint:forbidigo
-func (*packetConnAddrMock) SetWriteDeadline(_ time.Time) error     { panic("unimplemented") } //nolint:forbidigo
+func (*packetConnAddrMock) ReadFromWithAttributes([]byte, *transport.PacketAttributes) (int, net.Addr, error) {
+	panic("unimplemented")
+}                                                                 //nolint:forbidigo
+func (*packetConnAddrMock) WriteTo([]byte, net.Addr) (int, error) { panic("unimplemented") } //nolint:forbidigo
+func (*packetConnAddrMock) Close() error                          { panic("unimplemented") } //nolint:forbidigo
+func (*packetConnAddrMock) SetDeadline(_ time.Time) error         { panic("unimplemented") } //nolint:forbidigo
+func (*packetConnAddrMock) SetReadDeadline(_ time.Time) error     { panic("unimplemented") } //nolint:forbidigo
+func (*packetConnAddrMock) SetWriteDeadline(_ time.Time) error    { panic("unimplemented") } //nolint:forbidigo
 
 func TestPacketConnLocalAddrAndRemoteAddr(t *testing.T) {
 	c := NewPacketConn(&packetConnAddrMock{})
