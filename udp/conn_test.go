@@ -419,7 +419,7 @@ func TestBatchIO(t *testing.T) {
 
 	var serverConnWg sync.WaitGroup
 	serverConnWg.Add(1)
-	go func() {
+	go func() { //nolint:dupl
 		var exit int32
 		defer func() {
 			defer serverConnWg.Done()
@@ -484,7 +484,7 @@ func TestBatchIO(t *testing.T) {
 				assert.NoError(t, err)
 				n, err := client.Read(buf)
 				assert.NoError(t, err)
-				assert.Equal(t, sendStr, string(buf[:n]), i)
+				assert.Equal(t, sendStr, string(buf[:n]), "mismatch in client: %d", i)
 			}
 		}()
 	}
