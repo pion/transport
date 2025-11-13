@@ -4,6 +4,7 @@
 package packetio
 
 import (
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pion/transport/v3"
 	"github.com/pion/transport/v3/test"
 	"github.com/stretchr/testify/assert"
 )
@@ -257,7 +259,7 @@ func TestBufferLimitSize(t *testing.T) {
 	assert := assert.New(t)
 
 	buffer := NewBuffer()
-	buffer.SetLimitSize(11)
+	buffer.SetLimitSize(17)
 
 	assert.Equal(0, buffer.Size())
 
@@ -265,23 +267,23 @@ func TestBufferLimitSize(t *testing.T) {
 	n, err := buffer.Write([]byte{0, 1})
 	assert.NoError(err)
 	assert.Equal(2, n)
-	assert.Equal(4, buffer.Size())
+	assert.Equal(6, buffer.Size())
 
 	n, err = buffer.Write([]byte{2, 3})
 	assert.NoError(err)
 	assert.Equal(2, n)
-	assert.Equal(8, buffer.Size())
+	assert.Equal(12, buffer.Size())
 
 	// Over capacity
 	_, err = buffer.Write([]byte{4, 5})
 	assert.Equal(ErrFull, err)
-	assert.Equal(8, buffer.Size())
+	assert.Equal(12, buffer.Size())
 
 	// Cheeky write at exact size.
 	n, err = buffer.Write([]byte{6})
 	assert.NoError(err)
 	assert.Equal(1, n)
-	assert.Equal(11, buffer.Size())
+	assert.Equal(17, buffer.Size())
 
 	// Read once
 	packet := make([]byte, 4)
@@ -289,31 +291,31 @@ func TestBufferLimitSize(t *testing.T) {
 	assert.NoError(err)
 	assert.Equal(2, n)
 	assert.Equal([]byte{0, 1}, packet[:n])
-	assert.Equal(7, buffer.Size())
+	assert.Equal(11, buffer.Size())
 
 	// Write once
 	n, err = buffer.Write([]byte{7, 8})
 	assert.NoError(err)
 	assert.Equal(2, n)
-	assert.Equal(11, buffer.Size())
+	assert.Equal(17, buffer.Size())
 
 	// Over capacity
 	_, err = buffer.Write([]byte{9, 10})
 	assert.Equal(ErrFull, err)
-	assert.Equal(11, buffer.Size())
+	assert.Equal(17, buffer.Size())
 
 	// Read everything
 	n, err = buffer.Read(packet)
 	assert.NoError(err)
 	assert.Equal(2, n)
 	assert.Equal([]byte{2, 3}, packet[:n])
-	assert.Equal(7, buffer.Size())
+	assert.Equal(11, buffer.Size())
 
 	n, err = buffer.Read(packet)
 	assert.NoError(err)
 	assert.Equal(1, n)
 	assert.Equal([]byte{6}, packet[:n])
-	assert.Equal(4, buffer.Size())
+	assert.Equal(6, buffer.Size())
 
 	n, err = buffer.Read(packet)
 	assert.NoError(err)
@@ -716,4 +718,142 @@ func TestBufferConcurrentReadWrite(t *testing.T) {
 	<-allRead
 
 	assert.NoError(buffer.Close())
+}
+
+type varSizePacketAttributes struct {
+	buffer []byte
+}
+
+func newPacketAttributes(length int) *varSizePacketAttributes {
+	return &varSizePacketAttributes{
+		buffer: make([]byte, length),
+	}
+}
+
+// Marshal returns the internal buffer as-is.
+func (p *varSizePacketAttributes) Marshal() []byte {
+	return p.buffer
+}
+
+func (p *varSizePacketAttributes) GetBuffer() []byte {
+	return p.buffer
+}
+
+func TestReadWithAttributes(t *testing.T) {
+	assert := assert.New(t)
+
+	buffer := NewBuffer()
+
+	// create two random packets
+	p1 := make([]byte, 100)
+	p2 := make([]byte, 60)
+	_, err := rand.Read(p1)
+	assert.NoError(err)
+	_, err = rand.Read(p2)
+	assert.NoError(err)
+
+	// create attributes with random content
+	pa1 := newPacketAttributes(3)
+	pa2 := newPacketAttributes(5)
+	_, err = rand.Read(pa1.buffer)
+	assert.NoError(err)
+	_, err = rand.Read(pa2.buffer)
+	assert.NoError(err)
+
+	var attr1 transport.PacketAttributesBuffer = pa1
+	var attr2 transport.PacketAttributesBuffer = pa2
+
+	// write both packets with their attributes
+	n, err := buffer.WriteWithAttributes(p1, attr1)
+	assert.NoError(err)
+	assert.Equal(len(p1), n)
+
+	n, err = buffer.WriteWithAttributes(p2, attr2)
+	assert.NoError(err)
+	assert.Equal(len(p2), n)
+
+	// read them back one by one and verify packet and attributes match
+	out := make([]byte, 1000)
+
+	ra1 := newPacketAttributes(len(pa1.buffer))
+	var rattr1 transport.PacketAttributesBuffer = ra1
+	n, err = buffer.ReadWithAttributes(out, rattr1)
+	assert.NoError(err)
+	assert.Equal(len(p1), n)
+	assert.Equal(p1, out[:n])
+	assert.Equal(pa1.buffer, ra1.buffer)
+
+	ra2 := newPacketAttributes(len(pa2.buffer))
+	var rattr2 transport.PacketAttributesBuffer = ra2
+	n, err = buffer.ReadWithAttributes(out, rattr2)
+	assert.NoError(err)
+	assert.Equal(len(p2), n)
+	assert.Equal(p2, out[:n])
+	assert.Equal(pa2.buffer, ra2.buffer)
+}
+
+// ...existing code...
+func TestMixedReadWithAttributes(t *testing.T) {
+	assert := assert.New(t)
+
+	buffer := NewBuffer()
+
+	// prepare packets
+	p1 := make([]byte, 50)
+	p2 := make([]byte, 30)
+	p3 := make([]byte, 20)
+	_, err := rand.Read(p1)
+	assert.NoError(err)
+	_, err = rand.Read(p2)
+	assert.NoError(err)
+	_, err = rand.Read(p3)
+	assert.NoError(err)
+
+	// prepare attributes for packets written with attributes
+	pa1 := newPacketAttributes(4)
+	pa3 := newPacketAttributes(2)
+	_, err = rand.Read(pa1.buffer)
+	assert.NoError(err)
+	_, err = rand.Read(pa3.buffer)
+	assert.NoError(err)
+
+	// Write: with-attr, without-attr, with-attr
+	_, err = buffer.WriteWithAttributes(p1, pa1)
+	assert.NoError(err)
+	_, err = buffer.Write(p2)
+	assert.NoError(err)
+	_, err = buffer.WriteWithAttributes(p3, pa3)
+	assert.NoError(err)
+
+	out := make([]byte, 1024)
+
+	// 1) Read first packet using Read (no attributes) -> should return p1 content intact
+	n, err := buffer.Read(out)
+	assert.NoError(err)
+	assert.Equal(len(p1), n)
+	assert.Equal(p1, out[:n])
+
+	// 2) Read second packet using ReadWithAttributes -> was written without attributes,
+	// attributes length should be zero and the provided buffer must remain unchanged.
+	ra2 := newPacketAttributes(3)
+	// pre-fill with sentinel
+	for i := range ra2.buffer {
+		ra2.buffer[i] = 0xFF
+	}
+	n, err = buffer.ReadWithAttributes(out, ra2)
+	assert.NoError(err)
+	assert.Equal(len(p2), n)
+	assert.Equal(p2, out[:n])
+	// Ensure attributes buffer wasn't modified (aLen == 0 on write)
+	for _, v := range ra2.buffer {
+		assert.Equal(byte(0xFF), v)
+	}
+
+	// 3) Read third packet using ReadWithAttributes -> should return p3 and its attributes intact
+	ra3 := newPacketAttributes(len(pa3.buffer))
+	n, err = buffer.ReadWithAttributes(out, ra3)
+	assert.NoError(err)
+	assert.Equal(len(p3), n)
+	assert.Equal(p3, out[:n])
+	assert.Equal(pa3.buffer, ra3.buffer)
 }

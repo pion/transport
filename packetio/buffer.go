@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pion/transport/v3"
 	"github.com/pion/transport/v3/deadline"
 )
 
@@ -61,15 +62,16 @@ func NewBuffer() *Buffer {
 	}
 }
 
-// available returns true if the buffer is large enough to fit a packet
-// of the given size, taking overhead into account.
+// available returns true if the buffer is large enough to fit a buffer
+// of the given size, not taking overhead into account.
 func (b *Buffer) available(size int) bool {
 	available := b.head - b.tail
 	if available <= 0 {
 		available += len(b.data)
 	}
 	// we interpret head=tail as empty, so always keep a byte free
-	if size+2+1 > available {
+	// the method
+	if size+1 > available {
 		return false
 	}
 
@@ -119,12 +121,70 @@ func (b *Buffer) grow() error {
 	return nil
 }
 
+func (b *Buffer) consumeByte() byte {
+	byteRead := b.data[b.head]
+	b.head++
+	if b.head >= len(b.data) {
+		b.head = 0
+	}
+
+	return byteRead
+}
+
+func (b *Buffer) writeByte(x byte) {
+	b.data[b.tail] = x
+	b.tail++
+	if b.tail >= len(b.data) {
+		b.tail = 0
+	}
+}
+
+func (b *Buffer) writeLengthHeaders(length int) {
+	n1 := uint8(length >> 8) //nolint:gosec
+	n2 := uint8(length)      //nolint:gosec
+	b.writeByte(n1)
+	b.writeByte(n2)
+}
+
+func (b *Buffer) getSegmentLength() int {
+	n1 := b.consumeByte()
+	n2 := b.consumeByte()
+	l := int((uint16(n1) << 8) | uint16(n2))
+
+	return l
+}
+
+// The caller should make sure the input buffer (in []byte)
+// can be completely accomodated in b.data .
+func (b *Buffer) writeFromInputBuffer(in []byte) {
+	n := copy(b.data[b.tail:], in)
+	b.tail += n
+	if b.tail >= len(b.data) {
+		// we reached the end, wrap around
+		m := copy(b.data, in[n:])
+		b.tail = m
+	}
+}
+
 // Write appends a copy of the packet data to the buffer.
 // Returns ErrFull if the packet doesn't fit.
 //
 // Note that the packet size is limited to 65536 bytes since v0.11.0 due to the internal data structure.
-func (b *Buffer) Write(packet []byte) (int, error) { //nolint:cyclop
-	if len(packet) >= 0x10000 {
+func (b *Buffer) Write(buff []byte) (n int, err error) { //nolint:cyclop
+	return b.WriteWithAttributes(buff, nil)
+}
+
+// WriteWithAttributes works like Write, but it writes the
+// additional packet attributes into the Buffer.
+func (b *Buffer) WriteWithAttributes(packet []byte,
+	attr transport.PacketAttributesBuffer) (int, error) { //nolint:cyclop
+	pLen := len(packet)
+	aLen := 0
+	if attr != nil {
+		aLen = len(attr.Marshal())
+	}
+
+	if pLen >= 0x10000 {
 		return 0, errPacketTooBig
 	}
 
@@ -136,15 +196,17 @@ func (b *Buffer) Write(packet []byte) (int, error) { //nolint:cyclop
 		return 0, io.ErrClosedPipe
 	}
 
+	// two header bytes per segment indicating the length of the stored segment
+	lenWithHeaders := (2 + pLen) + (2 + aLen)
 	if (b.limitCount > 0 && b.count >= b.limitCount) ||
-		(b.limitSize > 0 && b.size()+2+len(packet) > b.limitSize) {
+		(b.limitSize > 0 && b.size()+lenWithHeaders > b.limitSize) {
 		b.mutex.Unlock()
 
 		return 0, ErrFull
 	}
 
 	// grow the buffer until the packet fits
-	for !b.available(len(packet)) {
+	for !b.available(lenWithHeaders) {
 		err := b.grow()
 		if err != nil {
 			b.mutex.Unlock()
@@ -154,26 +216,21 @@ func (b *Buffer) Write(packet []byte) (int, error) { //nolint:cyclop
 	}
 
 	// store the length of the packet
-	b.data[b.tail] = uint8(len(packet) >> 8) //nolint:gosec
-	b.tail++
-	if b.tail >= len(b.data) {
-		b.tail = 0
-	}
-	b.data[b.tail] = uint8(len(packet)) //nolint:gosec
-	b.tail++
-	if b.tail >= len(b.data) {
-		b.tail = 0
-	}
+	b.writeLengthHeaders(pLen)
 
 	// store the packet
-	n := copy(b.data[b.tail:], packet)
-	b.tail += n
-	if b.tail >= len(b.data) {
-		// we reached the end, wrap around
-		m := copy(b.data, packet[n:])
-		b.tail = m
-	}
+	b.writeFromInputBuffer(packet)
+
+	// increment the number of packets in buffer
 	b.count++
+
+	// store the length of the attributes segment
+	b.writeLengthHeaders(aLen)
+
+	if attr != nil {
+		// store the attributes buffer itself
+		b.writeFromInputBuffer(attr.Marshal())
+	}
 
 	select {
 	case b.notify <- struct{}{}:
@@ -181,14 +238,39 @@ func (b *Buffer) Write(packet []byte) (int, error) { //nolint:cyclop
 	}
 	b.mutex.Unlock()
 
-	return len(packet), nil
+	return pLen, nil
+}
+
+func (b *Buffer) writeToInputBuffer(in []byte, length int) {
+	if b.head+length < len(b.data) {
+		copy(in, b.data[b.head:b.head+length])
+	} else {
+		k := copy(in, b.data[b.head:])
+		copy(in[k:], b.data[:length-k])
+	}
+}
+
+func (b *Buffer) advanceHead(count int) {
+	b.head += count
+	if b.head >= len(b.data) {
+		b.head -= len(b.data)
+	}
 }
 
 // Read populates the given byte slice, returning the number of bytes read.
 // Blocks until data is available or the buffer is closed.
 // Returns io.ErrShortBuffer is the packet is too small to copy the Write.
 // Returns io.EOF if the buffer is closed.
-func (b *Buffer) Read(packet []byte) (n int, err error) { //nolint:gocognit,cyclop
+func (b *Buffer) Read(buff []byte) (n int, err error) { //nolint:gocognit,cyclop
+	n, err = b.ReadWithAttributes(buff, nil)
+
+	return
+}
+
+// ReadWithAttributes works like Read, but it also populates
+// additional packet attributes into the attr field.
+func (b *Buffer) ReadWithAttributes(
+	packet []byte, attr transport.PacketAttributesBuffer) (n int, err error) { //nolint:gocognit,cyclop
 	// Return immediately if the deadline is already exceeded.
 	select {
 	case <-b.readDeadline.Done():
@@ -201,17 +283,7 @@ func (b *Buffer) Read(packet []byte) (n int, err error) { //nolint:gocognit,cycl
 
 		if b.head != b.tail { //nolint:nestif
 			// decode the packet size
-			n1 := b.data[b.head]
-			b.head++
-			if b.head >= len(b.data) {
-				b.head = 0
-			}
-			n2 := b.data[b.head]
-			b.head++
-			if b.head >= len(b.data) {
-				b.head = 0
-			}
-			count := int((uint16(n1) << 8) | uint16(n2))
+			count := b.getSegmentLength()
 
 			// determine the number of bytes we'll actually copy
 			copied := count
@@ -220,17 +292,18 @@ func (b *Buffer) Read(packet []byte) (n int, err error) { //nolint:gocognit,cycl
 			}
 
 			// copy the data
-			if b.head+copied < len(b.data) {
-				copy(packet, b.data[b.head:b.head+copied])
-			} else {
-				k := copy(packet, b.data[b.head:])
-				copy(packet[k:], b.data[:copied-k])
-			}
+			b.writeToInputBuffer(packet, copied)
 
 			// advance head, discarding any data that wasn't copied
-			b.head += count
-			if b.head >= len(b.data) {
-				b.head -= len(b.data)
+			b.advanceHead(count)
+
+			// read the attributes segment
+			aLen := b.getSegmentLength()
+			if aLen > 0 {
+				if attr != nil {
+					b.writeToInputBuffer(attr.GetBuffer(), aLen)
+				}
+				b.advanceHead(aLen)
 			}
 
 			if b.head == b.tail {
@@ -244,6 +317,9 @@ func (b *Buffer) Read(packet []byte) (n int, err error) { //nolint:gocognit,cycl
 			b.mutex.Unlock()
 
 			if copied < count {
+				// The method still consumes the buffer even in the cases where
+				// packet buffer is short. but even in this case copies into the packet buffer
+				// and discards it :|
 				return copied, io.ErrShortBuffer
 			}
 
