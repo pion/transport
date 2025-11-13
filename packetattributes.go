@@ -3,11 +3,9 @@
 
 package transport
 
-import (
-	"github.com/pion/rtcp"
-)
-
 const attrMaxLen = 1
+
+type ECN uint8
 
 type PacketAttributesBuffer interface {
 	// for serializing
@@ -24,19 +22,21 @@ type PacketAttributes struct {
 func NewPacketAttributes() *PacketAttributes {
 	p := &PacketAttributes{}
 	p.Reset()
+
 	return p
 }
 
 func (p *PacketAttributes) Reset() {
-	p.WithECN(rtcp.ECNNonECT)
+	p.WithECN(0)
 }
 
-func (p *PacketAttributes) GetECN() rtcp.ECN {
-	return rtcp.ECN(p.buffer[0])
+func (p *PacketAttributes) GetECN() ECN {
+	return ECN(p.buffer[0])
 }
 
-func (p *PacketAttributes) WithECN(e rtcp.ECN) *PacketAttributes {
+func (p *PacketAttributes) WithECN(e ECN) *PacketAttributes {
 	p.buffer[0] = byte(e)
+
 	return p
 }
 
@@ -52,5 +52,6 @@ func (p *PacketAttributes) GetBuffer() []byte {
 func (p *PacketAttributes) Clone() *PacketAttributes {
 	clone := &PacketAttributes{}
 	clone.buffer[0] = p.buffer[0]
+
 	return clone
 }

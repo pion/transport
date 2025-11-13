@@ -32,12 +32,12 @@ func NewNetConnToPacketStream(conn net.Conn) *NetConnToPacketStream {
 	return &NetConnToPacketStream{conn: conn}
 }
 
-// ReadWithAttributes reads from the underlying connection and ignores attr.
-func (p *NetConnToPacketStream) ReadWithAttributes(b []byte, attr *PacketAttributes) (int, error) {
+// ReadWithAttributes reads from the underlying connection and ignores attributes.
+func (p *NetConnToPacketStream) ReadWithAttributes(b []byte, _ *PacketAttributes) (int, error) {
 	return p.conn.Read(b)
 }
 
-// Delegate net.Conn methods to the underlying connection
+// Delegate net.Conn methods to the underlying connection.
 func (p *NetConnToPacketStream) Read(b []byte) (int, error)        { return p.conn.Read(b) }
 func (p *NetConnToPacketStream) Write(b []byte) (int, error)       { return p.conn.Write(b) }
 func (p *NetConnToPacketStream) Close() error                      { return p.conn.Close() }
@@ -59,7 +59,8 @@ func NewUDPConnToPacketStreamPacketConnAdapter(conn net.PacketConn) *UDPConnToPa
 	}
 }
 
-func (u *UDPConnToPacketStreamPacketConnAdapter) ReadFromWithAttributes(p []byte, attr *PacketAttributes) (n int, addr net.Addr, err error) {
+func (u *UDPConnToPacketStreamPacketConnAdapter) ReadFromWithAttributes(
+	p []byte, _ *PacketAttributes) (n int, addr net.Addr, err error) {
 	return u.conn.ReadFrom(p)
 }
 
@@ -69,6 +70,7 @@ func (u *UDPConnToPacketStreamPacketConnAdapter) ReadFrom(p []byte) (n int, addr
 
 func (u *UDPConnToPacketStreamPacketConnAdapter) WriteTo(b []byte, addr net.Addr) (int, error) {
 	n, err := u.conn.WriteTo(b, addr)
+
 	return n, err
 }
 

@@ -279,8 +279,6 @@ func TestBufferLimitSize(t *testing.T) {
 	assert.Equal(ErrFull, err)
 	assert.Equal(12, buffer.Size())
 
-	println(buffer.size())
-
 	// Cheeky write at exact size.
 	n, err = buffer.Write([]byte{6})
 	assert.NoError(err)
@@ -734,11 +732,11 @@ func newPacketAttributes(length int) *varSizePacketAttributes {
 
 // Marshal returns the internal buffer as-is.
 func (p *varSizePacketAttributes) Marshal() []byte {
-	return p.buffer[:]
+	return p.buffer
 }
 
 func (p *varSizePacketAttributes) GetBuffer() []byte {
-	return p.buffer[:]
+	return p.buffer
 }
 
 func TestReadWithAttributes(t *testing.T) {
