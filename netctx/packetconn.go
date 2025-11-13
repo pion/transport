@@ -30,11 +30,11 @@ type PacketConn interface {
 	WriterTo
 	io.Closer
 	LocalAddr() net.Addr
-	Conn() transport.PacketStreamPacketConn
+	Conn() transport.PacketConnSocket
 }
 
 type packetConn struct {
-	nextConn  transport.PacketStreamPacketConn
+	nextConn  transport.PacketConnSocket
 	closed    chan struct{}
 	closeOnce sync.Once
 	readMu    sync.Mutex
@@ -42,7 +42,7 @@ type packetConn struct {
 }
 
 // NewPacketConn creates a new PacketConn wrapping the given net.PacketConn.
-func NewPacketConn(pconn transport.PacketStreamPacketConn) PacketConn {
+func NewPacketConn(pconn transport.PacketConnSocket) PacketConn {
 	p := &packetConn{
 		nextConn: pconn,
 		closed:   make(chan struct{}),
@@ -178,6 +178,6 @@ func (p *packetConn) LocalAddr() net.Addr {
 }
 
 // Conn returns the underlying net.PacketConn.
-func (p *packetConn) Conn() transport.PacketStreamPacketConn {
+func (p *packetConn) Conn() transport.PacketConnSocket {
 	return p.nextConn
 }

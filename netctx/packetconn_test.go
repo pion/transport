@@ -59,7 +59,7 @@ func (w wrapConn) SetWriteDeadline(t time.Time) error {
 	return w.c.SetWriteDeadline(t)
 }
 
-func pipe() (transport.PacketStreamPacketConn, transport.PacketStreamPacketConn) {
+func pipe() (transport.PacketConnSocket, transport.PacketConnSocket) {
 	a, b := net.Pipe()
 
 	return wrapConn{a}, wrapConn{b}
