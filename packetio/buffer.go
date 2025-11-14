@@ -15,6 +15,7 @@ import (
 )
 
 var errPacketTooBig = errors.New("packet too big")
+var errPacketAttributesBufferTooShort = errors.New("packet attributes buffer too short")
 
 // BufferPacketType allow the Buffer to know which packet protocol is writing.
 type BufferPacketType int
@@ -177,11 +178,11 @@ func (b *Buffer) Write(buff []byte) (n int, err error) { //nolint:cyclop
 // WriteWithAttributes works like Write, but it writes the
 // additional packet attributes into the Buffer.
 func (b *Buffer) WriteWithAttributes(packet []byte,
-	attr transport.PacketAttributesBuffer) (int, error) { //nolint:cyclop
+	attr *transport.PacketAttributes) (int, error) { //nolint:cyclop
 	pLen := len(packet)
 	aLen := 0
 	if attr != nil {
-		aLen = len(attr.Marshal())
+		aLen = len(attr.Buffer)
 	}
 
 	if pLen >= 0x10000 {
@@ -227,9 +228,9 @@ func (b *Buffer) WriteWithAttributes(packet []byte,
 	// store the length of the attributes segment
 	b.writeLengthHeaders(aLen)
 
-	if attr != nil {
+	if aLen > 0 {
 		// store the attributes buffer itself
-		b.writeFromInputBuffer(attr.Marshal())
+		b.writeFromInputBuffer(attr.Buffer)
 	}
 
 	select {
@@ -270,7 +271,7 @@ func (b *Buffer) Read(buff []byte) (n int, err error) { //nolint:gocognit,cyclop
 // ReadWithAttributes works like Read, but it also populates
 // additional packet attributes into the attr field.
 func (b *Buffer) ReadWithAttributes(
-	packet []byte, attr transport.PacketAttributesBuffer) (n int, err error) { //nolint:gocognit,cyclop
+	packet []byte, attr *transport.PacketAttributes) (n int, err error) { //nolint:gocognit,cyclop
 	// Return immediately if the deadline is already exceeded.
 	select {
 	case <-b.readDeadline.Done():
@@ -298,13 +299,7 @@ func (b *Buffer) ReadWithAttributes(
 			b.advanceHead(count)
 
 			// read the attributes segment
-			aLen := b.getSegmentLength()
-			if aLen > 0 {
-				if attr != nil {
-					b.writeToInputBuffer(attr.GetBuffer(), aLen)
-				}
-				b.advanceHead(aLen)
-			}
+			attrErr := b.readPacketAttributes(attr)
 
 			if b.head == b.tail {
 				// the buffer is empty, reset to beginning
@@ -319,8 +314,13 @@ func (b *Buffer) ReadWithAttributes(
 			if copied < count {
 				// The method still consumes the buffer even in the cases where
 				// packet buffer is short. but even in this case copies into the packet buffer
-				// and discards it :|
+				// and discards it.
 				return copied, io.ErrShortBuffer
+			}
+
+			// only if attr != nil do we care about attributes' buffer
+			if attr != nil && attrErr != nil {
+				return copied, attrErr
 			}
 
 			return copied, nil
@@ -339,6 +339,27 @@ func (b *Buffer) ReadWithAttributes(
 		case <-b.notify:
 		}
 	}
+}
+
+func (b *Buffer) readPacketAttributes(attr *transport.PacketAttributes) error {
+	aLen := b.getSegmentLength()
+	if aLen == 0 {
+		return nil
+	}
+	if attr == nil {
+		b.advanceHead(aLen)
+		return nil
+	}
+	aBuffer := attr.Buffer
+	b.writeToInputBuffer(aBuffer, aLen)
+	b.advanceHead(aLen)
+	if len(aBuffer) >= aLen {
+		attr.BytesCopied = aLen
+		return nil
+	}
+
+	attr.BytesCopied = len(aBuffer)
+	return errPacketAttributesBufferTooShort
 }
 
 // Close the buffer, unblocking any pending reads.

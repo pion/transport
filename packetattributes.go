@@ -3,55 +3,36 @@
 
 package transport
 
-const attrMaxLen = 1
-
-type ECN uint8
-
-type PacketAttributesBuffer interface {
-	// for serializing
-	Marshal() []byte
-
-	// for de-serializing. The bytes will be copied into the returned buffer
-	GetBuffer() []byte
-}
+const MaxAttributesLen = 1024
 
 type PacketAttributes struct {
-	buffer [attrMaxLen]byte
+	Buffer      []byte
+	BytesCopied int
 }
 
-func NewPacketAttributes() *PacketAttributes {
-	p := &PacketAttributes{}
-	p.Reset()
+func NewPacketAttributesWithLen(length int) *PacketAttributes {
+	buff := make([]byte, length)
 
-	return p
-}
-
-func (p *PacketAttributes) Reset() {
-	p.WithECN(0)
-}
-
-func (p *PacketAttributes) GetECN() ECN {
-	return ECN(p.buffer[0])
-}
-
-func (p *PacketAttributes) WithECN(e ECN) *PacketAttributes {
-	p.buffer[0] = byte(e)
-
-	return p
-}
-
-// Marshal returns the internal buffer as-is.
-func (p *PacketAttributes) Marshal() []byte {
-	return p.buffer[:]
-}
-
-func (p *PacketAttributes) GetBuffer() []byte {
-	return p.buffer[:]
+	return &PacketAttributes{
+		Buffer:      buff,
+		BytesCopied: 0,
+	}
 }
 
 func (p *PacketAttributes) Clone() *PacketAttributes {
-	clone := &PacketAttributes{}
-	clone.buffer[0] = p.buffer[0]
+	b := make([]byte, p.BytesCopied)
+	copy(b, p.Buffer)
+	return &PacketAttributes{
+		Buffer:      b,
+		BytesCopied: p.BytesCopied,
+	}
+}
 
-	return clone
+// Returns the read buffer. Just like when calling a read on a socket we have n, err := conn.Read(buf)
+// and the read bytes are in buf[:n], we should use this method after calling the ReadWithAttributes method.
+func (p *PacketAttributes) GetReadPacketAttributes() *PacketAttributes {
+	return &PacketAttributes{
+		Buffer:      p.Buffer[:p.BytesCopied],
+		BytesCopied: p.BytesCopied,
+	}
 }
