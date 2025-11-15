@@ -10,6 +10,10 @@ type PacketAttributes struct {
 	BytesCopied int
 }
 
+func (p *PacketAttributes) Reset() {
+	p.BytesCopied = 0
+}
+
 func NewPacketAttributesWithLen(length int) *PacketAttributes {
 	buff := make([]byte, length)
 
