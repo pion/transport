@@ -10,6 +10,7 @@ import (
 	"context"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -21,26 +22,43 @@ func TestTokenBucketFilter(t *testing.T) {
 	t.Run("bitrateBelowCapacity", func(t *testing.T) {
 		mnic := newMockNIC(t)
 
+		const payloadSize = 1200
+		sent := 100
+		if runtime.GOOS == "windows" {
+			// stay under the default queue size
+			// to avoid drops on the slower windows schedulers.
+			sent = 40
+		}
+
 		tbf, err := NewTokenBucketFilter(mnic, TBFRate(10*MBit), TBFMaxBurst(10*MBit))
 		assert.NoError(t, err, "should succeed")
 
-		received := 0
+		var received atomic.Int32
 		mnic.mockOnInboundChunk = func(Chunk) {
-			received++
+			received.Add(1)
 		}
 
 		time.Sleep(1 * time.Second)
 
-		sent := 100
 		for i := 0; i < sent; i++ {
 			tbf.onInboundChunk(&chunkUDP{
-				userData: make([]byte, 1200),
+				userData: make([]byte, payloadSize),
 			})
 		}
 
+		runtime.Gosched()
+		assert.Eventually(
+			t,
+			func() bool {
+				return int(received.Load()) == sent
+			},
+			time.Second,
+			5*time.Millisecond,
+		)
+
 		assert.NoError(t, tbf.Close())
 
-		assert.Equal(t, sent, received)
+		assert.Equal(t, sent, int(received.Load()))
 	})
 
 	subTest := func(t *testing.T, capacity int, maxBurst int, duration time.Duration) {

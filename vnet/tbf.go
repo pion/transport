@@ -3,13 +3,7 @@
 
 package vnet
 
-import (
-	"math"
-	"sync"
-	"time"
-
-	"github.com/pion/logging"
-)
+import "sync"
 
 const (
 	// Bit is a single bit.
@@ -21,64 +15,75 @@ const (
 )
 
 // TokenBucketFilter implements a token bucket rate limit algorithm.
+//
+// Deprecated: TokenBucketFilter is now a wrapper around Queue with a TBF
+// discipline. Use Queue directly.
 type TokenBucketFilter struct {
 	NIC
-	currentTokensInBucket float64
-	c                     chan Chunk
-	queue                 *chunkQueue
-	queueSize             int // in bytes
+	queue *Queue
+	tbf   *TBFQueue
 
-	mutex             sync.Mutex
-	rate              int
-	maxBurst          int
-	minRefillDuration time.Duration
-
-	wg   sync.WaitGroup
-	done chan struct{}
-
-	log logging.LeveledLogger
+	lock    sync.Mutex
+	maxSize int64
+	rate    int
+	burst   int
 }
 
 // TBFOption is the option type to configure a TokenBucketFilter.
+//
+// Deprecated: TokenBucketFilter is deprecated, use Queue instead.
 type TBFOption func(*TokenBucketFilter) TBFOption
 
 // TBFQueueSizeInBytes sets the max number of bytes waiting in the queue. Can
 // only be set in constructor before using the TBF.
+//
+// Deprecated: TokenBucketFilter is deprecated, use Queue instead.
 func TBFQueueSizeInBytes(bytes int) TBFOption {
 	return func(t *TokenBucketFilter) TBFOption {
-		prev := t.queueSize
-		t.queueSize = bytes
+		t.lock.Lock()
+		defer t.lock.Unlock()
+		prev := t.maxSize
+		t.maxSize = int64(bytes)
+		t.tbf.SetSize(t.maxSize)
 
-		return TBFQueueSizeInBytes(prev)
+		return TBFQueueSizeInBytes(int(prev))
 	}
 }
 
 // TBFRate sets the bit rate of a TokenBucketFilter.
+//
+// Deprecated: TokenBucketFilter is deprecated, use Queue instead.
 func TBFRate(rate int) TBFOption {
 	return func(t *TokenBucketFilter) TBFOption {
-		t.mutex.Lock()
-		defer t.mutex.Unlock()
-		previous := t.rate
+		t.lock.Lock()
+		defer t.lock.Unlock()
+		prev := t.rate
 		t.rate = rate
+		t.tbf.SetRate(t.rate)
 
-		return TBFRate(previous)
+		return TBFRate(prev)
 	}
 }
 
 // TBFMaxBurst sets the bucket size of the token bucket filter. This is the
 // maximum size that can instantly leave the filter, if the bucket is full.
+//
+// Deprecated: TokenBucketFilter is deprecated, use Queue instead.
 func TBFMaxBurst(size int) TBFOption {
 	return func(t *TokenBucketFilter) TBFOption {
-		t.mutex.Lock()
-		defer t.mutex.Unlock()
-		previous := t.maxBurst
-		t.maxBurst = size
+		t.lock.Lock()
+		defer t.lock.Unlock()
+		prev := t.burst
+		t.burst = size
+		t.tbf.SetBurst(t.burst)
 
-		return TBFMaxBurst(previous)
+		return TBFMaxBurst(prev)
 	}
 }
 
 // Set updates a setting on the token bucket filter.
+//
+// Deprecated: TokenBucketFilter is deprecated, use Queue instead.
 func (t *TokenBucketFilter) Set(opts ...TBFOption) (previous TBFOption) {
 	for _, opt := range opts {
 		previous = opt(t)
@@ -88,98 +93,31 @@ func (t *TokenBucketFilter) Set(opts ...TBFOption) (previous TBFOption) {
 }
 
 // NewTokenBucketFilter creates and starts a new TokenBucketFilter.
+//
+// Deprecated: TokenBucketFilter is deprecated, use Queue instead.
 func NewTokenBucketFilter(n NIC, opts ...TBFOption) (*TokenBucketFilter, error) {
+	tbfQueue := NewTBFQueue(1*MBit, 8*KBit, int64(50_000))
+	q, err := NewQueue(n, tbfQueue)
+	if err != nil {
+		return nil, err
+	}
 	tbf := &TokenBucketFilter{
-		NIC:                   n,
-		currentTokensInBucket: 0,
-		c:                     make(chan Chunk),
-		queue:                 nil,
-		queueSize:             50000,
-		mutex:                 sync.Mutex{},
-		rate:                  1 * MBit,
-		maxBurst:              8 * KBit,
-		minRefillDuration:     100 * time.Millisecond,
-		wg:                    sync.WaitGroup{},
-		done:                  make(chan struct{}),
-		log:                   logging.NewDefaultLoggerFactory().NewLogger("tbf"),
+		NIC:   q.NIC,
+		tbf:   tbfQueue,
+		queue: q,
 	}
 	tbf.Set(opts...)
-	tbf.queue = newChunkQueue(0, tbf.queueSize)
-	tbf.wg.Add(1)
-	go tbf.run()
 
 	return tbf, nil
 }
 
 func (t *TokenBucketFilter) onInboundChunk(c Chunk) {
-	select {
-	case t.c <- c:
-	case <-t.done:
-	}
-}
-
-func (t *TokenBucketFilter) run() {
-	defer t.wg.Done()
-
-	t.refillTokens(t.minRefillDuration)
-	lastRefill := time.Now()
-
-	for {
-		select {
-		case <-t.done:
-			t.drainQueue()
-
-			return
-		case chunk := <-t.c:
-			if time.Since(lastRefill) > t.minRefillDuration {
-				t.refillTokens(time.Since(lastRefill))
-				lastRefill = time.Now()
-			}
-			t.queue.push(chunk)
-			t.drainQueue()
-		}
-	}
-}
-
-func (t *TokenBucketFilter) refillTokens(dt time.Duration) {
-	t.mutex.Lock()
-	defer t.mutex.Unlock()
-	m := 1000.0 / float64(dt.Milliseconds())
-	add := (float64(t.rate) / m) / 8.0
-	t.currentTokensInBucket = math.Min(float64(t.maxBurst), t.currentTokensInBucket+add)
-	t.log.Tracef(
-		"add=(%v / %v) / 8 = %v, currentTokensInBucket=%v, maxBurst=%v",
-		t.rate,
-		m,
-		add,
-		t.currentTokensInBucket,
-		t.maxBurst,
-	)
-}
-
-func (t *TokenBucketFilter) drainQueue() {
-	for {
-		next := t.queue.peek()
-		if next == nil {
-			break
-		}
-		tokens := float64(len(next.UserData()))
-		if t.currentTokensInBucket < tokens {
-			t.log.Tracef("currentTokensInBucket=%v, tokens=%v, stop drain", t.currentTokensInBucket, tokens)
-
-			break
-		}
-		t.log.Tracef("currentTokensInBucket=%v, tokens=%v, pop chunk", t.currentTokensInBucket, tokens)
-		t.queue.pop()
-		t.NIC.onInboundChunk(next)
-		t.currentTokensInBucket -= tokens
-	}
+	t.queue.onInboundChunk(c)
 }
 
 // Close closes and stops the token bucket filter queue.
+//
+// Deprecated: TokenBucketFilter is deprecated, use Queue instead.
 func (t *TokenBucketFilter) Close() error {
-	close(t.done)
-	t.wg.Wait()
-
-	return nil
+	return t.queue.Close()
 }
