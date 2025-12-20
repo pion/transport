@@ -405,7 +405,7 @@ func (r *Router) assignIPAddress() (net.IP, error) {
 	ip := make(net.IP, 4)
 	copy(ip, r.ipv4Net.IP[:3])
 	r.lastID++
-	ip[3] = r.lastID
+	ip[3] = r.lastID //nolint:gosec // IPv4 address is always 4 bytes
 
 	return ip, nil
 }

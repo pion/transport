@@ -283,7 +283,7 @@ func TestRouterStandalone(t *testing.T) { //nolint:cyclop,maintidx
 
 		// send 3 packets
 		for i := 0; i < 3; i++ {
-			c := newChunkUDP(ip[0], ip[1])
+			c := newChunkUDP(ip[0], ip[1]) //nolint:gosec // ip slice length is 2
 			c.userData = make([]byte, 1)
 			c.userData[0] = byte(i) // 1-byte seq num
 			router.push(c)
