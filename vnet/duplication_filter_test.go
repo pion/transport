@@ -572,7 +572,7 @@ func TestDuplicationFilterBucketCoalescing(t *testing.T) { //nolint:cyclop
 	}()
 
 	for i := 0; i < size; i++ {
-		chunk := newChunkUDP(ip[0], ip[1])
+		chunk := newChunkUDP(ip[0], ip[1]) //nolint:gosec // ip slice length is 2
 		payload := []byte{byte(i)}
 		chunk.userData = make([]byte, len(payload))
 		copy(chunk.userData, payload)
