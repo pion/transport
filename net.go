@@ -409,6 +409,28 @@ func (ifc *Interface) AddAddress(addr net.Addr) {
 	ifc.addrs = append(ifc.addrs, addr)
 }
 
+// RemoveAddress removes an address from the interface.
+func (ifc *Interface) RemoveAddress(ip net.IP) bool {
+	for i, addr := range ifc.addrs {
+		var addrIP net.IP
+		switch a := addr.(type) {
+		case *net.IPNet:
+			addrIP = a.IP
+		case *net.IPAddr:
+			addrIP = a.IP
+		default:
+			continue
+		}
+		if addrIP.Equal(ip) {
+			ifc.addrs = append(ifc.addrs[:i], ifc.addrs[i+1:]...)
+
+			return true
+		}
+	}
+
+	return false
+}
+
 // Addrs returns a slice of configured addresses on the interface.
 func (ifc *Interface) Addrs() ([]net.Addr, error) {
 	if len(ifc.addrs) == 0 {

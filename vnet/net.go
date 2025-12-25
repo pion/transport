@@ -155,6 +155,49 @@ func (v *Net) setRouter(r *Router) error {
 	return nil
 }
 
+// AddAddress adds an address to an interface and registers it for routing.
+// This method can be called before or after the router has started.
+func (v *Net) AddAddress(ifName string, addr *net.IPNet) error {
+	v.mutex.Lock()
+	defer v.mutex.Unlock()
+
+	ifc, err := v._getInterface(ifName)
+	if err != nil {
+		return err
+	}
+	ifc.AddAddress(addr)
+
+	if v.router != nil {
+		v.router.mutex.Lock()
+		defer v.router.mutex.Unlock()
+
+		return v.router.addIPToNIC(v, addr.IP)
+	}
+
+	return nil
+}
+
+// RemoveAddress removes an address from an interface and unregisters it from routing.
+// This method can be called before or after the router has started.
+func (v *Net) RemoveAddress(ifName string, ip net.IP) error {
+	v.mutex.Lock()
+	defer v.mutex.Unlock()
+
+	ifc, err := v._getInterface(ifName)
+	if err != nil {
+		return err
+	}
+	ifc.RemoveAddress(ip)
+
+	if v.router != nil {
+		v.router.mutex.Lock()
+		defer v.router.mutex.Unlock()
+		v.router.removeIPFromNIC(ip)
+	}
+
+	return nil
+}
+
 func (v *Net) onInboundChunk(c Chunk) {
 	v.mutex.Lock()
 	defer v.mutex.Unlock()

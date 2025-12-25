@@ -807,4 +807,72 @@ func TestNetVirtual(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 
 		assert.NoError(t, wan.Stop(), "should succeed")
 	})
+
+	t.Run("AddAddress and RemoveAddress", func(t *testing.T) {
+		router, err := NewRouter(&RouterConfig{
+			CIDR:          "10.0.0.0/24",
+			LoggerFactory: loggerFactory,
+		})
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+
+		nw, err := NewNet(&NetConfig{})
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+
+		err = router.AddNet(nw)
+		assert.NoError(t, err, "should succeed")
+
+		err = router.Start()
+		assert.NoError(t, err, "should succeed")
+
+		// Add a new address dynamically.
+		newIP := net.ParseIP("10.0.0.100")
+		err = nw.AddAddress("eth0", &net.IPNet{
+			IP:   newIP,
+			Mask: net.CIDRMask(24, 32),
+		})
+		assert.NoError(t, err, "should succeed")
+
+		// Verify address was added to interface.
+		eth0, err := nw.InterfaceByName("eth0")
+		assert.NoError(t, err, "should succeed")
+		addrs, err := eth0.Addrs()
+		assert.NoError(t, err, "should succeed")
+		assert.Equal(t, 2, len(addrs), "should have 2 addresses")
+
+		// Remove the address.
+		err = nw.RemoveAddress("eth0", newIP)
+		assert.NoError(t, err, "should succeed")
+
+		// Verify address was removed.
+		addrs, err = eth0.Addrs()
+		assert.NoError(t, err, "should succeed")
+		assert.Equal(t, 1, len(addrs), "should have 1 address")
+
+		// AddAddress with IP outside CIDR should fail.
+		err = nw.AddAddress("eth0", &net.IPNet{
+			IP:   net.ParseIP("192.168.1.1"),
+			Mask: net.CIDRMask(24, 32),
+		})
+		assert.Error(t, err, "should fail for IP outside CIDR")
+
+		// RemoveAddress with IPAddr type.
+		eth0.AddAddress(&net.IPAddr{IP: net.ParseIP("10.0.0.200")})
+		removed := eth0.RemoveAddress(net.ParseIP("10.0.0.200"))
+		assert.True(t, removed, "should remove IPAddr")
+
+		// RemoveAddress skips unsupported addr types.
+		eth0.AddAddress(&net.TCPAddr{IP: net.ParseIP("10.0.0.201"), Port: 1234})
+		removed = eth0.RemoveAddress(net.ParseIP("10.0.0.201"))
+		assert.False(t, removed, "TCPAddr not supported")
+
+		// RemoveAddress with non-existent IP.
+		removed = eth0.RemoveAddress(net.ParseIP("10.0.0.250"))
+		assert.False(t, removed, "should return false")
+
+		assert.NoError(t, router.Stop(), "should succeed")
+	})
 }
