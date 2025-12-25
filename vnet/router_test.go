@@ -113,6 +113,33 @@ func TestRouterStandalone(t *testing.T) { //nolint:cyclop,maintidx
 		assert.Equal(t, "1.2.3.1", addrs[0].(*net.IPNet).IP.String(), "should match") //nolint:forcetypeassert
 	})
 
+	t.Run("AddIPToNIC", func(t *testing.T) {
+		router, err := NewRouter(&RouterConfig{
+			CIDR:          "1.2.3.0/24",
+			LoggerFactory: loggerFactory,
+		})
+		if !assert.Nil(t, err, "should succeed") {
+			return
+		}
+
+		nic, err := NewNet(&NetConfig{})
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+
+		err = router.AddNet(nic)
+		assert.Nil(t, err, "should succeed")
+
+		// Add a new IP dynamically.
+		newIP := net.ParseIP("1.2.3.100")
+		err = router.AddIPToNIC(nic, newIP)
+		assert.Nil(t, err, "should succeed")
+
+		// IP outside CIDR should fail.
+		err = router.AddIPToNIC(nic, net.ParseIP("192.168.1.1"))
+		assert.NotNil(t, err, "should fail")
+	})
+
 	t.Run("AddChildRouter", func(t *testing.T) {
 		r1, err := NewRouter(&RouterConfig{
 			CIDR:          "0.0.0.0/0",

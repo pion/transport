@@ -379,6 +379,19 @@ func (r *Router) AddNet(nic NIC) error {
 	return r.addNIC(nic)
 }
 
+// AddIPToNIC ...
+func (r *Router) AddIPToNIC(nic NIC, ip net.IP) error {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	if !r.ipv4Net.Contains(ip) {
+		return fmt.Errorf("%w: %s", errStaticIPisBeyondSubnet, r.ipv4Net.String())
+	}
+	r.nics[ip.String()] = nic
+
+	return nil
+}
+
 // AddHost adds a mapping of hostname and an IP address to the local resolver.
 func (r *Router) AddHost(hostName string, ipAddr string) error {
 	return r.resolver.addHost(hostName, ipAddr)
