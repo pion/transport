@@ -334,6 +334,21 @@ func (r *Router) addNIC(nic NIC) error {
 	return nic.setRouter(r)
 }
 
+// caller must hold the mutex.
+func (r *Router) addIPToNIC(nic NIC, ip net.IP) error {
+	if !r.ipv4Net.Contains(ip) {
+		return fmt.Errorf("%w: %s", errStaticIPisBeyondSubnet, r.ipv4Net.String())
+	}
+	r.nics[ip.String()] = nic
+
+	return nil
+}
+
+// caller must hold the mutex.
+func (r *Router) removeIPFromNIC(ip net.IP) {
+	delete(r.nics, ip.String())
+}
+
 // AddRouter adds a child Router.
 func (r *Router) AddRouter(router *Router) error {
 	r.mutex.Lock()
