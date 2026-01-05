@@ -7,6 +7,7 @@
 package stdnet
 
 import (
+	"context"
 	"net"
 	"testing"
 
@@ -14,7 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestStdNet(t *testing.T) { //nolint:cyclop
+func TestStdNet(t *testing.T) { //nolint:cyclop,maintidx
 	log := logging.NewDefaultLoggerFactory().NewLogger("test")
 
 	t.Run("Interfaces", func(t *testing.T) {
@@ -192,6 +193,68 @@ func TestStdNet(t *testing.T) { //nolint:cyclop
 		assert.True(t, laddr.(*net.UDPAddr).Port != 0, "should match")                 //nolint:forcetypeassert
 		assert.Equal(t, "127.0.0.1:1234", raddr.String(), "should match")
 		assert.NoError(t, conn.Close(), "should succeed")
+	})
+
+	t.Run("Listen", func(t *testing.T) {
+		nw, err := NewNet()
+		assert.Nil(t, err, "should succeed")
+
+		listenConfig := nw.CreateListenConfig(&net.ListenConfig{})
+		listener, err := listenConfig.Listen(context.Background(), "tcp4", "127.0.0.1:1234")
+		assert.NoError(t, err, "should succeed")
+
+		laddr := listener.Addr()
+		log.Debugf("laddr: %s", laddr.String())
+
+		dialer := nw.CreateDialer(&net.Dialer{
+			LocalAddr: &net.TCPAddr{
+				IP:   net.ParseIP("127.0.0.1"),
+				Port: 0,
+			},
+		})
+
+		conn, err := dialer.Dial("tcp4", "127.0.0.1:1234")
+		assert.NoError(t, err, "should succeed")
+
+		raddr := conn.RemoteAddr()
+		log.Debugf("raddr: %s", raddr.String())
+
+		assert.Equal(t, "127.0.0.1", laddr.(*net.TCPAddr).IP.String(), "should match") //nolint:forcetypeassert
+		assert.True(t, laddr.(*net.TCPAddr).Port != 0, "should match")                 //nolint:forcetypeassert
+		assert.Equal(t, "127.0.0.1:1234", raddr.String(), "should match")
+		assert.NoError(t, conn.Close(), "should succeed")
+		assert.NoError(t, listener.Close(), "should succeed")
+	})
+
+	t.Run("ListenPacket", func(t *testing.T) {
+		nw, err := NewNet()
+		assert.Nil(t, err, "should succeed")
+
+		listenConfig := nw.CreateListenConfig(&net.ListenConfig{})
+		packetListener, err := listenConfig.ListenPacket(context.Background(), udpString, "127.0.0.1:1234")
+		assert.NoError(t, err, "should succeed")
+
+		laddr := packetListener.LocalAddr()
+		log.Debugf("laddr: %s", laddr.String())
+
+		dialer := nw.CreateDialer(&net.Dialer{
+			LocalAddr: &net.UDPAddr{
+				IP:   net.ParseIP("127.0.0.1"),
+				Port: 0,
+			},
+		})
+
+		packetConn, err := dialer.Dial(udpString, "127.0.0.1:1234")
+		assert.NoError(t, err, "should succeed")
+
+		raddr := packetConn.RemoteAddr()
+		log.Debugf("raddr: %s", raddr.String())
+
+		assert.Equal(t, "127.0.0.1", laddr.(*net.UDPAddr).IP.String(), "should match") //nolint:forcetypeassert
+		assert.True(t, laddr.(*net.UDPAddr).Port != 0, "should match")                 //nolint:forcetypeassert
+		assert.Equal(t, "127.0.0.1:1234", raddr.String(), "should match")
+		assert.NoError(t, packetConn.Close(), "should succeed")
+		assert.NoError(t, packetListener.Close(), "should succeed")
 	})
 
 	t.Run("Unexpected operations", func(t *testing.T) {

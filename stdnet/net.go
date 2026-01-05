@@ -6,6 +6,7 @@
 package stdnet
 
 import (
+	"context"
 	"fmt"
 	"net"
 
@@ -165,4 +166,21 @@ func (d stdDialer) Dial(network, address string) (net.Conn, error) {
 // CreateDialer creates an instance of vnet.Dialer.
 func (n *Net) CreateDialer(d *net.Dialer) transport.Dialer {
 	return stdDialer{d}
+}
+
+type stdListenConfig struct {
+	*net.ListenConfig
+}
+
+func (d stdListenConfig) Listen(ctx context.Context, network, address string) (net.Listener, error) {
+	return d.ListenConfig.Listen(ctx, network, address)
+}
+
+func (d stdListenConfig) ListenPacket(ctx context.Context, network, address string) (net.PacketConn, error) {
+	return d.ListenConfig.ListenPacket(ctx, network, address)
+}
+
+// CreateListenConfig creates an instance of vnet.ListenConfig.
+func (n *Net) CreateListenConfig(d *net.ListenConfig) transport.ListenConfig {
+	return stdListenConfig{d}
 }

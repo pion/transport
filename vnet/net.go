@@ -4,6 +4,7 @@
 package vnet
 
 import (
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -664,4 +665,25 @@ type dialer struct {
 
 func (d *dialer) Dial(network, address string) (net.Conn, error) {
 	return d.net.Dial(network, address)
+}
+
+// CreateListenConfig creates an instance of vnet.ListenConfig.
+func (v *Net) CreateListenConfig(l *net.ListenConfig) transport.ListenConfig {
+	return &listenConfig{
+		listenConfig: l,
+		net:          v,
+	}
+}
+
+type listenConfig struct {
+	listenConfig *net.ListenConfig
+	net          *Net
+}
+
+func (l *listenConfig) Listen(ctx context.Context, network, address string) (net.Listener, error) {
+	return l.listenConfig.Listen(ctx, network, address)
+}
+
+func (l *listenConfig) ListenPacket(_ context.Context, network, address string) (net.PacketConn, error) {
+	return l.net.ListenPacket(network, address)
 }
