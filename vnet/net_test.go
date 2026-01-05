@@ -4,6 +4,7 @@
 package vnet
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"testing"
@@ -708,6 +709,61 @@ func TestNetVirtual(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 		assert.Equal(t, 1, nw.udpConns.size(), "should match")
 		assert.NoError(t, conn.Close(), "should succeed")
 		assert.Empty(t, nw.udpConns.size(), "should match")
+	})
+
+	t.Run("Listen", func(t *testing.T) {
+		nw, err := NewNet(&NetConfig{})
+		assert.Nil(t, err, "should succeed")
+
+		listenConfig := nw.CreateListenConfig(&net.ListenConfig{})
+		listener, err := listenConfig.Listen(context.Background(), "tcp4", "127.0.0.1:1234")
+		assert.NoError(t, err, "should succeed")
+
+		laddr := listener.Addr()
+		log.Debugf("laddr: %s", laddr.String())
+
+		conn, err := net.Dial("tcp4", "127.0.0.1:1234") //nolint:noctx
+		assert.NoError(t, err, "should succeed")
+
+		raddr := conn.RemoteAddr()
+		log.Debugf("raddr: %s", raddr.String())
+
+		assert.Equal(t, "127.0.0.1", laddr.(*net.TCPAddr).IP.String(), "should match") //nolint:forcetypeassert
+		assert.True(t, laddr.(*net.TCPAddr).Port != 0, "should match")                 //nolint:forcetypeassert
+		assert.Equal(t, "127.0.0.1:1234", raddr.String(), "should match")
+		assert.NoError(t, conn.Close(), "should succeed")
+		assert.NoError(t, listener.Close(), "should succeed")
+	})
+
+	t.Run("ListenPacket", func(t *testing.T) {
+		nw, err := NewNet(&NetConfig{})
+		assert.Nil(t, err, "should succeed")
+
+		listenConfig := nw.CreateListenConfig(&net.ListenConfig{})
+		packetListener, err := listenConfig.ListenPacket(context.Background(), udp, "127.0.0.1:1234")
+		assert.NoError(t, err, "should succeed")
+
+		laddr := packetListener.LocalAddr()
+		log.Debugf("laddr: %s", laddr.String())
+
+		dialer := nw.CreateDialer(&net.Dialer{
+			LocalAddr: &net.UDPAddr{
+				IP:   net.ParseIP("127.0.0.1"),
+				Port: 0,
+			},
+		})
+
+		packetConn, err := dialer.Dial(udp, "127.0.0.1:1234")
+		assert.NoError(t, err, "should succeed")
+
+		raddr := packetConn.RemoteAddr()
+		log.Debugf("raddr: %s", raddr.String())
+
+		assert.Equal(t, "127.0.0.1", laddr.(*net.UDPAddr).IP.String(), "should match") //nolint:forcetypeassert
+		assert.True(t, laddr.(*net.UDPAddr).Port != 0, "should match")                 //nolint:forcetypeassert
+		assert.Equal(t, "127.0.0.1:1234", raddr.String(), "should match")
+		assert.NoError(t, packetConn.Close(), "should succeed")
+		assert.NoError(t, packetListener.Close(), "should succeed")
 	})
 
 	t.Run("Two IPs on a NIC", func(t *testing.T) {

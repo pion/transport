@@ -6,6 +6,7 @@
 package transport
 
 import (
+	"context"
 	"errors"
 	"io"
 	"net"
@@ -208,6 +209,7 @@ type Net interface {
 	// The following functions are extensions to Go's standard net package
 
 	CreateDialer(dialer *net.Dialer) Dialer
+	CreateListenConfig(listenerConfig *net.ListenConfig) ListenConfig
 }
 
 // Dialer is identical to net.Dialer excepts that its methods
@@ -215,6 +217,14 @@ type Net interface {
 // Use vnet.CreateDialer() to create an instance of this Dialer.
 type Dialer interface {
 	Dial(network, address string) (net.Conn, error)
+}
+
+// ListenConfig is identical to net.ListenConfig except that its methods
+// (Listen, ListenPacket) are overridden to use the Net interface.
+// Use vnet.Create:ListenConfig() to create an instance of this ListenConfig.
+type ListenConfig interface {
+	Listen(ctx context.Context, network, address string) (net.Listener, error)
+	ListenPacket(ctx context.Context, network, address string) (net.PacketConn, error)
 }
 
 // UDPConn is packet-oriented connection for UDP.
