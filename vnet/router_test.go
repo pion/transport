@@ -532,28 +532,6 @@ func TestRouterStaticIPs(t *testing.T) {
 		assert.Equal(t, "1.2.3.3", lan.staticIPs[2].String(), "should match")
 	})
 
-	t.Run("StaticIPs and StaticIP in the mix", func(t *testing.T) {
-		lan, err := NewRouter(&RouterConfig{
-			CIDR: "192.168.0.0/24",
-			StaticIPs: []string{
-				"1.2.3.1",
-				"1.2.3.2",
-				"1.2.3.3",
-			},
-			StaticIP:      demoIP,
-			LoggerFactory: loggerFactory,
-		})
-		if !assert.Nil(t, err, "should succeed") {
-			return
-		}
-
-		assert.Equal(t, 4, len(lan.staticIPs), "should be 4")
-		assert.Equal(t, "1.2.3.1", lan.staticIPs[0].String(), "should match")
-		assert.Equal(t, "1.2.3.2", lan.staticIPs[1].String(), "should match")
-		assert.Equal(t, "1.2.3.3", lan.staticIPs[2].String(), "should match")
-		assert.Equal(t, demoIP, lan.staticIPs[3].String(), "should match")
-	})
-
 	t.Run("Static IP and local IP mapping", func(t *testing.T) {
 		lan, err := NewRouter(&RouterConfig{
 			CIDR: "192.168.0.0/24",

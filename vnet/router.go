@@ -54,8 +54,6 @@ type RouterConfig struct {
 	// an IP address.
 	// This will be ignored if this router is the root.
 	StaticIPs []string
-	// StaticIP is deprecated. Use StaticIPs.
-	StaticIP string
 	// Internal queue size
 	QueueSize int
 	// Effective only when this router has a parent router
@@ -164,12 +162,6 @@ func NewRouter(config *RouterConfig) (*Router, error) { //nolint:cyclop
 				}
 				staticLocalIPs[ip.String()] = locIP
 			}
-			staticIPs = append(staticIPs, ip)
-		}
-	}
-	if len(config.StaticIP) > 0 {
-		log.Warn("StaticIP is deprecated. Use StaticIPs instead")
-		if ip := net.ParseIP(config.StaticIP); ip != nil {
 			staticIPs = append(staticIPs, ip)
 		}
 	}

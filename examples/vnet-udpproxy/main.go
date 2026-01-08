@@ -31,7 +31,7 @@ func main() { //nolint:cyclop
 
 	// Create a network and add to router, for example, for client.
 	clientNetwork, err := vnet.NewNet(&vnet.NetConfig{
-		StaticIP: "10.0.0.11",
+		StaticIPs: []string{"10.0.0.11"},
 	})
 	if err != nil {
 		panic(err)

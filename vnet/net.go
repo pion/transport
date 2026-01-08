@@ -590,9 +590,6 @@ type NetConfig struct {
 	// If no static IP address is given, the router will automatically assign
 	// an IP address.
 	StaticIPs []string
-
-	// StaticIP is deprecated. Use StaticIPs.
-	StaticIP string
 }
 
 // NewNet creates an instance of a virtual network.
@@ -624,11 +621,6 @@ func NewNet(config *NetConfig) (*Net, error) {
 	var staticIPs []net.IP
 	for _, ipStr := range config.StaticIPs {
 		if ip := net.ParseIP(ipStr); ip != nil {
-			staticIPs = append(staticIPs, ip)
-		}
-	}
-	if len(config.StaticIP) > 0 {
-		if ip := net.ParseIP(config.StaticIP); ip != nil {
 			staticIPs = append(staticIPs, ip)
 		}
 	}

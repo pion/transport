@@ -46,7 +46,7 @@ func TestDuplicationFilterDuplicates(t *testing.T) {
 		}
 	}
 
-	dupFilter, err := NewDuplicationFilterWithOptions(
+	dupFilter, err := NewDuplicationFilter(
 		router,
 		WithDuplicationProbability(1.0),
 		WithDuplicationExtraDelay(20*time.Millisecond, 20*time.Millisecond),
@@ -101,32 +101,32 @@ func TestDuplicationFilterConfigValidation(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	_, err = NewDuplicationFilterWithOptions(router, WithDuplicationProbability(-0.1))
+	_, err = NewDuplicationFilter(router, WithDuplicationProbability(-0.1))
 	assert.ErrorIs(t, err, errInvalidDuplicationProbability)
-	_, err = NewDuplicationFilterWithOptions(router, WithDuplicationProbability(1.1))
+	_, err = NewDuplicationFilter(router, WithDuplicationProbability(1.1))
 	assert.ErrorIs(t, err, errInvalidDuplicationProbability)
 
-	_, err = NewDuplicationFilterWithOptions(router, WithDuplicationBurstProbability(1.5))
+	_, err = NewDuplicationFilter(router, WithDuplicationBurstProbability(1.5))
 	assert.ErrorIs(t, err, errInvalidDuplicationBurstProbability)
-	_, err = NewDuplicationFilterWithOptions(router, WithDuplicationBurstProbability(-0.1))
+	_, err = NewDuplicationFilter(router, WithDuplicationBurstProbability(-0.1))
 	assert.ErrorIs(t, err, errInvalidDuplicationBurstProbability)
 
-	_, err = NewDuplicationFilterWithOptions(router, WithDuplicationExtraDelay(time.Millisecond, -time.Millisecond))
+	_, err = NewDuplicationFilter(router, WithDuplicationExtraDelay(time.Millisecond, -time.Millisecond))
 	assert.ErrorIs(t, err, errInvalidDuplicationDelayRange)
 
-	_, err = NewDuplicationFilterWithOptions(router, WithDuplicationExtraDelay(-time.Millisecond, time.Millisecond))
+	_, err = NewDuplicationFilter(router, WithDuplicationExtraDelay(-time.Millisecond, time.Millisecond))
 	assert.ErrorIs(t, err, errInvalidDuplicationDelayRange)
 
-	_, err = NewDuplicationFilterWithOptions(router, WithDuplicationExtraDelay(time.Millisecond, time.Millisecond-1))
+	_, err = NewDuplicationFilter(router, WithDuplicationExtraDelay(time.Millisecond, time.Millisecond-1))
 	assert.ErrorIs(t, err, errInvalidDuplicationDelayRange)
 
-	_, err = NewDuplicationFilterWithOptions(router, WithDuplicationBurstDuration(-1))
+	_, err = NewDuplicationFilter(router, WithDuplicationBurstDuration(-1))
 	assert.ErrorIs(t, err, errInvalidDuplicationBurstDuration)
 
-	_, err = NewDuplicationFilterWithOptions(router, WithDuplicationBurstMultiplier(0.5))
+	_, err = NewDuplicationFilter(router, WithDuplicationBurstMultiplier(0.5))
 	assert.ErrorIs(t, err, errInvalidDuplicationBurstMultiplier)
 
-	_, err = NewDuplicationFilterWithOptions(nil, WithDuplicationProbability(0.5))
+	_, err = NewDuplicationFilter(nil, WithDuplicationProbability(0.5))
 	assert.ErrorIs(t, err, errInvalidDuplicationRouter)
 }
 
@@ -222,7 +222,7 @@ func TestDuplicationImmediateOption(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	filter, err := NewDuplicationFilterWithOptions(
+	filter, err := NewDuplicationFilter(
 		router,
 		WithDuplicationProbability(1.0),
 		WithDuplicationImmediate(),
@@ -242,7 +242,7 @@ func TestDuplicationFilterClosedSkipsDuplication(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	filter, err := NewDuplicationFilterWithOptions(
+	filter, err := NewDuplicationFilter(
 		router,
 		WithDuplicationProbability(1.0),
 		WithDuplicationExtraDelay(1*time.Millisecond, 1*time.Millisecond),
@@ -263,7 +263,7 @@ func TestDuplicationDelayRangeInclusive(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	filter, err := NewDuplicationFilterWithOptions(
+	filter, err := NewDuplicationFilter(
 		router,
 		WithDuplicationProbability(1.0),
 		WithDuplicationExtraDelay(0, 1*time.Nanosecond),
@@ -323,7 +323,7 @@ func TestDuplicationFilterZeroDelayNoLoop(t *testing.T) {
 		}
 	}
 
-	dupFilter, err := NewDuplicationFilterWithOptions(
+	dupFilter, err := NewDuplicationFilter(
 		router,
 		WithDuplicationProbability(1.0),
 		WithDuplicationExtraDelay(0, 0),
@@ -388,9 +388,9 @@ func TestDuplicationFilterBurstMultiplier(t *testing.T) {
 		WithDuplicationExtraDelay(0, 0),
 	}
 
-	baseline, err := NewDuplicationFilterWithOptions(router, append(baseOpts, WithDuplicationBurstMultiplier(1))...)
+	baseline, err := NewDuplicationFilter(router, append(baseOpts, WithDuplicationBurstMultiplier(1))...)
 	assert.NoError(t, err)
-	boosted, err := NewDuplicationFilterWithOptions(router, append(baseOpts, WithDuplicationBurstMultiplier(5))...)
+	boosted, err := NewDuplicationFilter(router, append(baseOpts, WithDuplicationBurstMultiplier(5))...)
 	assert.NoError(t, err)
 
 	now := time.Now()
@@ -441,7 +441,7 @@ func TestDuplicationFilterCloseCancelsPending(t *testing.T) {
 		}
 	}
 
-	dupFilter, err := NewDuplicationFilterWithOptions(
+	dupFilter, err := NewDuplicationFilter(
 		router,
 		WithDuplicationProbability(1.0),
 		WithDuplicationExtraDelay(100*time.Millisecond, 100*time.Millisecond),
@@ -491,7 +491,7 @@ func TestDuplicationFilterProbabilityLongRun(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	filter, err := NewDuplicationFilterWithOptions(
+	filter, err := NewDuplicationFilter(
 		router,
 		WithDuplicationProbability(0.3),
 		WithDuplicationExtraDelay(0, 0),
@@ -544,7 +544,7 @@ func TestDuplicationFilterBucketCoalescing(t *testing.T) { //nolint:cyclop
 		}
 	}
 
-	dupFilter, err := NewDuplicationFilterWithOptions(
+	dupFilter, err := NewDuplicationFilter(
 		router,
 		WithDuplicationProbability(1.0),
 		WithDuplicationExtraDelay(500*time.Microsecond, 500*time.Microsecond),
@@ -627,7 +627,7 @@ func TestDuplicationFilterBurstStartSetsWindow(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	filter, err := NewDuplicationFilterWithOptions(
+	filter, err := NewDuplicationFilter(
 		router,
 		WithDuplicationProbability(0.0),
 		WithDuplicationBurstProbability(1.0),
@@ -655,7 +655,7 @@ func TestDuplicationFilterOnBucketFiredClosedCleans(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	filter, err := NewDuplicationFilterWithOptions(
+	filter, err := NewDuplicationFilter(
 		router,
 		WithDuplicationProbability(0.0),
 		WithDuplicationExtraDelay(0, 0),
@@ -692,7 +692,7 @@ func TestDuplicationFilterScheduleDuplicateClosedNoop(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	filter, err := NewDuplicationFilterWithOptions(
+	filter, err := NewDuplicationFilter(
 		router,
 		WithDuplicationProbability(1.0),
 		WithDuplicationExtraDelay(1*time.Millisecond, 1*time.Millisecond),
@@ -724,7 +724,7 @@ func TestNewDuplicationFilter_NilOptionIgnored(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	filter, err := NewDuplicationFilterWithOptions(
+	filter, err := NewDuplicationFilter(
 		router,
 		WithDuplicationProbability(1.0),
 		// should be ignored.
@@ -754,7 +754,7 @@ func TestNewDuplicationFilter_ValidateCalledOnOptions(t *testing.T) {
 		return nil
 	}
 
-	_, err = NewDuplicationFilterWithOptions(
+	_, err = NewDuplicationFilter(
 		router,
 		WithDuplicationProbability(0.5),
 		DuplicationOption(invalidNoReturn),
@@ -789,7 +789,7 @@ func TestDuplicationFilterBurstImmediateAppliesMultiplier(t *testing.T) {
 	// so duplication should occur on the same call where the burst starts.
 	const mult = 2.0
 
-	filter, err := NewDuplicationFilterWithOptions(
+	filter, err := NewDuplicationFilter(
 		router,
 		WithDuplicationProbability(baseProb),
 		WithDuplicationBurstProbability(1.0),
@@ -833,7 +833,7 @@ func TestDuplicationFilterBurstBoundaryEqualityNotInBurst(t *testing.T) {
 		baseProb = 0
 	}
 
-	filter, err := NewDuplicationFilterWithOptions(
+	filter, err := NewDuplicationFilter(
 		router,
 		WithDuplicationProbability(baseProb),
 		WithDuplicationBurstProbability(1.0),

@@ -18,7 +18,7 @@ type TimestampedChunk struct {
 func initTest(t *testing.T) (*DelayFilter, chan TimestampedChunk) {
 	t.Helper()
 	nic := newMockNIC(t)
-	delayFilter, err := NewDelayFilter(nic, 0)
+	delayFilter, err := NewDelayFilter(nic, WithDelay(0))
 	if !assert.NoError(t, err, "should succeed") {
 		return nil, nil
 	}
@@ -170,5 +170,27 @@ func TestDelayFilter(t *testing.T) {
 		scheduleManyPackets(t, delayFilter, receiveCh, 50*time.Millisecond, 100)
 		scheduleManyPackets(t, delayFilter, receiveCh, 10*time.Millisecond, 100)
 		assert.NoError(t, delayFilter.Close())
+	})
+}
+
+func TestNewDelayFilterOptions(t *testing.T) {
+	t.Run("invalid delay", func(t *testing.T) {
+		nic := newMockNIC(t)
+		_, err := NewDelayFilter(nic, WithDelay(-time.Millisecond))
+		assert.ErrorIs(t, err, ErrInvalidDelay)
+	})
+
+	t.Run("nil option ignored", func(t *testing.T) {
+		nic := newMockNIC(t)
+		filter, err := NewDelayFilter(nic, nil, WithDelay(0))
+		assert.NoError(t, err)
+		assert.NoError(t, filter.Close())
+	})
+
+	t.Run("default delay zero", func(t *testing.T) {
+		nic := newMockNIC(t)
+		filter, err := NewDelayFilter(nic)
+		assert.NoError(t, err)
+		assert.NoError(t, filter.Close())
 	})
 }

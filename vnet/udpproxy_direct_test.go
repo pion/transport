@@ -88,7 +88,7 @@ func TestUDPProxyDirectDeliverTypical(t *testing.T) { //nolint:cyclop
 			}
 
 			clientNetwork, err := NewNet(&NetConfig{
-				StaticIP: "10.0.0.11",
+				StaticIPs: []string{"10.0.0.11"},
 			})
 			if err != nil {
 				return err
@@ -243,7 +243,7 @@ func TestUDPProxyDirectDeliverBadCase(t *testing.T) { //nolint:cyclop
 			}
 
 			clientNetwork, err := NewNet(&NetConfig{
-				StaticIP: "10.0.0.11",
+				StaticIPs: []string{"10.0.0.11"},
 			})
 			if err != nil {
 				return err
