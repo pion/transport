@@ -14,7 +14,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/pion/transport/v3"
+	"github.com/pion/transport/v4"
 )
 
 const (
