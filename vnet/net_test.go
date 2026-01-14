@@ -6,8 +6,10 @@ package vnet
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/pion/logging"
 	"github.com/pion/transport/v4"
@@ -176,7 +178,7 @@ func TestNetVirtual(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 		}
 	})
 
-	t.Run("assignPort()", func(t *testing.T) {
+	t.Run("assignUDPPort()", func(t *testing.T) {
 		nw, err := NewNet(&NetConfig{})
 		if !assert.NoError(t, err, "should succeed") {
 			return
@@ -201,11 +203,11 @@ func TestNetVirtual(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 		})
 
 		// attempt to assign port with start > end should fail
-		_, err = nw.assignPort(net.ParseIP(addr), 3000, 2999)
+		_, err = nw.assignUDPPort(net.ParseIP(addr), 3000, 2999)
 		assert.NotNil(t, err, "should fail")
 
 		for i := 0; i < space; i++ {
-			port, err2 := nw.assignPort(net.ParseIP(addr), start, end)
+			port, err2 := nw.assignUDPPort(net.ParseIP(addr), start, end)
 			assert.NoError(t, err2, "should succeed")
 			log.Debugf("[%d] got port: %d", i, port)
 
@@ -221,8 +223,48 @@ func TestNetVirtual(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 		assert.Equal(t, space, nw.udpConns.size(), "should match")
 
 		// attempt to assign again should fail
-		_, err = nw.assignPort(net.ParseIP(addr), start, end)
+		_, err = nw.assignUDPPort(net.ParseIP(addr), start, end)
 		assert.NotNil(t, err, "should fail")
+	})
+
+	t.Run("Port allocation independent for UDP/TCP", func(t *testing.T) {
+		nw, err := NewNet(&NetConfig{})
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+
+		ip := net.ParseIP("127.0.0.1")
+
+		// If TCP is already using a port, UDP allocation should still be able to pick it.
+		tcpL, err := nw.ListenTCP(tcp, &net.TCPAddr{IP: ip, Port: 5010})
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+		defer func() { _ = tcpL.Close() }()
+
+		udpPort, err := nw.assignUDPPort(ip, 5010, 5010)
+		assert.NoError(t, err, "should succeed")
+		assert.Equal(t, 5010, udpPort, "should match")
+
+		assert.NoError(t, tcpL.Close(), "should succeed")
+
+		// If UDP is already using a port, TCP allocation should still be able to pick it.
+		udpC, err := nw.ListenPacket(udp, "127.0.0.1:5011")
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+		defer func() { _ = udpC.Close() }()
+
+		tcpPort, err := nw.assignTCPPort(ip, 5011, 5011)
+		assert.NoError(t, err, "should succeed")
+		assert.Equal(t, 5011, tcpPort, "should match")
+
+		// And explicit binds should also be independent.
+		tcpL2, err := nw.ListenTCP(tcp, &net.TCPAddr{IP: ip, Port: 5011})
+		assert.NoError(t, err, "should succeed")
+		if tcpL2 != nil {
+			_ = tcpL2.Close()
+		}
 	})
 
 	t.Run("determineSourceIP()", func(t *testing.T) {
@@ -283,6 +325,20 @@ func TestNetVirtual(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 		assert.Equal(t, 1234, udpAddr.Port, "should match")
 	})
 
+	t.Run("ResolveTCPAddr", func(t *testing.T) {
+		nw, err := NewNet(&NetConfig{})
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+
+		tcpAddr, err := nw.ResolveTCPAddr(tcp, "localhost:1234")
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+		assert.Equal(t, "127.0.0.1", tcpAddr.IP.String(), "should match")
+		assert.Equal(t, 1234, tcpAddr.Port, "should match")
+	})
+
 	t.Run("UDPLoopback", func(t *testing.T) {
 		nw, err := NewNet(&NetConfig{})
 		if !assert.NoError(t, err, "should succeed") {
@@ -307,6 +363,101 @@ func TestNetVirtual(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 		assert.Equal(t, 1, nw.udpConns.size(), "should match")
 		assert.NoError(t, conn.Close(), "should succeed")
 		assert.Empty(t, nw.udpConns.size(), "should match")
+	})
+
+	t.Run("TCPLoopback", func(t *testing.T) {
+		nw, err := NewNet(&NetConfig{})
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+
+		listener, err := nw.ListenTCP(tcp, &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+		defer func() { _ = listener.Close() }()
+		_ = listener.SetDeadline(time.Now().Add(2 * time.Second))
+
+		acceptedCh := make(chan net.Conn, 1)
+		go func() {
+			c, err2 := listener.Accept()
+			if err2 != nil {
+				close(acceptedCh)
+
+				return
+			}
+			acceptedCh <- c
+		}()
+
+		client, err := nw.Dial(tcp, listener.Addr().String())
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+		defer func() { _ = client.Close() }()
+
+		var server net.Conn
+		select {
+		case server = <-acceptedCh:
+		case <-time.After(2 * time.Second):
+			assert.Fail(t, "accept timed out")
+
+			return
+		}
+		if !assert.NotNil(t, server, "should accept") {
+			return
+		}
+		defer func() { _ = server.Close() }()
+
+		_ = client.SetDeadline(time.Now().Add(2 * time.Second))
+		_ = server.SetDeadline(time.Now().Add(2 * time.Second))
+
+		msg := "PING!"
+
+		serverReadDone := make(chan error, 1)
+		go func() {
+			buf := make([]byte, len(msg))
+			_, err2 := io.ReadFull(server, buf)
+			if err2 == nil && string(buf) != msg {
+				err2 = fmt.Errorf("unexpected payload: %q", string(buf)) // nolint:err113
+			}
+			serverReadDone <- err2
+		}()
+
+		n, err := client.Write([]byte(msg))
+		assert.NoError(t, err, "should succeed")
+		assert.Equal(t, len(msg), n, "should match")
+
+		select {
+		case err2 := <-serverReadDone:
+			assert.NoError(t, err2, "should succeed")
+		case <-time.After(2 * time.Second):
+			assert.Fail(t, "server read timed out")
+
+			return
+		}
+
+		clientReadDone := make(chan error, 1)
+		go func() {
+			buf := make([]byte, len(msg))
+			_, err2 := io.ReadFull(client, buf)
+			if err2 == nil && string(buf) != msg {
+				err2 = fmt.Errorf("unexpected payload: %q", string(buf)) // nolint:err113
+			}
+			clientReadDone <- err2
+		}()
+
+		n, err = server.Write([]byte(msg))
+		assert.NoError(t, err, "should succeed")
+		assert.Equal(t, len(msg), n, "should match")
+
+		select {
+		case err2 := <-clientReadDone:
+			assert.NoError(t, err2, "should succeed")
+		case <-time.After(2 * time.Second):
+			assert.Fail(t, "client read timed out")
+
+			return
+		}
 	})
 
 	t.Run("ListenPacket random port", func(t *testing.T) {
@@ -407,6 +558,57 @@ func TestNetVirtual(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 		assert.Empty(t, nw.udpConns.size(), "should match")
 	})
 
+	t.Run("Dial (TCP) lo0", func(t *testing.T) {
+		nw, err := NewNet(&NetConfig{})
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+
+		listener, err := nw.ListenTCP(tcp, &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 1234})
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+		defer func() { _ = listener.Close() }()
+		_ = listener.SetDeadline(time.Now().Add(2 * time.Second))
+
+		acceptedCh := make(chan net.Conn, 1)
+		go func() {
+			c, err2 := listener.Accept()
+			if err2 != nil {
+				close(acceptedCh)
+
+				return
+			}
+			acceptedCh <- c
+		}()
+
+		conn, err := nw.Dial(tcp, "127.0.0.1:1234")
+		assert.NoError(t, err, "should succeed")
+		defer func() { _ = conn.Close() }()
+
+		var server net.Conn
+		select {
+		case server = <-acceptedCh:
+		case <-time.After(2 * time.Second):
+			assert.Fail(t, "accept timed out")
+
+			return
+		}
+		if server != nil {
+			_ = server.Close()
+		}
+
+		laddr := conn.LocalAddr()
+		log.Debugf("laddr: %s", laddr.String())
+
+		raddr := conn.RemoteAddr()
+		log.Debugf("raddr: %s", raddr.String())
+
+		assert.Equal(t, "127.0.0.1", laddr.(*net.TCPAddr).IP.String(), "should match") //nolint:forcetypeassert
+		assert.True(t, laddr.(*net.TCPAddr).Port != 0, "should match")                 //nolint:forcetypeassert
+		assert.Equal(t, "127.0.0.1:1234", raddr.String(), "should match")
+	})
+
 	t.Run("Dial (UDP) eth0", func(t *testing.T) {
 		wan, err := NewRouter(&RouterConfig{
 			CIDR:          "1.2.3.0/24",
@@ -436,6 +638,80 @@ func TestNetVirtual(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 		assert.Equal(t, 1, nw.udpConns.size(), "should match")
 		assert.NoError(t, conn.Close(), "should succeed")
 		assert.Empty(t, nw.udpConns.size(), "should match")
+	})
+
+	t.Run("Dial (TCP) eth0", func(t *testing.T) {
+		wan, err := NewRouter(&RouterConfig{
+			CIDR:          "1.2.3.0/24",
+			LoggerFactory: loggerFactory,
+		})
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+
+		net1, err := NewNet(&NetConfig{})
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+		assert.NoError(t, wan.AddNet(net1), "should succeed")
+		ip1, err := getIPAddr(net1)
+		assert.NoError(t, err, "should succeed")
+
+		net2, err := NewNet(&NetConfig{})
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+		assert.NoError(t, wan.AddNet(net2), "should succeed")
+		ip2, err := getIPAddr(net2)
+		assert.NoError(t, err, "should succeed")
+
+		assert.NoError(t, wan.Start(), "should succeed")
+		defer func() { _ = wan.Stop() }()
+
+		listener, err := net2.ListenTCP(tcp, &net.TCPAddr{IP: net.ParseIP(ip2), Port: 0})
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+		defer func() { _ = listener.Close() }()
+		_ = listener.SetDeadline(time.Now().Add(2 * time.Second))
+
+		acceptedCh := make(chan net.Conn, 1)
+		go func() {
+			c, err2 := listener.Accept()
+			if err2 != nil {
+				close(acceptedCh)
+
+				return
+			}
+			acceptedCh <- c
+		}()
+
+		conn, err := net1.Dial(tcp, listener.Addr().String())
+		assert.NoError(t, err, "should succeed")
+		defer func() { _ = conn.Close() }()
+
+		var server net.Conn
+		select {
+		case server = <-acceptedCh:
+		case <-time.After(2 * time.Second):
+			assert.Fail(t, "accept timed out")
+
+			return
+		}
+		if server != nil {
+			_ = server.Close()
+		}
+
+		laddr := conn.LocalAddr()
+		log.Debugf("laddr: %s", laddr.String())
+
+		raddr := conn.RemoteAddr()
+		log.Debugf("raddr: %s", raddr.String())
+
+		assert.Equal(t, ip1, laddr.(*net.TCPAddr).IP.String(), "should match") //nolint:forcetypeassert
+		assert.True(t, laddr.(*net.TCPAddr).Port != 0, "should match")         //nolint:forcetypeassert
+		listenerPort := listener.Addr().(*net.TCPAddr).Port                    // nolint:forcetypeassert
+		assert.Equal(t, fmt.Sprintf("%s:%d", ip2, listenerPort), raddr.String(), "should match")
 	})
 
 	t.Run("DialUDP", func(t *testing.T) {
@@ -711,18 +987,67 @@ func TestNetVirtual(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 		assert.Empty(t, nw.udpConns.size(), "should match")
 	})
 
+	t.Run("Dialer (TCP)", func(t *testing.T) {
+		nw, err := NewNet(&NetConfig{})
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+
+		listener, err := nw.ListenTCP(tcp, &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+		defer func() { _ = listener.Close() }()
+		_ = listener.SetDeadline(time.Now().Add(2 * time.Second))
+
+		acceptedCh := make(chan net.Conn, 1)
+		go func() {
+			c, err2 := listener.Accept()
+			if err2 != nil {
+				close(acceptedCh)
+
+				return
+			}
+			acceptedCh <- c
+		}()
+
+		dialer := nw.CreateDialer(&net.Dialer{
+			LocalAddr: &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0},
+		})
+
+		conn, err := dialer.Dial(tcp, listener.Addr().String())
+		assert.NoError(t, err, "should succeed")
+		defer func() { _ = conn.Close() }()
+
+		var server net.Conn
+		select {
+		case server = <-acceptedCh:
+		case <-time.After(2 * time.Second):
+			assert.Fail(t, "accept timed out")
+
+			return
+		}
+		if server != nil {
+			_ = server.Close()
+		}
+
+		laddr := conn.LocalAddr()
+		assert.Equal(t, "127.0.0.1", laddr.(*net.TCPAddr).IP.String(), "should match") //nolint:forcetypeassert
+		assert.True(t, laddr.(*net.TCPAddr).Port != 0, "should match")                 //nolint:forcetypeassert
+	})
+
 	t.Run("Listen", func(t *testing.T) {
 		nw, err := NewNet(&NetConfig{})
 		assert.Nil(t, err, "should succeed")
 
 		listenConfig := nw.CreateListenConfig(&net.ListenConfig{})
-		listener, err := listenConfig.Listen(context.Background(), "tcp4", "127.0.0.1:1234")
+		listener, err := listenConfig.Listen(context.Background(), tcp4, "127.0.0.1:1234")
 		assert.NoError(t, err, "should succeed")
 
 		laddr := listener.Addr()
 		log.Debugf("laddr: %s", laddr.String())
 
-		conn, err := net.Dial("tcp4", "127.0.0.1:1234") //nolint:noctx
+		conn, err := net.Dial(tcp4, "127.0.0.1:1234") //nolint:noctx
 		assert.NoError(t, err, "should succeed")
 
 		raddr := conn.RemoteAddr()
