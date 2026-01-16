@@ -21,6 +21,8 @@ const (
 	lo0String = "lo0String"
 	udp       = "udp"
 	udp4      = "udp4"
+	tcp       = "tcp"
+	tcp4      = "tcp4"
 )
 
 var (
@@ -48,11 +50,13 @@ func newMACAddress() net.HardwareAddr {
 // Net represents a local network stack equivalent to a set of layers from NIC
 // up to the transport (UDP / TCP) layer.
 type Net struct {
-	interfaces []*transport.Interface // read-only
-	staticIPs  []net.IP               // read-only
-	router     *Router                // read-only
-	udpConns   *udpConnMap            // read-only
-	mutex      sync.RWMutex
+	interfaces   []*transport.Interface // read-only
+	staticIPs    []net.IP               // read-only
+	router       *Router                // read-only
+	udpConns     *udpConnMap            // read-only
+	tcpListeners *tcpListenerMap        // read-only
+	tcpConns     *tcpConnMap            // read-only
+	mutex        sync.RWMutex
 }
 
 // Compile-time assertion.
@@ -199,14 +203,57 @@ func (v *Net) RemoveAddress(ifName string, ip net.IP) error {
 	return nil
 }
 
-func (v *Net) onInboundChunk(c Chunk) {
-	v.mutex.Lock()
-	defer v.mutex.Unlock()
-
-	if c.Network() == udp {
-		if conn, ok := v.udpConns.find(c.DestinationAddr()); ok {
-			conn.onInboundChunk(c)
+func (v *Net) onInboundChunk(chunk Chunk) {
+	switch chunk.Network() {
+	case udp:
+		v.mutex.Lock()
+		conn, ok := v.udpConns.find(chunk.DestinationAddr())
+		v.mutex.Unlock()
+		if ok {
+			conn.onInboundChunk(chunk)
 		}
+
+		return
+
+	case tcp:
+		tcpChunk, ok := chunk.(*chunkTCP)
+		if !ok {
+			return
+		}
+
+		// Lookups must be protected, but handlers may re-enter Net via write().
+		v.mutex.Lock()
+		conn, connOK := v.tcpConns.findByChunk(tcpChunk)
+		if connOK {
+			v.mutex.Unlock()
+			conn.onInboundChunk(tcpChunk)
+
+			return
+		}
+
+		// New connection attempt (SYN)
+		if tcpChunk.flags&tcpSYN != 0 && tcpChunk.flags&tcpACK == 0 {
+			dstAddr := tcpChunk.DestinationAddr().(*net.TCPAddr) //nolint:forcetypeassert
+			l, ok := v.tcpListeners.find(dstAddr)
+			v.mutex.Unlock()
+			if ok {
+				l.onInboundSYN(tcpChunk)
+
+				return
+			}
+		} else {
+			v.mutex.Unlock()
+		}
+
+		// No listener/conn for this tuple; send RST back.
+		dstAddr := tcpChunk.DestinationAddr().(*net.TCPAddr) //nolint:forcetypeassert
+		srcAddr := tcpChunk.SourceAddr().(*net.TCPAddr)      //nolint:forcetypeassert
+		_ = v.write(newChunkTCP(dstAddr, srcAddr, tcpRST))
+
+		return
+
+	default:
+		return
 	}
 }
 
@@ -237,7 +284,7 @@ func (v *Net) _dialUDP(network string, locAddr, remAddr *net.UDPAddr) (transport
 
 	if locAddr.Port == 0 {
 		// choose randomly from the range between 5000 and 5999
-		port, err := v.assignPort(locAddr.IP, 5000, 5999)
+		port, err := v.assignUDPPort(locAddr.IP, 5000, 5999)
 		if err != nil {
 			return nil, &net.OpError{
 				Op:   "listen",
@@ -300,20 +347,38 @@ func (v *Net) DialUDP(network string, locAddr, remAddr *net.UDPAddr) (transport.
 
 // Dial connects to the address on the named network.
 func (v *Net) Dial(network string, address string) (net.Conn, error) {
-	v.mutex.Lock()
-	defer v.mutex.Unlock()
+	switch network {
+	case udp, udp4:
+		remAddr, err := v.ResolveUDPAddr(network, address)
+		if err != nil {
+			return nil, err
+		}
 
-	remAddr, err := v.ResolveUDPAddr(network, address)
-	if err != nil {
-		return nil, err
+		v.mutex.Lock()
+		srcIP := v.determineSourceIP(nil, remAddr.IP)
+		v.mutex.Unlock()
+
+		locAddr := &net.UDPAddr{IP: srcIP, Port: 0}
+
+		return v.DialUDP(network, locAddr, remAddr)
+
+	case tcp, tcp4:
+		remAddr, err := v.ResolveTCPAddr(network, address)
+		if err != nil {
+			return nil, err
+		}
+
+		v.mutex.Lock()
+		srcIP := v.determineSourceIP(nil, remAddr.IP)
+		v.mutex.Unlock()
+
+		locAddr := &net.TCPAddr{IP: srcIP, Port: 0}
+
+		return v.DialTCP(network, locAddr, remAddr)
+
+	default:
+		return nil, fmt.Errorf("%w %s", errUnknownNetwork, network)
 	}
-
-	// Determine source address
-	srcIP := v.determineSourceIP(nil, remAddr.IP)
-
-	locAddr := &net.UDPAddr{IP: srcIP, Port: 0}
-
-	return v._dialUDP(network, locAddr, remAddr)
 }
 
 // ResolveIPAddr returns an address of IP end point.
@@ -376,7 +441,7 @@ func (v *Net) ResolveUDPAddr(network, address string) (*net.UDPAddr, error) {
 
 // ResolveTCPAddr returns an address of TCP end point.
 func (v *Net) ResolveTCPAddr(network, address string) (*net.TCPAddr, error) {
-	if network != udp && network != "udp4" {
+	if network != tcp && network != tcp4 {
 		return nil, fmt.Errorf("%w %s", errUnknownNetwork, network)
 	}
 
@@ -395,17 +460,18 @@ func (v *Net) ResolveTCPAddr(network, address string) (*net.TCPAddr, error) {
 		return nil, errInvalidPortNumber
 	}
 
-	udpAddr := &net.TCPAddr{
+	tcpAddr := &net.TCPAddr{
 		IP:   ipAddr.IP,
 		Zone: ipAddr.Zone,
 		Port: port,
 	}
 
-	return udpAddr, nil
+	return tcpAddr, nil
 }
 
 func (v *Net) write(chunk Chunk) error {
-	if chunk.Network() == udp { //nolint:nestif
+	switch chunk.Network() {
+	case udp:
 		if udp, ok := chunk.(*chunkUDP); ok {
 			if chunk.getDestinationIP().IsLoopback() {
 				if conn, ok := v.udpConns.find(udp.DestinationAddr()); ok {
@@ -417,6 +483,20 @@ func (v *Net) write(chunk Chunk) error {
 		} else {
 			return errUnexpectedTypeSwitchFailure
 		}
+
+	case tcp:
+		if tcp, ok := chunk.(*chunkTCP); ok {
+			if chunk.getDestinationIP().IsLoopback() {
+				v.onInboundChunk(tcp)
+
+				return nil
+			}
+		} else {
+			return errUnexpectedTypeSwitchFailure
+		}
+
+	default:
+		return fmt.Errorf("%w: %s", errUnexpectedNetwork, chunk.Network())
 	}
 
 	if v.router == nil {
@@ -429,9 +509,15 @@ func (v *Net) write(chunk Chunk) error {
 }
 
 func (v *Net) onClosed(addr net.Addr) {
-	if addr.Network() == udp {
+	switch addr.Network() {
+	case udp:
 		//nolint:errcheck
 		v.udpConns.delete(addr) // #nosec
+	case tcp:
+		//nolint:errcheck
+		v.tcpConns.deleteByAddr(addr) // #nosec
+	default:
+		// do nothing
 	}
 }
 
@@ -560,7 +646,7 @@ func (v *Net) allocateLocalAddr(ip net.IP, port int) error {
 }
 
 // caller must hold the mutex.
-func (v *Net) assignPort(ip net.IP, start, end int) (int, error) {
+func (v *Net) assignUDPPort(ip net.IP, start, end int) (int, error) {
 	// choose randomly from the range between start and end (inclusive)
 	if end < start {
 		return -1, errEndPortLessThanStart
@@ -575,6 +661,52 @@ func (v *Net) assignPort(ip net.IP, start, end int) (int, error) {
 		if err == nil {
 			return port, nil
 		}
+	}
+
+	return -1, errPortSpaceExhausted
+}
+
+// caller must hold the mutex.
+func (v *Net) assignTCPListenerPort(ip net.IP, start, end int) (int, error) {
+	if end < start {
+		return -1, errEndPortLessThanStart
+	}
+
+	space := end + 1 - start
+	offset := rand.Intn(space) //nolint:gosec
+	for i := 0; i < space; i++ {
+		port := ((offset + i) % space) + start
+		addr := &net.TCPAddr{IP: ip, Port: port}
+		if _, ok := v.tcpListeners.find(addr); ok {
+			continue
+		}
+
+		return port, nil
+	}
+
+	return -1, errPortSpaceExhausted
+}
+
+// caller must hold the mutex.
+func (v *Net) assignTCPPort(ip net.IP, start, end int) (int, error) {
+	if end < start {
+		return -1, errEndPortLessThanStart
+	}
+
+	space := end + 1 - start
+	offset := rand.Intn(space) //nolint:gosec
+	for i := 0; i < space; i++ {
+		port := ((offset + i) % space) + start
+		// For simplicity, don't reuse a local port if any listener exists on that port.
+		if _, ok := v.tcpListeners.find(&net.TCPAddr{IP: ip, Port: port}); ok {
+			continue
+		}
+		// Also avoid if any connection is already using this local port.
+		if v.tcpConns.portInUse(ip, port) {
+			continue
+		}
+
+		return port, nil
 	}
 
 	return -1, errPortSpaceExhausted
@@ -626,20 +758,128 @@ func NewNet(config *NetConfig) (*Net, error) {
 	}
 
 	return &Net{
-		interfaces: []*transport.Interface{lo0, eth0},
-		staticIPs:  staticIPs,
-		udpConns:   newUDPConnMap(),
+		interfaces:   []*transport.Interface{lo0, eth0},
+		staticIPs:    staticIPs,
+		udpConns:     newUDPConnMap(),
+		tcpListeners: newTCPListenerMap(),
+		tcpConns:     newTCPConnMap(),
 	}, nil
 }
 
 // DialTCP acts like Dial for TCP networks.
-func (v *Net) DialTCP(string, *net.TCPAddr, *net.TCPAddr) (transport.TCPConn, error) {
-	return nil, transport.ErrNotSupported
+func (v *Net) DialTCP(network string, locAddr, remAddr *net.TCPAddr) (transport.TCPConn, error) { //nolint:cyclop
+	if network != tcp && network != tcp4 {
+		return nil, fmt.Errorf("%w: %s", errUnexpectedNetwork, network)
+	}
+
+	if remAddr == nil {
+		return nil, &net.OpError{Op: "dial", Net: network, Addr: nil, Err: errNoRemAddr}
+	}
+	if remAddr.IP == nil {
+		remAddr.IP = net.IPv4zero
+	}
+
+	if locAddr == nil {
+		locAddr = &net.TCPAddr{IP: net.IPv4zero, Port: 0}
+	} else if locAddr.IP == nil {
+		locAddr.IP = net.IPv4zero
+	}
+
+	v.mutex.Lock()
+
+	// determine local IP if unspecified
+	locAddr.IP = v.determineSourceIP(locAddr.IP, remAddr.IP)
+	if locAddr.IP == nil {
+		v.mutex.Unlock()
+
+		return nil, errLocAddr
+	}
+
+	// validate address. do we have that address?
+	if !v.hasIPAddr(locAddr.IP) {
+		v.mutex.Unlock()
+
+		return nil, &net.OpError{Op: "dial", Net: network, Addr: locAddr, Err: fmt.Errorf("bind: %w",
+			errCantAssignRequestedAddr)}
+	}
+
+	if locAddr.Port == 0 {
+		port, err := v.assignTCPPort(locAddr.IP, 5000, 5999)
+		if err != nil {
+			v.mutex.Unlock()
+
+			return nil, &net.OpError{Op: "dial", Net: network, Addr: locAddr, Err: err}
+		}
+		locAddr.Port = port
+	}
+
+	conn, err := newTCPConn(locAddr, remAddr, v, nil)
+	if err != nil {
+		v.mutex.Unlock()
+
+		return nil, err
+	}
+
+	if err := v.tcpConns.insert(conn); err != nil {
+		v.mutex.Unlock()
+
+		return nil, &net.OpError{Op: "dial", Net: network, Addr: locAddr, Err: fmt.Errorf("bind: %w", err)}
+	}
+	v.mutex.Unlock()
+
+	if err := conn.startClientHandshake(); err != nil {
+		_ = v.tcpConns.deleteConn(conn)
+
+		return nil, err
+	}
+
+	if err := conn.waitEstablished(); err != nil {
+		_ = conn.Close()
+
+		return nil, err
+	}
+
+	return conn, nil
 }
 
 // ListenTCP acts like Listen for TCP networks.
-func (v *Net) ListenTCP(string, *net.TCPAddr) (transport.TCPListener, error) {
-	return nil, transport.ErrNotSupported
+func (v *Net) ListenTCP(network string, locAddr *net.TCPAddr) (transport.TCPListener, error) { //nolint:cyclop
+	v.mutex.Lock()
+	defer v.mutex.Unlock()
+
+	if network != tcp && network != tcp4 {
+		return nil, fmt.Errorf("%w: %s", errUnexpectedNetwork, network)
+	}
+
+	if locAddr == nil {
+		locAddr = &net.TCPAddr{IP: net.IPv4zero, Port: 0}
+	} else if locAddr.IP == nil {
+		locAddr.IP = net.IPv4zero
+	}
+
+	if !v.hasIPAddr(locAddr.IP) {
+		return nil, &net.OpError{Op: "listen", Net: network, Addr: locAddr, Err: fmt.Errorf("bind: %w",
+			errCantAssignRequestedAddr)}
+	}
+
+	if locAddr.Port == 0 {
+		port, err := v.assignTCPListenerPort(locAddr.IP, 5000, 5999)
+		if err != nil {
+			return nil, &net.OpError{Op: "listen", Net: network, Addr: locAddr, Err: err}
+		}
+		locAddr.Port = port
+	}
+
+	l, err := newTCPListener(locAddr, v)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := v.tcpListeners.insert(l); err != nil {
+		return nil, &net.OpError{Op: "listen", Net: network, Addr: locAddr, Err: fmt.Errorf("bind: %w", err)}
+	}
+
+	return l, nil
 }
 
 // CreateDialer creates an instance of vnet.Dialer.

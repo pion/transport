@@ -7,7 +7,7 @@ type timeoutError struct {
 	msg string
 }
 
-func newTimeoutError(msg string) error {
+func newTimeoutError(msg string) error { // nolint:unparam
 	return &timeoutError{
 		msg: msg,
 	}

@@ -212,8 +212,8 @@ type chunkTCP struct {
 	destinationPort int
 	flags           tcpFlag // control bits
 	userData        []byte  // only with PSH flag
-	// seq             uint32  // always starts with 0
-	// ack             uint32  // always starts with 0
+	seqNum          uint32  // data sequence (vnet-internal)
+	ackNum          uint32  // ACK for a seqNum (vnet-internal)
 }
 
 func newChunkTCP(srcAddr, dstAddr *net.TCPAddr, flags tcpFlag) *chunkTCP {
@@ -256,15 +256,20 @@ func (c *chunkTCP) Clone() Chunk {
 			timestamp:     c.timestamp,
 			sourceIP:      c.sourceIP,
 			destinationIP: c.destinationIP,
+			tag:           c.tag,
+			duplicate:     c.duplicate,
 		},
 		sourcePort:      c.sourcePort,
 		destinationPort: c.destinationPort,
+		flags:           c.flags,
 		userData:        userData,
+		seqNum:          c.seqNum,
+		ackNum:          c.ackNum,
 	}
 }
 
 func (c *chunkTCP) Network() string {
-	return "tcp"
+	return tcp
 }
 
 func (c *chunkTCP) String() string {

@@ -311,7 +311,7 @@ func TestUDPProxyDirectDeliverBadCase(t *testing.T) { //nolint:cyclop
 			}
 
 			// BadCase: Invalid address, error and ignore.
-			tcpAddr, err := net.ResolveTCPAddr("tcp4", "192.168.1.10:8000")
+			tcpAddr, err := net.ResolveTCPAddr(tcp4, "192.168.1.10:8000")
 			if err != nil {
 				return err
 			}
@@ -321,7 +321,7 @@ func TestUDPProxyDirectDeliverBadCase(t *testing.T) { //nolint:cyclop
 			}
 
 			// BadCase: Invalid target address, ignore.
-			udpAddr, err := net.ResolveUDPAddr("udp4", "10.0.0.12:5788")
+			udpAddr, err := net.ResolveUDPAddr(udp4, "10.0.0.12:5788")
 			if err != nil {
 				return err
 			}

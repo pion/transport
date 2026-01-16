@@ -90,7 +90,7 @@ func TestChunk(t *testing.T) {
 		var chunk Chunk = newChunkTCP(src, dst, tcpSYN)
 		str := chunk.String()
 		log.Debugf("chunk: %s", str)
-		assert.Equal(t, "tcp", chunk.Network(), "should match")
+		assert.Equal(t, tcp, chunk.Network(), "should match")
 		assert.True(t, strings.Contains(str, src.Network()), "should include network type")
 		assert.True(t, strings.Contains(str, src.String()), "should include address")
 		assert.True(t, strings.Contains(str, dst.String()), "should include address")
