@@ -1,6 +1,6 @@
 module github.com/pion/transport/v4
 
-go 1.21
+go 1.24
 
 require (
 	github.com/pion/logging v0.2.4
