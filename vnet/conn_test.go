@@ -265,7 +265,7 @@ func TestUDPConn(t *testing.T) { //nolint:cyclop,maintidx
 			onOnClosed: func(net.Addr) {},
 		}
 
-		for i := 0; i < 1000; i++ { // nolint:staticcheck // (false positive detection)
+		for range 1000 { // nolint:staticcheck // (false positive detection)
 			conn, err = newUDPConn(srcAddr, nil, obs)
 			assert.NoError(t, err, "should succeed")
 

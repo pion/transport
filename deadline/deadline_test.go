@@ -12,8 +12,7 @@ import (
 )
 
 func TestDeadline(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	t.Run("Deadline", func(t *testing.T) {
 		now := time.Now()

@@ -13,10 +13,10 @@ import (
 
 func Control(network, address string, conn syscall.RawConn) error {
 	return conn.Control(func(fd uintptr) {
-		err := unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_REUSEADDR, 1)
+		err := unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_REUSEADDR, 1) //nolint:gosec // GG115
 		if err != nil {
 			return
 		}
-		_ = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_REUSEPORT, 1)
+		_ = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_REUSEPORT, 1) //nolint:gosec // GG115
 	})
 }

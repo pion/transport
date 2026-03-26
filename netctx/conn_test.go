@@ -223,7 +223,7 @@ func BenchmarkBase(b *testing.B) {
 	b.ResetTimer()
 
 	go func(n int) {
-		for i := 0; i < n; i++ {
+		for range n {
 			_, _ = cb.Write(data)
 		}
 		_ = cb.Close()
@@ -266,7 +266,7 @@ func BenchmarkWrite(b *testing.B) {
 
 	go func(n int) {
 		c := NewConn(cb)
-		for i := 0; i < n; i++ {
+		for range n {
 			_, _ = c.WriteContext(context.Background(), data)
 		}
 		_ = cb.Close()
@@ -308,7 +308,7 @@ func BenchmarkRead(b *testing.B) {
 	b.ResetTimer()
 
 	go func(n int) {
-		for i := 0; i < n; i++ {
+		for range n {
 			_, _ = cb.Write(data)
 		}
 		_ = cb.Close()

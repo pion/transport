@@ -155,7 +155,7 @@ func TestRouterStandalone(t *testing.T) { //nolint:cyclop,maintidx
 		nic := make([]*dummyNIC, 2)
 		ip := make([]*net.UDPAddr, 2)
 
-		for i := 0; i < 2; i++ {
+		for i := range 2 {
 			anic, netErr := NewNet(&NetConfig{})
 			if !assert.NoError(t, netErr, "should succeed") {
 				return
@@ -217,7 +217,7 @@ func TestRouterStandalone(t *testing.T) { //nolint:cyclop,maintidx
 		nic := make([]*dummyNIC, 2)
 		ip := make([]*net.UDPAddr, 2)
 
-		for i := 0; i < 2; i++ {
+		for i := range 2 {
 			anic, netErr := NewNet(&NetConfig{})
 			if !assert.NoError(t, netErr, "should succeed") {
 				return
@@ -282,7 +282,7 @@ func TestRouterStandalone(t *testing.T) { //nolint:cyclop,maintidx
 		assert.Nil(t, err, "should succeed")
 
 		// send 3 packets
-		for i := 0; i < 3; i++ {
+		for i := range 3 {
 			c := newChunkUDP(ip[0], ip[1]) //nolint:gosec // ip slice length is 2
 			c.userData = make([]byte, 1)
 			c.userData[0] = byte(i) // 1-byte seq num
@@ -328,7 +328,7 @@ func TestRouterDelay(t *testing.T) {
 			nic := make([]*dummyNIC, 2)
 			ip := make([]*net.UDPAddr, 2)
 
-			for i := 0; i < 2; i++ {
+			for i := range 2 {
 				anic, netErr := NewNet(&NetConfig{})
 				if !assert.NoError(t, netErr, "should succeed") {
 					return
@@ -371,7 +371,7 @@ func TestRouterDelay(t *testing.T) {
 			err = router.Start()
 			assert.Nil(t, err, "should succeed")
 
-			for i := 0; i < nPkts; i++ {
+			for range nPkts {
 				c := newChunkUDP(ip[0], ip[1])
 				router.push(c)
 				time.Sleep(50 * time.Millisecond)

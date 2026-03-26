@@ -39,7 +39,7 @@ func Example_fixedBigInt_SetBit() {
 	bi.Lsh(129)
 	fmt.Println(bi.String())
 
-	for i := 0; i < 256; i++ {
+	for range 256 {
 		bi.Lsh(1)
 		bi.SetBit(0)
 	}

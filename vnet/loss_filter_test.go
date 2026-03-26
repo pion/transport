@@ -84,7 +84,7 @@ func TestLossFilterNoLoss(t *testing.T) {
 		received++
 	}
 
-	for i := 0; i < packets; i++ {
+	for range packets {
 		lossFilter.onInboundChunk(&chunkUDP{})
 	}
 
@@ -105,7 +105,7 @@ func TestLossFilterSomeLoss(t *testing.T) {
 		received++
 	}
 
-	for i := 0; i < packets; i++ {
+	for range packets {
 		lossFilter.onInboundChunk(&chunkUDP{})
 	}
 
@@ -130,7 +130,7 @@ func TestLossFilterLossRateChangeRandomShuffleHandler(t *testing.T) {
 		received++
 	}
 
-	for i := 0; i < packets; i++ {
+	for range packets {
 		lossFilter.onInboundChunk(&chunkUDP{})
 	}
 
@@ -141,7 +141,7 @@ func TestLossFilterLossRateChangeRandomShuffleHandler(t *testing.T) {
 		return
 	}
 	received = 0
-	for i := 0; i < packets; i++ {
+	for range packets {
 		lossFilter.onInboundChunk(&chunkUDP{})
 	}
 
@@ -152,7 +152,7 @@ func TestLossFilterLossRateChangeRandomShuffleHandler(t *testing.T) {
 		return
 	}
 	received = 0
-	for i := 0; i < packets; i++ {
+	for range packets {
 		lossFilter.onInboundChunk(&chunkUDP{})
 	}
 
@@ -176,7 +176,7 @@ func TestLossFilterImmediateLossRateChangeRandomShuffleHandler(t *testing.T) {
 	}
 
 	// send 50 dummy packets to partially fill shuffle block
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		lossFilter.onInboundChunk(&chunkUDP{})
 	}
 
@@ -187,7 +187,7 @@ func TestLossFilterImmediateLossRateChangeRandomShuffleHandler(t *testing.T) {
 	}
 
 	received = 0
-	for i := 0; i < packets; i++ {
+	for range packets {
 		lossFilter.onInboundChunk(&chunkUDP{})
 	}
 
@@ -210,14 +210,14 @@ func TestLossFilterNonImmediateLossRateChangeRandomShuffleHandler(t *testing.T) 
 	}
 
 	// send 50 dummy packets to partially fill shuffle block
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		lossFilter.onInboundChunk(&chunkUDP{})
 	}
 
 	_ = lossFilter.SetLossRate(100, false)
 
 	// the loss rate should not be changed until the shuffle block is full
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		lossFilter.onInboundChunk(&chunkUDP{})
 	}
 
@@ -226,7 +226,7 @@ func TestLossFilterNonImmediateLossRateChangeRandomShuffleHandler(t *testing.T) 
 	received = 0
 
 	// the new loss rate should be applied to this block
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		lossFilter.onInboundChunk(&chunkUDP{})
 	}
 
@@ -252,7 +252,7 @@ func TestLossFilterOptionsPattern(t *testing.T) {
 			received++
 		}
 
-		for i := 0; i < packets; i++ {
+		for range packets {
 			lossFilter.onInboundChunk(&chunkUDP{})
 		}
 
@@ -276,7 +276,7 @@ func TestLossFilterOptionsPattern(t *testing.T) {
 			received++
 		}
 
-		for i := 0; i < packets; i++ {
+		for range packets {
 			lossFilter.onInboundChunk(&chunkUDP{})
 		}
 
@@ -299,7 +299,7 @@ func TestLossFilterOptionsPattern(t *testing.T) {
 			received++
 		}
 
-		for i := 0; i < packets; i++ {
+		for range packets {
 			lossFilter.onInboundChunk(&chunkUDP{})
 		}
 
@@ -322,7 +322,7 @@ func testShuffleRounding(t *testing.T, chance int, blockSize int, expectedReceiv
 		received++
 	}
 
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		lossFilter.onInboundChunk(&chunkUDP{})
 	}
 
@@ -373,7 +373,7 @@ func TestLossFilterResetImmediately(t *testing.T) { //nolint:cyclop
 			return
 		}
 
-		for i := 0; i < 30; i++ {
+		for range 30 {
 			lossFilter.onInboundChunk(&chunkUDP{})
 		}
 		receivedBeforeReset := *received
@@ -383,7 +383,7 @@ func TestLossFilterResetImmediately(t *testing.T) { //nolint:cyclop
 			return
 		}
 
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			lossFilter.onInboundChunk(&chunkUDP{})
 		}
 		receivedAfterReset := *received
@@ -398,7 +398,7 @@ func TestLossFilterResetImmediately(t *testing.T) { //nolint:cyclop
 			return
 		}
 
-		for i := 0; i < 30; i++ {
+		for range 30 {
 			lossFilter.onInboundChunk(&chunkUDP{})
 		}
 		receivedAt30 := *received
@@ -408,7 +408,7 @@ func TestLossFilterResetImmediately(t *testing.T) { //nolint:cyclop
 			return
 		}
 
-		for i := 0; i < 70; i++ {
+		for range 70 {
 			lossFilter.onInboundChunk(&chunkUDP{})
 		}
 		receivedAt100 := *received
@@ -416,7 +416,7 @@ func TestLossFilterResetImmediately(t *testing.T) { //nolint:cyclop
 		assert.GreaterOrEqual(t, receivedAt100, receivedAt30+60)
 		assert.LessOrEqual(t, receivedAt100, receivedAt30+70)
 
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			lossFilter.onInboundChunk(&chunkUDP{})
 		}
 		receivedAt200 := *received
@@ -431,7 +431,7 @@ func TestLossFilterResetImmediately(t *testing.T) { //nolint:cyclop
 			return
 		}
 
-		for i := 0; i < 20; i++ {
+		for range 20 {
 			lossFilter.onInboundChunk(&chunkUDP{})
 		}
 
@@ -440,7 +440,7 @@ func TestLossFilterResetImmediately(t *testing.T) { //nolint:cyclop
 			return
 		}
 
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			lossFilter.onInboundChunk(&chunkUDP{})
 		}
 		receivedAt120 := *received
@@ -450,7 +450,7 @@ func TestLossFilterResetImmediately(t *testing.T) { //nolint:cyclop
 			return
 		}
 
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			lossFilter.onInboundChunk(&chunkUDP{})
 		}
 
@@ -463,7 +463,7 @@ func TestLossFilterResetImmediately(t *testing.T) { //nolint:cyclop
 			return
 		}
 
-		for i := 0; i < 50; i++ {
+		for range 50 {
 			lossFilter.onInboundChunk(&chunkUDP{})
 		}
 
@@ -472,7 +472,7 @@ func TestLossFilterResetImmediately(t *testing.T) { //nolint:cyclop
 			return
 		}
 
-		for i := 0; i < 30; i++ {
+		for range 30 {
 			lossFilter.onInboundChunk(&chunkUDP{})
 		}
 		receivedAt80 := *received
@@ -482,7 +482,7 @@ func TestLossFilterResetImmediately(t *testing.T) { //nolint:cyclop
 			return
 		}
 
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			lossFilter.onInboundChunk(&chunkUDP{})
 		}
 
@@ -556,7 +556,7 @@ func TestLossFilterWithSeed_DeterministicShuffle(t *testing.T) {
 		pattern1 := make([]bool, blockSize)
 		pattern2 := make([]bool, blockSize)
 
-		for i := 0; i < blockSize; i++ {
+		for i := range blockSize {
 			pattern1[i] = filter1.LossFilterHandler.shouldDrop()
 			pattern2[i] = filter2.LossFilterHandler.shouldDrop()
 		}
@@ -579,7 +579,7 @@ func TestLossFilterWithSeed_DeterministicShuffle(t *testing.T) {
 		}
 
 		packets := blockSize * 5
-		for i := 0; i < packets; i++ {
+		for range packets {
 			filter.onInboundChunk(&chunkUDP{})
 		}
 
@@ -606,7 +606,7 @@ func TestLossFilterWithSeed_DeterministicRandom(t *testing.T) {
 		dropped1 := make([]bool, numPackets)
 		dropped2 := make([]bool, numPackets)
 
-		for i := 0; i < numPackets; i++ {
+		for i := range numPackets {
 			dropped1[i] = filter1.LossFilterHandler.shouldDrop()
 			dropped2[i] = filter2.LossFilterHandler.shouldDrop()
 		}
@@ -630,7 +630,7 @@ func TestLossFilterWithSeed_DeterministicRandom(t *testing.T) {
 		dropped1 := make([]bool, numPackets)
 		dropped2 := make([]bool, numPackets)
 
-		for i := 0; i < numPackets; i++ {
+		for i := range numPackets {
 			dropped1[i] = filter1.LossFilterHandler.shouldDrop()
 			dropped2[i] = filter2.LossFilterHandler.shouldDrop()
 		}
@@ -652,7 +652,7 @@ func TestLossFilterWithSeed_DeterministicRandom(t *testing.T) {
 		}
 
 		packets := 10000
-		for i := 0; i < packets; i++ {
+		for range packets {
 			filter.onInboundChunk(&chunkUDP{})
 		}
 
@@ -708,7 +708,7 @@ func TestLossFilterWithSeed_Reproducibility(t *testing.T) {
 		pattern1 := make([]bool, 100)
 		pattern2 := make([]bool, 100)
 
-		for i := 0; i < 100; i++ {
+		for i := range 100 {
 			pattern1[i] = filter1.LossFilterHandler.shouldDrop()
 			pattern2[i] = filter2.LossFilterHandler.shouldDrop()
 		}
@@ -730,7 +730,7 @@ func TestLossFilterSeed_NoSeedRandomization(t *testing.T) {
 			received++
 		}
 
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			filter.onInboundChunk(&chunkUDP{})
 		}
 
@@ -765,7 +765,7 @@ func TestLossFilterOptionValidation(t *testing.T) {
 		assert.NoError(t, err)
 
 		dropped := 0
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			if filter.LossFilterHandler.shouldDrop() {
 				dropped++
 			}
@@ -792,7 +792,7 @@ func TestLossFilterDeterminismProperty(t *testing.T) {
 		sequence1 := make([]bool, sequenceLength)
 		sequence2 := make([]bool, sequenceLength)
 
-		for i := 0; i < sequenceLength; i++ {
+		for i := range sequenceLength {
 			sequence1[i] = filter1.LossFilterHandler.shouldDrop()
 			sequence2[i] = filter2.LossFilterHandler.shouldDrop()
 		}
@@ -817,7 +817,7 @@ func TestLossFilterDeterminismProperty(t *testing.T) {
 		sequence1 := make([]bool, sequenceLength)
 		sequence2 := make([]bool, sequenceLength)
 
-		for i := 0; i < sequenceLength; i++ {
+		for i := range sequenceLength {
 			sequence1[i] = filter1.LossFilterHandler.shouldDrop()
 			sequence2[i] = filter2.LossFilterHandler.shouldDrop()
 		}
@@ -840,7 +840,7 @@ func TestLossFilterDeterminismProperty(t *testing.T) {
 		sequence1 := make([]bool, sequenceLength)
 		sequence2 := make([]bool, sequenceLength)
 
-		for i := 0; i < sequenceLength; i++ {
+		for i := range sequenceLength {
 			sequence1[i] = filter1.LossFilterHandler.shouldDrop()
 			sequence2[i] = filter2.LossFilterHandler.shouldDrop()
 		}
@@ -864,7 +864,7 @@ func TestLossFilterDeterminismProperty(t *testing.T) {
 		sequence1 := make([]bool, sequenceLength)
 		sequence2 := make([]bool, sequenceLength)
 
-		for i := 0; i < sequenceLength; i++ {
+		for i := range sequenceLength {
 			sequence1[i] = filter1.LossFilterHandler.shouldDrop()
 			sequence2[i] = filter2.LossFilterHandler.shouldDrop()
 		}
@@ -887,7 +887,7 @@ func TestLossFilterDeterminismProperty(t *testing.T) {
 		sequence1 := make([]bool, sequenceLength)
 		sequence2 := make([]bool, sequenceLength)
 
-		for i := 0; i < sequenceLength; i++ {
+		for i := range sequenceLength {
 			sequence1[i] = filter1.LossFilterHandler.shouldDrop()
 			sequence2[i] = filter2.LossFilterHandler.shouldDrop()
 		}
@@ -902,7 +902,7 @@ func TestLossFilterBoundaryChances(t *testing.T) {
 		filter, err := NewLossFilter(mnic, 0)
 		assert.NoError(t, err)
 
-		for i := 0; i < 1000; i++ {
+		for range 1000 {
 			assert.False(t, filter.LossFilterHandler.shouldDrop(), "0% chance should never drop")
 		}
 	})
@@ -912,7 +912,7 @@ func TestLossFilterBoundaryChances(t *testing.T) {
 		filter, err := NewLossFilter(mnic, 100)
 		assert.NoError(t, err)
 
-		for i := 0; i < 1000; i++ {
+		for range 1000 {
 			assert.True(t, filter.LossFilterHandler.shouldDrop(), "100% chance should always drop")
 		}
 	})
@@ -922,7 +922,7 @@ func TestLossFilterBoundaryChances(t *testing.T) {
 		filter, err := NewLossFilter(mnic, 0, WithShuffleLossHandler(100))
 		assert.NoError(t, err)
 
-		for i := 0; i < 1000; i++ {
+		for range 1000 {
 			assert.False(t, filter.LossFilterHandler.shouldDrop(), "0% chance should never drop in shuffle mode")
 		}
 	})
@@ -932,7 +932,7 @@ func TestLossFilterBoundaryChances(t *testing.T) {
 		filter, err := NewLossFilter(mnic, 100, WithShuffleLossHandler(100))
 		assert.NoError(t, err)
 
-		for i := 0; i < 1000; i++ {
+		for range 1000 {
 			assert.True(t, filter.LossFilterHandler.shouldDrop(), "100% chance should always drop in shuffle mode")
 		}
 	})
@@ -942,14 +942,14 @@ func TestLossFilterBoundaryChances(t *testing.T) {
 		filter, err := NewLossFilter(mnic, 0, WithLossSeed(42))
 		assert.NoError(t, err)
 
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			assert.False(t, filter.LossFilterHandler.shouldDrop())
 		}
 
 		err = filter.SetLossRate(100, true)
 		assert.NoError(t, err)
 
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			assert.True(t, filter.LossFilterHandler.shouldDrop())
 		}
 	})
@@ -959,14 +959,14 @@ func TestLossFilterBoundaryChances(t *testing.T) {
 		filter, err := NewLossFilter(mnic, 0, WithShuffleLossHandler(50), WithLossSeed(42))
 		assert.NoError(t, err)
 
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			assert.False(t, filter.LossFilterHandler.shouldDrop())
 		}
 
 		err = filter.SetLossRate(100, true)
 		assert.NoError(t, err)
 
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			assert.True(t, filter.LossFilterHandler.shouldDrop())
 		}
 	})
@@ -1025,16 +1025,16 @@ func TestLossFilterConcurrencySmoke(t *testing.T) { //nolint:cyclop
 		const callsPerGoroutine = 1000
 		done := make(chan bool, numGoroutines)
 
-		for i := 0; i < numGoroutines; i++ {
+		for range numGoroutines {
 			go func() {
-				for j := 0; j < callsPerGoroutine; j++ {
+				for range callsPerGoroutine {
 					_ = filter.LossFilterHandler.shouldDrop()
 				}
 				done <- true
 			}()
 		}
 
-		for i := 0; i < numGoroutines; i++ {
+		for range numGoroutines {
 			<-done
 		}
 	})
@@ -1048,16 +1048,16 @@ func TestLossFilterConcurrencySmoke(t *testing.T) { //nolint:cyclop
 		const callsPerGoroutine = 1000
 		done := make(chan bool, numGoroutines)
 
-		for i := 0; i < numGoroutines; i++ {
+		for range numGoroutines {
 			go func() {
-				for j := 0; j < callsPerGoroutine; j++ {
+				for range callsPerGoroutine {
 					_ = filter.LossFilterHandler.shouldDrop()
 				}
 				done <- true
 			}()
 		}
 
-		for i := 0; i < numGoroutines; i++ {
+		for range numGoroutines {
 			<-done
 		}
 	})
@@ -1070,25 +1070,25 @@ func TestLossFilterConcurrencySmoke(t *testing.T) { //nolint:cyclop
 		const numGoroutines = 20
 		done := make(chan bool, numGoroutines)
 
-		for i := 0; i < numGoroutines/2; i++ {
+		for range numGoroutines / 2 {
 			go func() {
-				for j := 0; j < 1000; j++ {
+				for range 1000 {
 					_ = filter.LossFilterHandler.shouldDrop()
 				}
 				done <- true
 			}()
 		}
 
-		for i := 0; i < numGoroutines/2; i++ {
+		for range numGoroutines / 2 {
 			go func() {
-				for j := 0; j < 100; j++ {
+				for j := range 100 {
 					_ = filter.SetLossRate(j%101, false)
 				}
 				done <- true
 			}()
 		}
 
-		for i := 0; i < numGoroutines; i++ {
+		for range numGoroutines {
 			<-done
 		}
 	})
@@ -1104,14 +1104,14 @@ func TestLossFilterNilOptionSkip(t *testing.T) {
 		assert.NotNil(t, filter)
 
 		sequence1 := make([]bool, 50)
-		for i := 0; i < 50; i++ {
+		for i := range 50 {
 			sequence1[i] = filter.LossFilterHandler.shouldDrop()
 		}
 
 		filter2, err := NewLossFilter(mnic, 50, WithLossSeed(seed))
 		assert.NoError(t, err)
 		sequence2 := make([]bool, 50)
-		for i := 0; i < 50; i++ {
+		for i := range 50 {
 			sequence2[i] = filter2.LossFilterHandler.shouldDrop()
 		}
 
@@ -1126,7 +1126,7 @@ func TestLossFilterNilOptionSkip(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, filter)
 
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			_ = filter.LossFilterHandler.shouldDrop()
 		}
 	})
@@ -1141,7 +1141,7 @@ func TestLossFilterNilOptionSkip(t *testing.T) {
 
 		// Verify shuffle mode works
 		dropped := 0
-		for i := 0; i < 50; i++ {
+		for range 50 {
 			if filter.LossFilterHandler.shouldDrop() {
 				dropped++
 			}

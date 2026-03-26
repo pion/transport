@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 
 //go:build !js
-// +build !js
 
 package udp
 
@@ -116,7 +115,7 @@ func TestListenerCloseUnaccepted(t *testing.T) {
 	}).Listen(network, addr)
 	assert.NoError(t, err)
 
-	for i := 0; i < backlog; i++ {
+	for i := range backlog {
 		addr, ok := listener.Addr().(*net.UDPAddr)
 		assert.True(t, ok)
 		conn, err := net.DialUDP(network, nil, addr)
@@ -156,7 +155,6 @@ func TestListenerAcceptFilter(t *testing.T) { //nolint:cyclop
 	}
 
 	for name, testCase := range testCases {
-		testCase := testCase
 		t.Run(name, func(t *testing.T) {
 			network, addr := getConfig()
 			listener, err := (&ListenConfig{
@@ -230,7 +228,7 @@ func TestListenerConcurrent(t *testing.T) { //nolint:cyclop
 	}).Listen(network, addr)
 	assert.NoError(t, err)
 
-	for i := 0; i < backlog+1; i++ {
+	for i := range backlog + 1 {
 		addr, ok := listener.Addr().(*net.UDPAddr)
 		assert.True(t, ok)
 		conn, connErr := net.DialUDP(network, nil, addr)
@@ -242,7 +240,7 @@ func TestListenerConcurrent(t *testing.T) { //nolint:cyclop
 
 	time.Sleep(100 * time.Millisecond) // Wait all packets being processed by readLoop
 
-	for i := 0; i < backlog; i++ {
+	for i := range backlog {
 		conn, connErr := listener.Accept()
 		assert.NoError(t, connErr)
 		b := make([]byte, 1)
@@ -469,7 +467,7 @@ func TestBatchIO(t *testing.T) {
 	cc := 3
 	wgs.Add(cc)
 
-	for i := 0; i < cc; i++ {
+	for i := range cc {
 		sendStr := fmt.Sprintf("hello %d", i)
 		go func() {
 			defer wgs.Done()
@@ -477,7 +475,7 @@ func TestBatchIO(t *testing.T) {
 			client, err := net.DialUDP("udp", nil, raddr)
 			assert.NoError(t, err)
 			defer func() { _ = client.Close() }()
-			for i := 0; i < 1; i++ {
+			for i := range 1 {
 				_, err := client.Write([]byte(sendStr))
 				assert.NoError(t, err)
 				err = client.SetReadDeadline(time.Now().Add(time.Second))

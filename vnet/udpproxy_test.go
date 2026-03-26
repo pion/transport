@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 
 //go:build !wasm
-// +build !wasm
 
 package vnet
 
@@ -214,7 +213,7 @@ func TestUDPProxyOne2One(t *testing.T) { //nolint:gocyclo,cyclop
 				_ = client.Close() // nolint:errcheck
 			}()
 
-			for i := 0; i < 10; i++ {
+			for range 10 {
 				if _, err = client.WriteTo([]byte("Hello"), serverAddr); err != nil {
 					return err
 				}
@@ -370,7 +369,7 @@ func TestUDPProxyTwo2One(t *testing.T) { //nolint:gocyclo,cyclop
 					_ = client.Close()
 				}()
 
-				for i := 0; i < 10; i++ {
+				for range 10 {
 					if _, err := client.WriteTo([]byte(echoData), serverAddr); err != nil { // nolint:govet
 						return err
 					}
@@ -562,7 +561,7 @@ func TestUDPProxyProxyTwice(t *testing.T) { //nolint:gocyclo,cyclop
 					_ = client.Close() // nolint:errcheck
 				}()
 
-				for i := 0; i < 10; i++ {
+				for range 10 {
 					if _, handClientErr = client.WriteTo([]byte(echoData), serverAddr); handClientErr != nil {
 						return handClientErr
 					}

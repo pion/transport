@@ -283,7 +283,7 @@ func TestBridge(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 			}()
 			msgs := make([]string, 0)
 
-			for i := 0; i < 5; i++ {
+			for i := range 5 {
 				msg := fmt.Sprintf("msg%d", i)
 				msgs = append(msgs, msg)
 				n, err := srcConn.Write([]byte(msg))
@@ -299,7 +299,7 @@ func TestBridge(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 
 			assert.Lenf(t, readRes, 2, "[%d] unexpected number of packets", fromID)
 
-			for i := 0; i < 2; i++ {
+			for i := range 2 {
 				ar := <-readRes
 				assert.NoErrorf(t, ar.err, "Test: %d", fromID)
 

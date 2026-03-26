@@ -166,7 +166,7 @@ func TestStressTestUDP(t *testing.T) { //nolint:cyclop
 
 			buf := make([]byte, pktSize)
 			to := conn0.LocalAddr()
-			for i := 0; i < numToSend; i++ {
+			for range numToSend {
 				_, err3 := conn1.WriteTo(buf, to)
 				assert.NoError(t, err3, "should succeed")
 				time.Sleep(10 * time.Millisecond)
@@ -189,7 +189,7 @@ func TestStressTestUDP(t *testing.T) { //nolint:cyclop
 		}
 
 		// Run echo tests concurrently
-		for i := 0; i < 20; i++ {
+		for range 20 {
 			wg.Add(1)
 			go runEchoTest()
 		}

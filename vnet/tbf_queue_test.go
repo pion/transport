@@ -25,7 +25,7 @@ func TestTBFQueue(t *testing.T) {
 		chunk := &chunkUDP{
 			userData: make([]byte, 1500),
 		}
-		for i := 0; i < 20; i++ {
+		for range 20 {
 			q.push(chunk)
 		}
 		assert.Len(t, q.chunks, 15)
@@ -35,12 +35,12 @@ func TestTBFQueue(t *testing.T) {
 		chunk := &chunkUDP{
 			userData: make([]byte, 1500),
 		}
-		for i := 0; i < 15; i++ {
+		for range 15 {
 			queue.push(chunk)
 		}
 		// queue size is 15, burst is 10 so we should be allowed to burst 10
 		// packets immediately
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			assert.Equal(t, chunk, queue.pop())
 		}
 		// But no more than 10
@@ -51,7 +51,7 @@ func TestTBFQueue(t *testing.T) {
 		chunk := &chunkUDP{
 			userData: make([]byte, 1000),
 		}
-		for i := 0; i < 30; i++ {
+		for range 30 {
 			queue.push(chunk)
 		}
 		now := time.Now()
