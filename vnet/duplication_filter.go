@@ -301,7 +301,7 @@ func (f *DuplicationFilter) onBucketFired(key int64) {
 	chunks := bucket.chunks
 	f.mu.Unlock()
 
-	for i := 0; i < len(chunks); i++ {
+	for i := range chunks {
 		f.router.push(chunks[i])
 	}
 }

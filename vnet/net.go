@@ -568,7 +568,7 @@ func (v *Net) assignPort(ip net.IP, start, end int) (int, error) {
 
 	space := end + 1 - start
 	offset := rand.Intn(space) //nolint:gosec
-	for i := 0; i < space; i++ {
+	for i := range space {
 		port := ((offset + i) % space) + start
 
 		err := v.allocateLocalAddr(ip, port)

@@ -17,9 +17,9 @@ func TestXOR(t *testing.T) { //nolint:cyclop
 		if testing.Short() && j > 16 {
 			break
 		}
-		for alignP := 0; alignP < 2; alignP++ {
-			for alignQ := 0; alignQ < 2; alignQ++ {
-				for alignD := 0; alignD < 2; alignD++ {
+		for alignP := range 2 {
+			for alignQ := range 2 {
+				for alignD := range 2 {
 					p := make([]byte, j)[alignP:] //nolint:varnamelen
 					q := make([]byte, j)[alignQ:] //nolint:varnamelen
 					d0 := make([]byte, j+alignD+1)
@@ -32,7 +32,7 @@ func TestXOR(t *testing.T) { //nolint:cyclop
 					assert.NoError(t, err)
 					XorBytes(d1, p, q)
 					n := minInt(p, q)
-					for i := 0; i < n; i++ {
+					for i := range n {
 						d2[i] = p[i] ^ q[i]
 					}
 					assert.Equalf(t, d1, d2, "p: %#v, q: %#v", p, q)
@@ -44,10 +44,7 @@ func TestXOR(t *testing.T) { //nolint:cyclop
 }
 
 func minInt(a, b []byte) int {
-	n := len(a)
-	if len(b) < n {
-		n = len(b)
-	}
+	n := min(len(b), len(a))
 
 	return n
 }

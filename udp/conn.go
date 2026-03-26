@@ -242,7 +242,7 @@ func (l *listener) readBatch(br BatchReader) {
 
 			return
 		}
-		for i := 0; i < n; i++ {
+		for i := range n {
 			l.dispatchMsg(msgs[i].Addr, msgs[i].Buffers[0][:msgs[i].N])
 		}
 	}

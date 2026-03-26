@@ -46,7 +46,7 @@ func scheduleOnePacketAtATime(
 	t.Helper()
 	delayFilter.SetDelay(delay)
 	lastNr := -1
-	for i := 0; i < nrPackets; i++ {
+	for i := range nrPackets {
 		sent := time.Now()
 		delayFilter.onInboundChunk(&chunkUDP{
 			chunkIP:  chunkIP{timestamp: sent},
@@ -82,7 +82,7 @@ func scheduleManyPackets(
 	delayFilter.SetDelay(delay)
 	sent := time.Now()
 
-	for i := 0; i < nrPackets; i++ {
+	for i := range nrPackets {
 		delayFilter.onInboundChunk(&chunkUDP{
 			chunkIP:  chunkIP{timestamp: sent},
 			userData: []byte{byte(i)},
@@ -90,7 +90,7 @@ func scheduleManyPackets(
 	}
 
 	// receive nrPackets chunks with a minimum delay
-	for i := 0; i < nrPackets; i++ {
+	for i := range nrPackets {
 		select {
 		case chunk := <-receiveCh:
 			nr := int(chunk.c.UserData()[0])

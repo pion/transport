@@ -214,10 +214,7 @@ func (b *Buffer) Read(packet []byte) (n int, err error) { //nolint:gocognit,cycl
 			count := int((uint16(n1) << 8) | uint16(n2))
 
 			// determine the number of bytes we'll actually copy
-			copied := count
-			if copied > len(packet) {
-				copied = len(packet)
-			}
+			copied := min(count, len(packet))
 
 			// copy the data
 			if b.head+copied < len(b.data) {

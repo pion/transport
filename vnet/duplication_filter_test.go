@@ -26,7 +26,7 @@ func TestDuplicationFilterDuplicates(t *testing.T) {
 	nic := make([]*dummyNIC, 2)
 	ip := make([]*net.UDPAddr, 2)
 
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		anet, netErr := NewNet(&NetConfig{})
 		assert.NoError(t, netErr)
 
@@ -303,7 +303,7 @@ func TestDuplicationFilterZeroDelayNoLoop(t *testing.T) {
 	nic := make([]*dummyNIC, 2)
 	ip := make([]*net.UDPAddr, 2)
 
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		anet, netErr := NewNet(&NetConfig{})
 		assert.NoError(t, netErr)
 
@@ -421,7 +421,7 @@ func TestDuplicationFilterCloseCancelsPending(t *testing.T) {
 	nic := make([]*dummyNIC, 2)
 	ip := make([]*net.UDPAddr, 2)
 
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		anet, netErr := NewNet(&NetConfig{})
 		assert.NoError(t, netErr)
 
@@ -501,7 +501,7 @@ func TestDuplicationFilterProbabilityLongRun(t *testing.T) {
 
 	const iterations = 50000
 	dupCount := 0
-	for i := 0; i < iterations; i++ {
+	for range iterations {
 		_, dup := filter.shouldDuplicate()
 		if dup {
 			dupCount++
@@ -524,7 +524,7 @@ func TestDuplicationFilterBucketCoalescing(t *testing.T) { //nolint:cyclop
 	nic := make([]*dummyNIC, 2)
 	ip := make([]*net.UDPAddr, 2)
 
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		anet, netErr := NewNet(&NetConfig{})
 		assert.NoError(t, netErr)
 
@@ -571,7 +571,7 @@ func TestDuplicationFilterBucketCoalescing(t *testing.T) { //nolint:cyclop
 		assert.NoError(t, router.Stop())
 	}()
 
-	for i := 0; i < size; i++ {
+	for i := range size {
 		chunk := newChunkUDP(ip[0], ip[1]) //nolint:gosec // ip slice length is 2
 		payload := []byte{byte(i)}
 		chunk.userData = make([]byte, len(payload))
@@ -594,7 +594,7 @@ func TestDuplicationFilterBucketCoalescing(t *testing.T) { //nolint:cyclop
 	}
 
 	var firstDup, lastDup time.Time
-	for i := 0; i < size; i++ {
+	for i := range size {
 		pair := arrivals[i]
 		assert.Len(t, pair, 2, "expected primary and duplicate for index %d", i)
 		primary, duplicate := pair[0].t, pair[1].t

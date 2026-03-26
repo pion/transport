@@ -130,7 +130,7 @@ func newPingPong(size int, interval time.Duration, batchConn BatchPacketConn) *p
 		flushCycleDone: make(chan struct{}),
 		flusherDone:    make(chan struct{}),
 	}
-	for i := 0; i < len(p.batches); i++ {
+	for i := range len(p.batches) {
 		p.batches[i] = newMessageBatch(size, batchConn)
 	}
 

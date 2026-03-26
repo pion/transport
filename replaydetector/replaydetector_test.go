@@ -191,7 +191,6 @@ var commonCases = map[string]testCase{ //nolint:gochecknoglobals
 
 func TestReplayDetector(t *testing.T) {
 	for name, testCase := range commonCases {
-		testCase := testCase
 		t.Run(name, func(t *testing.T) {
 			det := New(testCase.windowSize, testCase.maxSeq)
 			var out []uint64

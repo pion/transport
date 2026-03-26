@@ -238,7 +238,7 @@ func BenchmarkPacketConnBase(b *testing.B) {
 	b.ResetTimer()
 
 	go func(n int) {
-		for i := 0; i < n; i++ {
+		for range n {
 			_, _ = cb.WriteTo(data, nil)
 		}
 		_ = cb.Close()
@@ -281,7 +281,7 @@ func BenchmarkWriteTo(b *testing.B) {
 
 	go func(n int) {
 		c := NewPacketConn(cb)
-		for i := 0; i < n; i++ {
+		for range n {
 			_, _ = c.WriteToContext(context.Background(), data, nil)
 		}
 		_ = cb.Close()
@@ -323,7 +323,7 @@ func BenchmarkReadFrom(b *testing.B) {
 	b.ResetTimer()
 
 	go func(n int) {
-		for i := 0; i < n; i++ {
+		for range n {
 			_, _ = cb.WriteTo(data, nil)
 		}
 		_ = cb.Close()

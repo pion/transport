@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 
 //go:build !wasm
-// +build !wasm
 
 package vnet
 

@@ -340,7 +340,6 @@ func TestBufferLimitSizes(t *testing.T) {
 	const packetSize = 0x8000
 
 	for _, size := range sizes {
-		size := size
 		name := "default"
 		if size > 0 {
 			name = fmt.Sprintf("%dkBytes", size/1024)
@@ -360,7 +359,7 @@ func TestBufferLimitSizes(t *testing.T) {
 
 			nPackets := size / (packetSize + headerSize)
 
-			for i := 0; i < nPackets; i++ {
+			for range nPackets {
 				_, err := buffer.Write(make([]byte, packetSize))
 				assert.NoError(err)
 			}
@@ -370,7 +369,7 @@ func TestBufferLimitSizes(t *testing.T) {
 			assert.Error(err, ErrFull)
 
 			packet := make([]byte, size)
-			for i := 0; i < nPackets; i++ {
+			for range nPackets {
 				n, err := buffer.Read(packet)
 				assert.NoError(err)
 				assert.Equal(packetSize, n)
@@ -422,7 +421,7 @@ func TestBufferAlloc(t *testing.T) {
 			// Create buffers in advance to avoid measuring allocs in NewBuffer()
 			// +1 buffer for warm-up run
 			buffers := make([]*Buffer, 0, nRuns+1)
-			for i := 0; i < nRuns+1; i++ {
+			for range nRuns + 1 {
 				buffers = append(buffers, NewBuffer())
 			}
 			var iBuffer int
@@ -455,7 +454,7 @@ func TestBufferAlloc(t *testing.T) {
 
 				return
 			}
-			for i := 0; i < count; i++ {
+			for range count {
 				if _, err := buffer.Write(packet); err != nil {
 					*errOut = fmt.Errorf("write: %w", err)
 
@@ -485,7 +484,7 @@ func TestBufferAlloc(t *testing.T) {
 
 				return
 			}
-			for i := 0; i < count; i++ {
+			for range count {
 				if _, err := buffer.Write(packet); err != nil {
 					*errOut = fmt.Errorf("write: %w", err)
 
@@ -694,7 +693,7 @@ func TestBufferConcurrentReadWrite(t *testing.T) {
 	allRead := make(chan struct{})
 	readPkts := func(count int) {
 		packet := make([]byte, 4)
-		for i := 0; i < count; i++ {
+		for range count {
 			_, readErr := buffer.Read(packet)
 			if readErr != nil {
 				return
@@ -709,7 +708,7 @@ func TestBufferConcurrentReadWrite(t *testing.T) {
 	go readPkts(numPkts)
 	go readPkts(numPkts / 100)
 
-	for i := 0; i < numPkts; i++ {
+	for range numPkts {
 		_, writeErr := buffer.Write([]byte{2, 3, 4})
 		assert.NoError(writeErr)
 	}

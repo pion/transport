@@ -204,7 +204,7 @@ func TestNetVirtual(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 		_, err = nw.assignPort(net.ParseIP(addr), 3000, 2999)
 		assert.NotNil(t, err, "should fail")
 
-		for i := 0; i < space; i++ {
+		for i := range space {
 			port, err2 := nw.assignPort(net.ParseIP(addr), start, end)
 			assert.NoError(t, err2, "should succeed")
 			log.Debugf("[%d] got port: %d", i, port)

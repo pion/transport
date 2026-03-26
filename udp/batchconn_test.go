@@ -158,7 +158,7 @@ func TestBatchConn_WriteBatchSize(t *testing.T) { //nolint:cyclop
 	// first cycle, write two packets from each client,
 	// should not be able to read any packets
 	wgs.Add(cc)
-	for i := 0; i < cc; i++ {
+	for i := range cc {
 		sendStr := fmt.Sprintf("hello %d", i)
 
 		idx := i
@@ -169,7 +169,7 @@ func TestBatchConn_WriteBatchSize(t *testing.T) { //nolint:cyclop
 			assert.NoError(t, err)
 			clients[idx] = client
 
-			for j := 0; j < 2; j++ {
+			for range 2 {
 				_, err = client.Write([]byte(sendStr))
 				assert.NoError(t, err)
 			}
@@ -189,12 +189,12 @@ func TestBatchConn_WriteBatchSize(t *testing.T) { //nolint:cyclop
 	// should be able to read three packets on average per client
 	// (ordering is not guaranteed due to goroutine scheduling, so just check for a total of 9 packets)
 	wgs.Add(cc * 3)
-	for i := 0; i < cc; i++ {
+	for i := range cc {
 		sendStr := fmt.Sprintf("hello %d", i)
 
 		idx := i
 		go func() {
-			for j := 0; j < 2; j++ {
+			for range 2 {
 				_, err := clients[idx].Write([]byte(sendStr))
 				assert.NoError(t, err)
 			}
@@ -218,7 +218,7 @@ func TestBatchConn_WriteBatchSize(t *testing.T) { //nolint:cyclop
 
 	// should not be able to read any packets as the next batch is not ready yet
 	wgs.Add(cc)
-	for i := 0; i < cc; i++ {
+	for i := range cc {
 		idx := i
 		go func() {
 			defer wgs.Done()
@@ -237,14 +237,14 @@ func TestBatchConn_WriteBatchSize(t *testing.T) { //nolint:cyclop
 	// third cycle, write two packets from each client,
 	// should be able to read three packets on average per client
 	wgs.Add(cc * 3)
-	for i := 0; i < cc; i++ {
+	for i := range cc {
 		sendStr := fmt.Sprintf("hello %d", i)
 
 		idx := i
 		go func() {
 			defer func() { _ = clients[idx].Close() }()
 
-			for j := 0; j < 2; j++ {
+			for range 2 {
 				_, err := clients[idx].Write([]byte(sendStr))
 				assert.NoError(t, err)
 			}

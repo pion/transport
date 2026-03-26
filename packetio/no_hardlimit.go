@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 
 //go:build !packetioSizeHardlimit
-// +build !packetioSizeHardlimit
 
 package packetio
 
