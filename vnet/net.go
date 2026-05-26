@@ -19,8 +19,15 @@ import (
 
 const (
 	lo0String = "lo0String"
+	ip        = "ip"
+	ip4       = "ip4"
+	ip6       = "ip6"
 	udp       = "udp"
 	udp4      = "udp4"
+	udp6      = "udp6"
+	tcp       = "tcp"
+	tcp4      = "tcp4"
+	tcp6      = "tcp6"
 )
 
 var (
@@ -317,8 +324,22 @@ func (v *Net) Dial(network string, address string) (net.Conn, error) {
 }
 
 // ResolveIPAddr returns an address of IP end point.
-func (v *Net) ResolveIPAddr(_, address string) (*net.IPAddr, error) {
+func (v *Net) ResolveIPAddr(network, address string) (*net.IPAddr, error) {
 	var err error
+
+	switch network {
+	case "", ip, ip4, ip6:
+	default:
+		return nil, fmt.Errorf("%w %s", errUnknownNetwork, network)
+	}
+
+	if address == "" {
+		if network == ip6 {
+			return &net.IPAddr{IP: net.IPv6unspecified}, nil
+		}
+
+		return &net.IPAddr{IP: net.IPv4zero}, nil
+	}
 
 	// Check if host is a domain name
 	ip := net.ParseIP(address)
@@ -346,7 +367,13 @@ func (v *Net) ResolveIPAddr(_, address string) (*net.IPAddr, error) {
 
 // ResolveUDPAddr returns an address of UDP end point.
 func (v *Net) ResolveUDPAddr(network, address string) (*net.UDPAddr, error) {
-	if network != udp && network != udp4 {
+	var ipNetwork string
+	switch network {
+	case udp, udp4:
+		ipNetwork = ip4
+	case udp6:
+		ipNetwork = ip6
+	default:
 		return nil, fmt.Errorf("%w %s", errUnknownNetwork, network)
 	}
 
@@ -355,7 +382,7 @@ func (v *Net) ResolveUDPAddr(network, address string) (*net.UDPAddr, error) {
 		return nil, err
 	}
 
-	ipAddress, err := v.ResolveIPAddr("ip", host)
+	ipAddress, err := v.ResolveIPAddr(ipNetwork, host)
 	if err != nil {
 		return nil, err
 	}
@@ -376,7 +403,13 @@ func (v *Net) ResolveUDPAddr(network, address string) (*net.UDPAddr, error) {
 
 // ResolveTCPAddr returns an address of TCP end point.
 func (v *Net) ResolveTCPAddr(network, address string) (*net.TCPAddr, error) {
-	if network != udp && network != "udp4" {
+	var ipNetwork string
+	switch network {
+	case tcp, tcp4:
+		ipNetwork = ip4
+	case tcp6:
+		ipNetwork = ip6
+	default:
 		return nil, fmt.Errorf("%w %s", errUnknownNetwork, network)
 	}
 
@@ -385,7 +418,7 @@ func (v *Net) ResolveTCPAddr(network, address string) (*net.TCPAddr, error) {
 		return nil, err
 	}
 
-	ipAddr, err := v.ResolveIPAddr("ip", host)
+	ipAddr, err := v.ResolveIPAddr(ipNetwork, host)
 	if err != nil {
 		return nil, err
 	}
