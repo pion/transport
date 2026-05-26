@@ -12,6 +12,7 @@ import (
 	"github.com/pion/logging"
 	"github.com/pion/transport/v4"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNetVirtual(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
@@ -280,6 +281,59 @@ func TestNetVirtual(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 			return
 		}
 		assert.Equal(t, "127.0.0.1", udpAddr.IP.String(), "should match")
+		assert.Equal(t, 1234, udpAddr.Port, "should match")
+	})
+
+	t.Run("ResolveEmptyAddr", func(t *testing.T) {
+		nw, err := NewNet(&NetConfig{})
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+
+		wan, err := NewRouter(&RouterConfig{
+			CIDR:          "1.2.3.0/24",
+			LoggerFactory: loggerFactory,
+		})
+		require.NoError(t, err, "should succeed")
+		require.NoError(t, wan.AddNet(nw), "should succeed")
+
+		ipAddr, err := nw.ResolveIPAddr(ip, "")
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+		assert.Equal(t, "0.0.0.0", ipAddr.IP.String(), "should match")
+
+		ipAddr, err = nw.ResolveIPAddr(ip4, "")
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+		assert.Equal(t, "0.0.0.0", ipAddr.IP.String(), "should match")
+
+		ipAddr, err = nw.ResolveIPAddr(ip6, "")
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+		assert.Equal(t, "::", ipAddr.IP.String(), "should match")
+
+		udpAddr, err := nw.ResolveUDPAddr(udp, ":1234")
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+		assert.Equal(t, "0.0.0.0", udpAddr.IP.String(), "should match")
+		assert.Equal(t, 1234, udpAddr.Port, "should match")
+
+		udpAddr, err = nw.ResolveUDPAddr(udp4, ":1234")
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+		assert.Equal(t, "0.0.0.0", udpAddr.IP.String(), "should match")
+		assert.Equal(t, 1234, udpAddr.Port, "should match")
+
+		udpAddr, err = nw.ResolveUDPAddr(udp6, ":1234")
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+		assert.Equal(t, "::", udpAddr.IP.String(), "should match")
 		assert.Equal(t, 1234, udpAddr.Port, "should match")
 	})
 
