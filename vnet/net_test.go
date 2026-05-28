@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/pion/logging"
 	"github.com/pion/transport/v4"
@@ -45,7 +46,7 @@ func TestNetVirtual(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 
 				addrs, err := ifc.Addrs()
 				assert.NoError(t, err, "should succeed")
-				assert.Equal(t, 1, len(addrs), "should be one address")
+				assert.Equal(t, 2, len(addrs), "should have loopback addresses")
 			case "eth0":
 				assert.Equal(t, 2, ifc.Index, "Index mismatch")
 				assert.Equal(t, 1500, ifc.MTU, "MTU mismatch")
@@ -100,7 +101,7 @@ func TestNetVirtual(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 
 			addrs, err2 := ifc.Addrs()
 			assert.NoError(t, err2, "should succeed")
-			assert.Equal(t, 1, len(addrs), "should be one address")
+			assert.Equal(t, 2, len(addrs), "should have loopback addresses")
 		}
 
 		ifc, err = nw.InterfaceByName("eth0")
@@ -144,6 +145,10 @@ func TestNetVirtual(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 
 		assert.True(t, nw.hasIPAddr(net.ParseIP("127.0.0.1")),
 			"the IP addr should exist")
+		assert.True(t, nw.hasIPAddr(net.ParseIP("::1")),
+			"the IP addr should exist")
+		assert.True(t, nw.hasIPAddr(net.IPv6unspecified),
+			"the unspecified IPv6 addr should bind")
 		assert.True(t, nw.hasIPAddr(net.ParseIP("10.1.2.3")),
 			"the IP addr should exist")
 		assert.False(t, nw.hasIPAddr(net.ParseIP("192.168.1.1")),
@@ -175,6 +180,10 @@ func TestNetVirtual(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 		for _, ip := range ips {
 			log.Debugf("ip: %s", ip.String())
 		}
+
+		ips = nw.getAllIPAddrs(true)
+		assert.Equal(t, 1, len(ips), "should match")
+		assert.Equal(t, "::1", ips[0].String(), "should match")
 	})
 
 	t.Run("assignPort()", func(t *testing.T) {
@@ -261,6 +270,14 @@ func TestNetVirtual(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 		assert.NotNil(t, srcIP, "shouldn't be nil")
 		assert.Equal(t, srcIP.String(), "127.0.0.1", "use loopback IP")
 
+		// IPv6 any IP turned into IPv6 loopback IP
+		anyIP = net.IPv6unspecified
+		dstIP = net.IPv6loopback
+		srcIP = nw.determineSourceIP(anyIP, dstIP)
+		log.Debugf("anyIP: %s => %s", anyIP.String(), srcIP.String())
+		assert.NotNil(t, srcIP, "shouldn't be nil")
+		assert.Equal(t, "::1", srcIP.String(), "use IPv6 loopback IP")
+
 		// Non any IP won't change
 		anyIP = net.ParseIP(demoIP)
 		dstIP = net.ParseIP("127.0.0.2")
@@ -281,6 +298,13 @@ func TestNetVirtual(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 			return
 		}
 		assert.Equal(t, "127.0.0.1", udpAddr.IP.String(), "should match")
+		assert.Equal(t, 1234, udpAddr.Port, "should match")
+
+		udpAddr, err = nw.ResolveUDPAddr(udp6, "localhost:1234")
+		if !assert.NoError(t, err, "should succeed") {
+			return
+		}
+		assert.Equal(t, "::1", udpAddr.IP.String(), "should match")
 		assert.Equal(t, 1234, udpAddr.Port, "should match")
 	})
 
@@ -523,6 +547,61 @@ func TestNetVirtual(t *testing.T) { //nolint:gocyclo,cyclop,maintidx
 		assert.Equal(t, 1, nw.udpConns.size(), "should match")
 		assert.NoError(t, conn.Close(), "should succeed")
 		assert.Empty(t, nw.udpConns.size(), "should match")
+	})
+
+	t.Run("UDP6", func(t *testing.T) {
+		nw, err := NewNet(&NetConfig{})
+		require.NoError(t, err, "should succeed")
+
+		packetConn, err := nw.ListenPacket(udp6, ":0")
+		require.NoError(t, err, "should succeed")
+		packetAddr := packetConn.LocalAddr().(*net.UDPAddr) //nolint:forcetypeassert
+		assert.Equal(t, "::", packetAddr.IP.String(), "should match")
+		assert.NoError(t, packetConn.Close(), "should succeed")
+
+		udpConn, err := nw.ListenUDP(udp6, nil)
+		require.NoError(t, err, "should succeed")
+		udpAddr := udpConn.LocalAddr().(*net.UDPAddr) //nolint:forcetypeassert
+		assert.Equal(t, "::", udpAddr.IP.String(), "should match")
+		assert.NoError(t, udpConn.Close(), "should succeed")
+
+		locAddr := &net.UDPAddr{
+			IP: net.IPv6loopback,
+		}
+		remAddr := &net.UDPAddr{
+			IP:   net.IPv6loopback,
+			Port: 1234,
+		}
+		udpConn, err = nw.DialUDP(udp6, locAddr, remAddr)
+		require.NoError(t, err, "should succeed")
+		udpAddr = udpConn.LocalAddr().(*net.UDPAddr) //nolint:forcetypeassert
+		assert.Equal(t, "::1", udpAddr.IP.String(), "should match")
+		assert.NoError(t, udpConn.Close(), "should succeed")
+
+		packetConn, err = nw.ListenPacket(udp6, "[::1]:0")
+		require.NoError(t, err, "should succeed")
+		assert.NoError(t, packetConn.SetReadDeadline(time.Now().Add(time.Second)), "should succeed")
+
+		conn, err := nw.Dial(udp6, packetConn.LocalAddr().String())
+		require.NoError(t, err, "should succeed")
+		localAddr := conn.LocalAddr().(*net.UDPAddr) //nolint:forcetypeassert
+		assert.Equal(t, "::1", localAddr.IP.String(), "should match")
+		assert.Equal(t, packetConn.LocalAddr().String(), conn.RemoteAddr().String(), "should match")
+
+		msg := "PING!"
+		n, err := conn.Write([]byte(msg))
+		assert.NoError(t, err, "should succeed")
+		assert.Equal(t, len(msg), n, "should match")
+
+		buf := make([]byte, 1000)
+		n, addr, err := packetConn.ReadFrom(buf)
+		assert.NoError(t, err, "should succeed")
+		assert.Equal(t, len(msg), n, "should match")
+		assert.Equal(t, msg, string(buf[:n]), "should match")
+		assert.Equal(t, conn.LocalAddr().String(), addr.String(), "should match")
+
+		assert.NoError(t, conn.Close(), "should succeed")
+		assert.NoError(t, packetConn.Close(), "should succeed")
 	})
 
 	t.Run("Resolver", func(t *testing.T) {

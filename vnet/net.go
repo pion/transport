@@ -143,7 +143,11 @@ func (v *Net) getAllIPAddrs(ipv6 bool) []net.IP {
 				continue
 			}
 
-			if !ipv6 {
+			if ipv6 {
+				if ip.To4() == nil {
+					ips = append(ips, ip)
+				}
+			} else {
 				if ip.To4() != nil {
 					ips = append(ips, ip)
 				}
@@ -220,16 +224,18 @@ func (v *Net) onInboundChunk(c Chunk) {
 // caller must hold the mutex.
 func (v *Net) _dialUDP(network string, locAddr, remAddr *net.UDPAddr) (transport.UDPConn, error) { //nolint:cyclop
 	// validate network
-	if network != udp && network != udp4 {
+	switch network {
+	case udp, udp4, udp6:
+	default:
 		return nil, fmt.Errorf("%w: %s", errUnexpectedNetwork, network)
 	}
 
 	if locAddr == nil {
 		locAddr = &net.UDPAddr{
-			IP: net.IPv4zero,
+			IP: udpZeroIP(network),
 		}
 	} else if locAddr.IP == nil {
-		locAddr.IP = net.IPv4zero
+		locAddr.IP = udpZeroIP(network)
 	}
 
 	// validate address. do we have that address?
@@ -346,7 +352,11 @@ func (v *Net) ResolveIPAddr(network, address string) (*net.IPAddr, error) {
 	if ip == nil { //nolint:nestif
 		address = strings.ToLower(address)
 		if address == "localhost" {
-			ip = net.IPv4(127, 0, 0, 1)
+			if network == ip6 {
+				ip = net.IPv6loopback
+			} else {
+				ip = net.IPv4(127, 0, 0, 1)
+			}
 		} else {
 			// host is a domain name. resolve IP address by the name
 			if v.router == nil {
@@ -437,6 +447,14 @@ func (v *Net) ResolveTCPAddr(network, address string) (*net.TCPAddr, error) {
 	return udpAddr, nil
 }
 
+func udpZeroIP(network string) net.IP {
+	if network == udp6 {
+		return net.IPv6unspecified
+	}
+
+	return net.IPv4zero
+}
+
 func (v *Net) write(chunk Chunk) error {
 	if chunk.Network() == udp { //nolint:nestif
 		if udp, ok := chunk.(*chunkUDP); ok {
@@ -480,7 +498,18 @@ func (v *Net) determineSourceIP(locIP, dstIP net.IP) net.IP { //nolint:cyclop
 	var srcIP net.IP
 
 	if dstIP.IsLoopback() { //nolint:nestif
-		srcIP = net.ParseIP("127.0.0.1")
+		switch {
+		case locIP == nil:
+			if dstIP.To4() == nil {
+				srcIP = net.IPv6loopback
+			} else {
+				srcIP = net.IPv4(127, 0, 0, 1)
+			}
+		case locIP.To4() == nil:
+			srcIP = net.IPv6loopback
+		default:
+			srcIP = net.IPv4(127, 0, 0, 1)
+		}
 	} else {
 		ifc, err2 := v._getInterface("eth0")
 		if err2 != nil {
@@ -628,7 +657,7 @@ type NetConfig struct {
 // NewNet creates an instance of a virtual network.
 //
 // By design, it always have lo0 and eth0 interfaces.
-// The lo0 has the address 127.0.0.1 assigned by default.
+// The lo0 has the addresses 127.0.0.1 and ::1 assigned by default.
 // IP address for eth0 will be assigned when this Net is added to a router.
 func NewNet(config *NetConfig) (*Net, error) {
 	lo0 := transport.NewInterface(net.Interface{
@@ -641,6 +670,10 @@ func NewNet(config *NetConfig) (*Net, error) {
 	lo0.AddAddress(&net.IPNet{
 		IP:   net.ParseIP("127.0.0.1"),
 		Mask: net.CIDRMask(8, 32),
+	})
+	lo0.AddAddress(&net.IPNet{
+		IP:   net.IPv6loopback,
+		Mask: net.CIDRMask(128, 128),
 	})
 
 	eth0 := transport.NewInterface(net.Interface{
