@@ -7,11 +7,7 @@ type timeoutError struct {
 	msg string
 }
 
-func newTimeoutError(msg string) error {
-	return &timeoutError{
-		msg: msg,
-	}
-}
+var errIOTimeout = &timeoutError{msg: "i/o timeout"} //nolint:gochecknoglobals
 
 func (e *timeoutError) Error() string {
 	return e.msg
