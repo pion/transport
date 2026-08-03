@@ -23,6 +23,11 @@ const (
 	hugeSeq  = 0x1000000000000
 )
 
+var (
+	_ CheckAccepter = (*slidingWindowDetector)(nil)
+	_ CheckAccepter = (*wrappedSlidingWindowDetector)(nil)
+)
+
 var commonCases = map[string]testCase{ //nolint:gochecknoglobals
 	"Continuous": {
 		16, 0x0000FFFFFFFFFFFF,
@@ -189,20 +194,50 @@ var commonCases = map[string]testCase{ //nolint:gochecknoglobals
 	},
 }
 
+func runCheckCase(t *testing.T, det ReplayDetector, tc testCase) {
+	t.Helper()
+
+	var out []uint64
+	for i, seq := range tc.input {
+		accept, ok := det.Check(seq)
+		assert.Equal(t, tc.valid[i], ok, "Unexpected validity")
+		if ok {
+			out = append(out, seq)
+		}
+		assert.Equal(t, tc.latest[i], accept(), "Unexpected sequence latest status")
+	}
+	assert.Equal(t, tc.expected, out, "Wrong replay detection result")
+}
+
+func runCheckAccepterCase(t *testing.T, det ReplayDetector, tc testCase) {
+	t.Helper()
+
+	ca, ok := det.(CheckAccepter)
+	assert.True(t, ok, "detector must implement CheckAccepter")
+
+	var out []uint64
+	for i, seq := range tc.input {
+		tok := ca.CheckSeq(seq)
+		assert.Equal(t, tc.valid[i], tok.Passed(), "Unexpected validity")
+		if tok.Passed() {
+			out = append(out, seq)
+		}
+		assert.Equal(t, tc.latest[i], ca.Accept(tok), "Unexpected sequence latest status")
+	}
+	assert.Equal(t, tc.expected, out, "Wrong replay detection result")
+}
+
 func TestReplayDetector(t *testing.T) {
-	for name, testCase := range commonCases {
-		t.Run(name, func(t *testing.T) {
-			det := New(testCase.windowSize, testCase.maxSeq)
-			var out []uint64
-			for i, seq := range testCase.input {
-				accept, ok := det.Check(seq)
-				assert.Equal(t, testCase.valid[i], ok, "Unexpected validity")
-				if ok {
-					out = append(out, seq)
-				}
-				assert.Equal(t, testCase.latest[i], accept(), "Unexpected sequence latest status")
+	for apiName, runCase := range map[string]func(*testing.T, ReplayDetector, testCase){
+		"Check":         runCheckCase,
+		"CheckAccepter": runCheckAccepterCase,
+	} {
+		t.Run(apiName, func(t *testing.T) {
+			for name, tc := range commonCases {
+				t.Run(name, func(t *testing.T) {
+					runCase(t, New(tc.windowSize, tc.maxSeq), tc)
+				})
 			}
-			assert.Equal(t, testCase.expected, out, "Wrong replay detection result")
 		})
 	}
 }
@@ -259,20 +294,89 @@ func TestReplayDetectorWrapped(t *testing.T) {
 		assert.False(t, ok, "Duplicate test case name: %q", name)
 		cases[name] = c
 	}
-	for name, c := range cases {
-		testCase := c
-		t.Run(name, func(t *testing.T) {
-			det := WithWrap(testCase.windowSize, testCase.maxSeq)
-			var out []uint64
-			for i, seq := range testCase.input {
-				accept, ok := det.Check(seq)
-				assert.Equal(t, testCase.valid[i], ok, "Unexpected validity")
-				if ok {
-					out = append(out, seq)
-				}
-				assert.Equal(t, testCase.latest[i], accept(), "Unexpected sequence latest status")
+
+	for apiName, runCase := range map[string]func(*testing.T, ReplayDetector, testCase){
+		"Check":         runCheckCase,
+		"CheckAccepter": runCheckAccepterCase,
+	} {
+		t.Run(apiName, func(t *testing.T) {
+			for name, tc := range cases {
+				t.Run(name, func(t *testing.T) {
+					runCase(t, WithWrap(tc.windowSize, tc.maxSeq), tc)
+				})
 			}
-			assert.Equal(t, testCase.expected, out, "Wrong replay detection result")
+		})
+	}
+}
+
+// TestCheckSeqDoesNotCommit verifies that CheckSeq alone does not update the
+// replay list: RFC 3711 Section 3.3.2 requires the list to be updated only
+// after the packet has been authenticated, so a sequence number that passed
+// CheckSeq but was never accepted must still pass a later check.
+func TestCheckSeqDoesNotCommit(t *testing.T) {
+	kinds := map[string]ReplayDetector{
+		"New":      New(16, 0xFFFF),
+		"WithWrap": WithWrap(16, 0xFFFF),
+	}
+
+	for name, detector := range kinds {
+		t.Run(name, func(t *testing.T) {
+			det, ok := detector.(CheckAccepter)
+			assert.True(t, ok, "detector must implement CheckAccepter")
+
+			assert.True(t, det.CheckSeq(5).Passed(), "first check must pass")
+			tok := det.CheckSeq(5)
+			assert.True(t, tok.Passed(), "re-check of an unaccepted seq must pass")
+			det.Accept(tok)
+			assert.False(t, det.CheckSeq(5).Passed(), "check after accept must reject the duplicate")
+		})
+	}
+}
+
+// TestRejectedTokenIsInert verifies that accepting a rejected or zero-value
+// Token does not modify the window: a sequence number that failed its check
+// cannot corrupt the detector even if its Token is accepted.
+func TestRejectedTokenIsInert(t *testing.T) {
+	kinds := map[string]ReplayDetector{
+		"New":      New(16, 0xFFFF),
+		"WithWrap": WithWrap(16, 0xFFFF),
+	}
+
+	for name, detector := range kinds {
+		t.Run(name, func(t *testing.T) {
+			det, ok := detector.(CheckAccepter)
+			assert.True(t, ok, "detector must implement CheckAccepter")
+
+			rejected := det.CheckSeq(0x10000) // beyond maxSeq
+			assert.False(t, rejected.Passed(), "out-of-range seq must fail the check")
+			assert.False(t, det.Accept(rejected), "accepting a rejected token must do nothing")
+			assert.False(t, det.Accept(Token{}), "accepting a zero-value token must do nothing")
+
+			tok := det.CheckSeq(5)
+			assert.True(t, tok.Passed(), "window must be intact after inert accepts")
+			det.Accept(tok)
+			assert.False(t, det.CheckSeq(5).Passed(), "duplicate must still be rejected after inert accepts")
+		})
+	}
+}
+
+func TestCheckAccepterNoAllocation(t *testing.T) {
+	kinds := map[string]ReplayDetector{
+		"New":      New(128, 0x0000FFFFFFFFFFFF),
+		"WithWrap": WithWrap(128, 0xFFFF),
+	}
+
+	for name, detector := range kinds {
+		t.Run(name, func(t *testing.T) {
+			det, ok := detector.(CheckAccepter)
+			assert.True(t, ok, "detector must implement CheckAccepter")
+
+			seq := uint64(0)
+			allocs := testing.AllocsPerRun(1000, func() {
+				seq++
+				det.Accept(det.CheckSeq(seq))
+			})
+			assert.Zero(t, allocs, "CheckSeq/Accept must not allocate")
 		})
 	}
 }
