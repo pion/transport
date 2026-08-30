@@ -99,6 +99,22 @@ func TestReadFromTimeout(t *testing.T) {
 	assert.Empty(t, n, "Wrong data length")
 }
 
+func TestReadFromAlreadyTimeout(t *testing.T) {
+	ca, _ := pipe()
+	defer func() {
+		_ = ca.Close()
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 0)
+	defer cancel()
+
+	c := NewPacketConn(ca)
+	b := make([]byte, 100)
+	n, _, err := c.ReadFromContext(ctx, b)
+	assert.Error(t, err)
+	assert.Empty(t, n, "Wrong data length")
+}
+
 func TestReadFromCancel(t *testing.T) {
 	ca, _ := pipe()
 	defer func() {
@@ -128,6 +144,49 @@ func TestReadFromClosed(t *testing.T) {
 	n, _, err := c.ReadFromContext(context.Background(), b)
 	assert.ErrorIs(t, err, net.ErrClosed)
 	assert.Empty(t, n, "Wrong data length")
+}
+
+func TestReadFromClosedAfter(t *testing.T) {
+	ca, _ := pipe()
+
+	c := NewPacketConn(ca)
+	go func() {
+		<-time.After(time.Second)
+		_ = c.Close()
+	}()
+
+	b := make([]byte, 100)
+	n, _, err := c.ReadFromContext(context.Background(), b)
+	assert.ErrorIs(t, err, io.ErrClosedPipe)
+	assert.Empty(t, n, "Wrong data length")
+}
+
+var errSetDeadline = errors.New("set read deadline failed")
+
+type badDeadlineConn struct {
+	net.PacketConn
+}
+
+func (c *badDeadlineConn) SetReadDeadline(time.Time) error {
+	return errSetDeadline
+}
+
+func TestReadFromSetDeadlineErr(t *testing.T) {
+	ca, _ := pipe()
+
+	b := NewPacketConn(&badDeadlineConn{
+		PacketConn: ca,
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		<-time.After(time.Second)
+		cancel()
+	}()
+
+	packet := make([]byte, 100)
+	_, _, err := b.ReadFromContext(ctx, packet)
+	assert.ErrorIs(t, err, context.Canceled)
 }
 
 func TestWriteTo(t *testing.T) {
@@ -174,6 +233,22 @@ func TestWriteToTimeout(t *testing.T) {
 	assert.Empty(t, n, "Wrong data length")
 }
 
+func TestWriteToAlreadyTimeout(t *testing.T) {
+	ca, _ := pipe()
+	defer func() {
+		_ = ca.Close()
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 0)
+	defer cancel()
+
+	c := NewPacketConn(ca)
+	b := make([]byte, 100)
+	n, err := c.WriteToContext(ctx, b, nil)
+	assert.Error(t, err)
+	assert.Empty(t, n, "Wrong data length")
+}
+
 func TestWriteToCancel(t *testing.T) {
 	ca, _ := pipe()
 	defer func() {
@@ -203,6 +278,39 @@ func TestWriteToClosed(t *testing.T) {
 	n, err := c.WriteToContext(context.Background(), b, nil)
 	assert.ErrorIs(t, err, ErrClosing)
 	assert.Empty(t, n, "Wrong data length")
+}
+
+func TestWriteToClosedAfter(t *testing.T) {
+	ca, _ := pipe()
+
+	c := NewPacketConn(ca)
+	go func() {
+		<-time.After(time.Second)
+		_ = c.Close()
+	}()
+
+	b := make([]byte, 100)
+	n, err := c.WriteToContext(context.Background(), b, nil)
+	assert.ErrorIs(t, err, io.ErrClosedPipe)
+	assert.Empty(t, n, "Wrong data length")
+}
+
+func TestWriteToSetDeadlineErr(t *testing.T) {
+	ca, _ := pipe()
+
+	b := NewPacketConn(&badDeadlineConn{
+		PacketConn: ca,
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		<-time.After(time.Second)
+		cancel()
+	}()
+
+	packet := make([]byte, 100)
+	_, err := b.WriteToContext(ctx, packet, nil)
+	assert.ErrorIs(t, err, context.Canceled)
 }
 
 type packetConnAddrMock struct{}
@@ -333,7 +441,7 @@ func BenchmarkReadFrom(b *testing.B) {
 	count := 0
 	for {
 		n, _, err := c.ReadFromContext(context.Background(), buf)
-		if err != nil {
+		if n == 0 && err != nil {
 			if !errors.Is(err, io.EOF) {
 				b.Fatal(err)
 			}
