@@ -5,6 +5,7 @@ package deadline
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -92,6 +93,68 @@ func TestDeadline(t *testing.T) {
 		calls := collectCh(ch, 2, 60*time.Millisecond)
 		expectedCalls := []byte{0}
 		assert.Equal(t, expectedCalls, calls, "Wrong order of deadline signal")
+	})
+
+	t.Run("DeadlineAfterFuncExceedFuture", func(t *testing.T) {
+		now := time.Now()
+
+		d := New()
+		var trigger atomic.Int32
+		d.AfterFunc(func() {
+			trigger.Add(1)
+		})
+		d.Set(now.Add(10 * time.Millisecond))
+		<-time.After(20 * time.Millisecond)
+		d.Set(now.Add(10 * time.Millisecond))
+		<-time.After(20 * time.Millisecond)
+
+		assert.Equal(t, int32(1), trigger.Load(), "Function triggered wrong number of time")
+	})
+
+	t.Run("DeadlineAfterFuncExceedPast", func(t *testing.T) {
+		now := time.Now()
+
+		d := New()
+		var trigger atomic.Int32
+		d.AfterFunc(func() {
+			trigger.Add(1)
+		})
+		d.Set(now.Add(10 * time.Millisecond))
+		d.Set(now.Add(-10 * time.Millisecond))
+		<-time.After(20 * time.Millisecond)
+
+		assert.Equal(t, int32(1), trigger.Load(), "Function triggered wrong number of time")
+	})
+
+	t.Run("DeadlineAfterFuncCancel", func(t *testing.T) {
+		now := time.Now()
+
+		d := New()
+		var trigger atomic.Int32
+		d.AfterFunc(func() {
+			trigger.Add(1)
+		})
+
+		d.Set(now.Add(10 * time.Millisecond))
+		d.Set(time.Time{})
+		<-time.After(20 * time.Millisecond)
+
+		assert.Equal(t, int32(0), trigger.Load(), "Function triggered wrong number of time")
+	})
+
+	t.Run("DeadlineAfterFuncDetach", func(t *testing.T) {
+		now := time.Now()
+
+		d := New()
+		var trigger atomic.Int32
+		detach := d.AfterFunc(func() {
+			trigger.Add(1)
+		})
+		detach()
+		d.Set(now.Add(10 * time.Millisecond))
+		<-time.After(20 * time.Millisecond)
+
+		assert.Equal(t, int32(0), trigger.Load(), "Function triggered wrong number of time")
 	})
 }
 

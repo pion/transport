@@ -30,12 +30,15 @@ type Deadline struct {
 	deadline time.Time
 	state    deadlineState
 	pending  uint8
+	cbs      map[int]func()
+	nextCbID int
 }
 
 // New creates new deadline timer.
 func New() *Deadline {
 	return &Deadline{
 		done: make(chan struct{}),
+		cbs:  map[int]func(){},
 	}
 }
 
@@ -49,9 +52,38 @@ func (d *Deadline) timeout() {
 
 	d.state = deadlineExceeded
 	done := d.done
+	for _, cb := range d.cbs {
+		go cb()
+	}
+	clear(d.cbs)
 	d.mu.Unlock()
 
 	close(done)
+}
+
+// AfterFunc attaches a function to the deadline.
+// The functions will be triggered on deadline exceeded.
+// If the deadline is reset, the functions are skipped.
+// Attached functions are only triggered once.
+func (d *Deadline) AfterFunc(cb func()) func() bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.cbs[d.nextCbID] = cb
+	usedID := d.nextCbID
+	cancel := func() bool {
+		d.mu.Lock()
+		defer d.mu.Unlock()
+		if _, has := d.cbs[usedID]; has {
+			delete(d.cbs, usedID)
+
+			return true
+		}
+
+		return false
+	}
+	d.nextCbID++
+
+	return cancel
 }
 
 // Set new deadline. Zero value means no deadline.
@@ -73,6 +105,7 @@ func (d *Deadline) Set(setTo time.Time) {
 	if setTo.IsZero() {
 		d.pending--
 		d.state = deadlineStopped
+		clear(d.cbs)
 
 		return
 	}
@@ -91,6 +124,10 @@ func (d *Deadline) Set(setTo time.Time) {
 	d.pending--
 	d.state = deadlineExceeded
 	close(d.done)
+	for _, cb := range d.cbs {
+		go cb()
+	}
+	clear(d.cbs)
 }
 
 // Done receives deadline signal.
