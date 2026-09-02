@@ -30,6 +30,8 @@ type Deadline struct {
 	deadline time.Time
 	state    deadlineState
 	pending  uint8
+	cbs      map[int]func()
+	nextCbID int
 }
 
 // New creates new deadline timer.
@@ -47,11 +49,41 @@ func (d *Deadline) timeout() {
 		return
 	}
 
-	d.state = deadlineExceeded
-	done := d.done
+	d.fire()
 	d.mu.Unlock()
+}
 
-	close(done)
+// AfterTimeout attaches a callback to the deadline.
+// The added callback will be triggered when the deadline is met.
+// The callback can be detached via the returned function.
+// This function mimics context.AfterFunc behavior.
+func (d *Deadline) AfterTimeout(cb func()) func() bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.state == deadlineExceeded {
+		go cb()
+
+		return func() bool { return false }
+	}
+	d.nextCbID++
+	usedID := d.nextCbID
+	if d.cbs == nil {
+		d.cbs = map[int]func(){}
+	}
+	d.cbs[d.nextCbID] = cb
+	cancel := func() bool {
+		d.mu.Lock()
+		defer d.mu.Unlock()
+		if _, has := d.cbs[usedID]; has {
+			delete(d.cbs, usedID)
+
+			return true
+		}
+
+		return false
+	}
+
+	return cancel
 }
 
 // Set new deadline. Zero value means no deadline.
@@ -89,8 +121,16 @@ func (d *Deadline) Set(setTo time.Time) {
 	}
 
 	d.pending--
+	d.fire()
+}
+
+func (d *Deadline) fire() {
 	d.state = deadlineExceeded
 	close(d.done)
+	for _, cb := range d.cbs {
+		go cb()
+	}
+	clear(d.cbs)
 }
 
 // Done receives deadline signal.
