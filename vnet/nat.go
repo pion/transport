@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	errNATRequiresMapping       = errors.New("1:1 NAT requires at least one mapping")
+	errNATRequiresMapping       = errors.New("1:1 NAT requires more than one mapping")
 	errMismatchLengthIP         = errors.New("length mismatch between mappedIPs and localIPs")
 	errTranslationNotSupported  = errors.New("translation is not supported for this protocol")
 	errNoAssociatedLocalAddress = errors.New("no associated local address")
