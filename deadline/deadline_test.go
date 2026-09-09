@@ -5,6 +5,8 @@ package deadline
 
 import (
 	"context"
+	"runtime"
+	"sync"
 	"testing"
 	"time"
 
@@ -149,6 +151,148 @@ func TestContext(t *testing.T) { //nolint:cyclop
 		t1, expired1 := d.Deadline()
 		assert.True(t, t1.Equal(dl), "Initial Deadline is expected to be %v, got %v", dl, t1)
 		assert.True(t, expired1, "Deadline is expected to be expired")
+	})
+}
+
+func assertCanceled(t *testing.T, ctx context.Context, cause error) {
+	t.Helper()
+
+	select {
+	case <-ctx.Done():
+	case <-time.After(time.Second):
+		assert.Fail(t, "context was not canceled")
+
+		return
+	}
+	assert.ErrorIs(t, context.Cause(ctx), cause)
+}
+
+func assertLive(t *testing.T, ctx context.Context) {
+	t.Helper()
+
+	select {
+	case <-ctx.Done():
+		assert.Fail(t, "context was unexpectedly canceled")
+	default:
+	}
+	assert.NoError(t, ctx.Err())
+}
+
+func TestDeadlineContext(t *testing.T) {
+	t.Run("MemoizedAcrossCalls", func(t *testing.T) {
+		d := New()
+		d.Set(time.Now().Add(time.Hour))
+
+		assert.Equal(t, d.Context(), d.Context(), "Context should be memoized")
+	})
+
+	t.Run("ExtendKeepsSameContext", func(t *testing.T) {
+		d := New()
+		d.Set(time.Now().Add(time.Hour))
+		ctx := d.Context()
+
+		d.Set(time.Now().Add(2 * time.Hour))
+
+		assert.Equal(t, ctx, d.Context(), "Extending the deadline should not retire the context")
+		assertLive(t, ctx)
+	})
+
+	t.Run("CanceledByTimer", func(t *testing.T) {
+		d := New()
+		d.Set(time.Now().Add(10 * time.Millisecond))
+
+		assertCanceled(t, d.Context(), context.DeadlineExceeded)
+	})
+
+	t.Run("CanceledByPastDeadline", func(t *testing.T) {
+		d := New()
+		ctx := d.Context()
+		d.Set(time.Unix(0, 1))
+
+		assertCanceled(t, ctx, context.DeadlineExceeded)
+	})
+
+	t.Run("StopKeepsContextLive", func(t *testing.T) {
+		d := New()
+		d.Set(time.Now().Add(time.Hour))
+		ctx := d.Context()
+
+		d.Set(time.Time{}) // no deadline
+
+		assert.Equal(t, ctx, d.Context(), "Stopping the deadline should not retire the context")
+		assertLive(t, ctx)
+	})
+
+	t.Run("NewGenerationAfterExpiry", func(t *testing.T) {
+		d := New()
+		expired := d.Context()
+		d.Set(time.Unix(0, 1))
+		assertCanceled(t, expired, context.DeadlineExceeded)
+
+		d.Set(time.Now().Add(time.Hour))
+		revived := d.Context()
+
+		assert.NotEqual(t, expired, revived, "Reviving the deadline should mint a new context")
+		assertLive(t, revived)
+		assertCanceled(t, expired, context.DeadlineExceeded)
+	})
+
+	t.Run("DerivedContextIsCanceled", func(t *testing.T) {
+		d := New()
+		d.Set(time.Now().Add(10 * time.Millisecond))
+
+		derived, cancel := context.WithCancel(d.Context())
+		defer cancel()
+
+		assertCanceled(t, derived, context.DeadlineExceeded)
+	})
+
+	t.Run("DerivedContextsDoNotSpawnGoroutines", func(t *testing.T) {
+		const derived = 100
+
+		d := New()
+		d.Set(time.Now().Add(time.Hour))
+		parent := d.Context()
+
+		runtime.GC()
+		before := runtime.NumGoroutine()
+
+		cancels := make([]context.CancelFunc, 0, derived)
+		for range derived {
+			_, cancel := context.WithCancel(parent)
+			cancels = append(cancels, cancel)
+		}
+		spawned := runtime.NumGoroutine() - before
+		for _, cancel := range cancels {
+			cancel()
+		}
+
+		// A *cancelCtx parent registers children in a map; anything else costs
+		// a goroutine per child.
+		assert.Less(t, spawned, derived/10, "Deriving contexts should not spawn goroutines")
+	})
+
+	t.Run("ConcurrentContextAndSet", func(t *testing.T) {
+		deadline := New()
+
+		var wg sync.WaitGroup
+		for range 8 {
+			wg.Add(2)
+			go func() {
+				defer wg.Done()
+				for range 500 {
+					_ = deadline.Context().Err()
+				}
+			}()
+			go func() {
+				defer wg.Done()
+				for range 500 {
+					deadline.Set(time.Unix(0, 1))
+					deadline.Set(time.Now().Add(time.Hour))
+				}
+			}()
+		}
+		wg.Wait()
 	})
 }
 

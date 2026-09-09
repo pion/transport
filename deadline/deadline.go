@@ -24,9 +24,12 @@ var _ context.Context = (*Deadline)(nil)
 // Deadline signals updatable deadline timer.
 // Also, it implements context.Context.
 type Deadline struct {
-	mu       sync.RWMutex
-	timer    timer
-	done     chan struct{}
+	mu     sync.RWMutex
+	timer  timer
+	done   chan struct{}
+	ctx    context.Context //nolint:containedctx // Deadline state, not a request scope.
+	cancel context.CancelCauseFunc
+
 	deadline time.Time
 	state    deadlineState
 	pending  uint8
@@ -47,15 +50,46 @@ func (d *Deadline) timeout() {
 		return
 	}
 
-	d.state = deadlineExceeded
-	done := d.done
+	cancel := d.fire()
 	d.mu.Unlock()
 
-	close(done)
+	if cancel != nil {
+		cancel(context.DeadlineExceeded)
+	}
+}
+
+// Returns the cancel func rather than calling it: canceling walks derived
+// contexts' closures, which must not run under mu.
+func (d *Deadline) fire() context.CancelCauseFunc {
+	d.state = deadlineExceeded
+	close(d.done)
+
+	cancel := d.cancel
+	d.ctx, d.cancel = nil, nil
+
+	return cancel
+}
+
+// Context returns a context for the current deadline, canceled with
+// context.DeadlineExceeded as its Cause.
+func (d *Deadline) Context() context.Context {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.ctx == nil {
+		d.ctx, d.cancel = context.WithCancelCause(context.Background())
+	}
+
+	return d.ctx
 }
 
 // Set new deadline. Zero value means no deadline.
 func (d *Deadline) Set(setTo time.Time) {
+	if cancel := d.set(setTo); cancel != nil {
+		cancel(context.DeadlineExceeded)
+	}
+}
+
+func (d *Deadline) set(setTo time.Time) context.CancelCauseFunc {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
@@ -74,7 +108,7 @@ func (d *Deadline) Set(setTo time.Time) {
 		d.pending--
 		d.state = deadlineStopped
 
-		return
+		return nil
 	}
 
 	if dur := time.Until(setTo); dur > 0 {
@@ -85,12 +119,12 @@ func (d *Deadline) Set(setTo time.Time) {
 			d.timer.Reset(dur)
 		}
 
-		return
+		return nil
 	}
 
 	d.pending--
-	d.state = deadlineExceeded
-	close(d.done)
+
+	return d.fire()
 }
 
 // Done receives deadline signal.
