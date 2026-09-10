@@ -28,10 +28,7 @@ func init() {
 	exceededContext = ctx
 }
 
-var _ context.Context = (*Deadline)(nil)
-
 // Deadline signals updatable deadline timer.
-// Also, it implements context.Context.
 type Deadline struct {
 	mu     sync.RWMutex
 	timer  timer
@@ -169,9 +166,4 @@ func (d *Deadline) Deadline() (time.Time, bool) {
 	}
 
 	return d.deadline, true
-}
-
-// Value returns nil.
-func (d *Deadline) Value(any) any {
-	return nil
 }
