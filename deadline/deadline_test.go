@@ -212,15 +212,50 @@ func TestDeadlineContext(t *testing.T) {
 		assertCanceled(t, ctx, context.DeadlineExceeded)
 	})
 
-	t.Run("StopKeepsContextLive", func(t *testing.T) {
+	t.Run("SuspendKeepsContextLive", func(t *testing.T) {
 		d := New()
 		d.Set(time.Now().Add(time.Hour))
 		ctx := d.Context()
 
 		d.Set(time.Time{}) // no deadline
 
-		assert.Equal(t, ctx, d.Context(), "Stopping the deadline should not retire the context")
+		assert.Equal(t, ctx, d.Context(), "Suspending the deadline should not retire the context")
 		assertLive(t, ctx)
+	})
+
+	t.Run("ExceededReturnsCanceledContext", func(t *testing.T) {
+		d := New()
+		d.Set(time.Unix(0, 1))
+
+		assertCanceled(t, d.Context(), context.DeadlineExceeded)
+	})
+
+	t.Run("ExceededByTimerReturnsCanceledContext", func(t *testing.T) {
+		d := New()
+		d.Set(time.Now().Add(10 * time.Millisecond))
+		assertCanceled(t, d.Context(), context.DeadlineExceeded)
+
+		assertCanceled(t, d.Context(), context.DeadlineExceeded)
+	})
+
+	t.Run("DerivedFromExceededIsCanceled", func(t *testing.T) {
+		d := New()
+		d.Set(time.Unix(0, 1))
+
+		derived, cancel := context.WithCancel(d.Context())
+		defer cancel()
+
+		assertCanceled(t, derived, context.DeadlineExceeded)
+	})
+
+	t.Run("SuspendAfterExpiryGivesLiveContext", func(t *testing.T) {
+		d := New()
+		d.Set(time.Unix(0, 1))
+		assertCanceled(t, d.Context(), context.DeadlineExceeded)
+
+		d.Set(time.Time{}) // no deadline
+
+		assertLive(t, d.Context())
 	})
 
 	t.Run("NewGenerationAfterExpiry", func(t *testing.T) {

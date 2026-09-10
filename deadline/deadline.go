@@ -14,10 +14,19 @@ import (
 type deadlineState uint8
 
 const (
-	deadlineStopped deadlineState = iota
+	deadlineSuspended deadlineState = iota
 	deadlineStarted
 	deadlineExceeded
 )
+
+//nolint:gochecknoglobals // A canceled context is immutable, so it is safe to share.
+var exceededContext context.Context
+
+func init() {
+	ctx, cancel := context.WithCancelCause(context.Background())
+	cancel(context.DeadlineExceeded)
+	exceededContext = ctx
+}
 
 var _ context.Context = (*Deadline)(nil)
 
@@ -75,6 +84,10 @@ func (d *Deadline) fire() context.CancelCauseFunc {
 func (d *Deadline) Context() context.Context {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+
+	if d.state == deadlineExceeded {
+		return exceededContext
+	}
 	if d.ctx == nil {
 		d.ctx, d.cancel = context.WithCancelCause(context.Background())
 	}
@@ -106,7 +119,7 @@ func (d *Deadline) set(setTo time.Time) context.CancelCauseFunc {
 
 	if setTo.IsZero() {
 		d.pending--
-		d.state = deadlineStopped
+		d.state = deadlineSuspended
 
 		return nil
 	}
