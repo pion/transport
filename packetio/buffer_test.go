@@ -7,250 +7,58 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
-	"sync/atomic"
+	"sync"
 	"testing"
 	"time"
 
-	"github.com/pion/transport/v4/test"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestBuffer(t *testing.T) {
-	assert := assert.New(t)
-
-	buffer := NewBuffer()
-	packet := make([]byte, 4)
-
-	// Write once
-	n, err := buffer.Write([]byte{0, 1})
-	assert.NoError(err)
-	assert.Equal(2, n)
-
-	// Read once
-	n, err = buffer.Read(packet)
-	assert.NoError(err)
-	assert.Equal(2, n)
-	assert.Equal([]byte{0, 1}, packet[:n])
-
-	// Read deadline
-	err = buffer.SetReadDeadline(time.Unix(0, 1))
-	assert.NoError(err)
-	n, err = buffer.Read(packet)
-	var e net.Error
-	assert.ErrorAs(err, &e)
-	assert.True(e.Timeout())
-	assert.Equal(0, n)
-
-	// Reset deadline
-	err = buffer.SetReadDeadline(time.Time{})
-	assert.NoError(err)
-
-	// Write twice
-	n, err = buffer.Write([]byte{2, 3, 4})
-	assert.NoError(err)
-	assert.Equal(3, n)
-
-	n, err = buffer.Write([]byte{5, 6, 7})
-	assert.NoError(err)
-	assert.Equal(3, n)
-
-	// Read twice
-	n, err = buffer.Read(packet)
-	assert.NoError(err)
-	assert.Equal(3, n)
-	assert.Equal([]byte{2, 3, 4}, packet[:n])
-
-	n, err = buffer.Read(packet)
-	assert.NoError(err)
-	assert.Equal(3, n)
-	assert.Equal([]byte{5, 6, 7}, packet[:n])
-
-	// Write once prior to close.
-	_, err = buffer.Write([]byte{3})
-	assert.NoError(err)
-
-	// Close
-	err = buffer.Close()
-	assert.NoError(err)
-
-	// Future writes will error
-	_, err = buffer.Write([]byte{4})
-	assert.Error(err)
-
-	// But we can read the remaining data.
-	n, err = buffer.Read(packet)
-	assert.NoError(err)
-	assert.Equal(1, n)
-	assert.Equal([]byte{3}, packet[:n])
-
-	// Until EOF
-	_, err = buffer.Read(packet)
-	assert.Equal(io.EOF, err)
-}
-
-func testWraparound(t *testing.T, grow bool) {
-	t.Helper()
-
-	assert := assert.New(t)
-
-	buffer := NewBuffer()
-	err := buffer.grow()
-	assert.NoError(err)
-
-	buffer.head = len(buffer.data) - 13
-	buffer.tail = buffer.head
-
-	p1 := []byte{1, 2, 3}
-	p2 := []byte{4, 5, 6}
-	p3 := []byte{7, 8, 9}
-	p4 := []byte{10, 11, 12}
-
-	_, err = buffer.Write(p1)
-	assert.NoError(err)
-	_, err = buffer.Write(p2)
-	assert.NoError(err)
-	_, err = buffer.Write(p3)
-	assert.NoError(err)
-
-	packet := make([]byte, 10)
-
-	n, err := buffer.Read(packet)
-	assert.NoError(err)
-	assert.Equal(p1, packet[:n])
-
-	if grow {
-		err = buffer.grow()
-		assert.NoError(err)
-	}
-
-	n, err = buffer.Read(packet)
-	assert.NoError(err)
-	assert.Equal(p2, packet[:n])
-
-	_, err = buffer.Write(p4)
-	assert.NoError(err)
-
-	n, err = buffer.Read(packet)
-	assert.NoError(err)
-	assert.Equal(p3, packet[:n])
-	n, err = buffer.Read(packet)
-	assert.NoError(err)
-	assert.Equal(p4, packet[:n])
-
-	if !grow {
-		assert.Equal(len(buffer.data), minSize)
-	} else {
-		assert.Equal(len(buffer.data), 2*minSize)
-	}
-}
-
 func TestBufferWraparound(t *testing.T) {
-	testWraparound(t, false)
-}
-
-func TestBufferWraparoundGrow(t *testing.T) {
-	testWraparound(t, true)
-}
-
-func TestBufferAsync(t *testing.T) {
-	assert := assert.New(t)
-
-	buffer := NewBuffer()
-
-	// Start up a goroutine to start a blocking read.
-	done := make(chan struct{})
-	go func() {
-		packet := make([]byte, 4)
-
-		n, err := buffer.Read(packet)
-		assert.NoError(err)
-		assert.Equal(2, n)
-		assert.Equal([]byte{0, 1}, packet[:n])
-
-		_, err = buffer.Read(packet)
-		assert.Equal(io.EOF, err)
-
-		close(done)
-	}()
-
-	// Wait for the reader to start reading.
-	time.Sleep(time.Millisecond)
-
-	// Write once
-	n, err := buffer.Write([]byte{0, 1})
-	assert.NoError(err)
-	assert.Equal(2, n)
-
-	// Wait for the reader to start reading again.
-	time.Sleep(time.Millisecond)
-
-	// Close will unblock the reader.
-	err = buffer.Close()
-	assert.NoError(err)
-
-	<-done
-}
-
-func TestBufferLimitCount(t *testing.T) {
-	assert := assert.New(t)
-
-	buffer := NewBuffer()
-	buffer.SetLimitCount(2)
-
-	assert.Equal(0, buffer.Count())
-
-	// Write twice
-	n, err := buffer.Write([]byte{0, 1})
-	assert.NoError(err)
-	assert.Equal(2, n)
-	assert.Equal(1, buffer.Count())
-
-	n, err = buffer.Write([]byte{2, 3})
-	assert.NoError(err)
-	assert.Equal(2, n)
-	assert.Equal(2, buffer.Count())
-
-	// Over capacity
-	_, err = buffer.Write([]byte{4, 5})
-	assert.Equal(ErrFull, err)
-	assert.Equal(2, buffer.Count())
-
-	// Read once
-	packet := make([]byte, 4)
-	n, err = buffer.Read(packet)
-	assert.NoError(err)
-	assert.Equal(2, n)
-	assert.Equal([]byte{0, 1}, packet[:n])
-	assert.Equal(1, buffer.Count())
-
-	// Write once
-	n, err = buffer.Write([]byte{6, 7})
-	assert.NoError(err)
-	assert.Equal(2, n)
-	assert.Equal(2, buffer.Count())
-
-	// Over capacity
-	_, err = buffer.Write([]byte{8, 9})
-	assert.Equal(ErrFull, err)
-	assert.Equal(2, buffer.Count())
-
-	// Read twice
-	n, err = buffer.Read(packet)
-	assert.NoError(err)
-	assert.Equal(2, n)
-	assert.Equal([]byte{2, 3}, packet[:n])
-	assert.Equal(1, buffer.Count())
-
-	n, err = buffer.Read(packet)
-	assert.NoError(err)
-	assert.Equal(2, n)
-	assert.Equal([]byte{6, 7}, packet[:n])
-	assert.Equal(0, buffer.Count())
-
-	// Nothing left.
-	err = buffer.Close()
-	assert.NoError(err)
+	for _, offset := range []int{11, 13} {
+		for _, grow := range []bool{false, true} {
+			t.Run(fmt.Sprintf("offset=%d/grow=%t", offset, grow), func(t *testing.T) {
+				buffer := NewBuffer()
+				assert.NoError(t, buffer.grow())
+				buffer.head = len(buffer.data) - offset
+				buffer.tail = buffer.head
+				write := func(value byte) {
+					t.Helper()
+					_, err := buffer.Write([]byte{value, value, value}, Attributes{{Key: testKey, Value: value}})
+					assert.NoError(t, err)
+				}
+				read := func(value byte) {
+					t.Helper()
+					payload := make([]byte, 3)
+					n, attributes, err := buffer.Read(payload, nil)
+					assert.NoError(t, err)
+					assert.Equal(t, []byte{value, value, value}, payload[:n])
+					assert.Equal(t, value, attributes.Get(testKey))
+				}
+				for value := range byte(4) {
+					write(value)
+				}
+				read(0)
+				read(1)
+				write(4)
+				write(5) // Wrap the attribute ring.
+				write(6) // Grow the wrapped attribute ring.
+				if grow {
+					assert.NoError(t, buffer.grow()) // Grow the wrapped byte ring.
+				}
+				for value := byte(2); value <= 6; value++ {
+					read(value)
+				}
+				assert.Zero(t, buffer.Count())
+				assert.Zero(t, buffer.Size())
+				for _, attributes := range buffer.attributes {
+					assert.Empty(t, attributes)
+				}
+			})
+		}
+	}
 }
 
 func TestBufferLimitSize(t *testing.T) {
@@ -262,60 +70,60 @@ func TestBufferLimitSize(t *testing.T) {
 	assert.Equal(0, buffer.Size())
 
 	// Write twice
-	n, err := buffer.Write([]byte{0, 1})
+	n, err := buffer.Write([]byte{0, 1}, nil)
 	assert.NoError(err)
 	assert.Equal(2, n)
 	assert.Equal(4, buffer.Size())
 
-	n, err = buffer.Write([]byte{2, 3})
+	n, err = buffer.Write([]byte{2, 3}, nil)
 	assert.NoError(err)
 	assert.Equal(2, n)
 	assert.Equal(8, buffer.Size())
 
 	// Over capacity
-	_, err = buffer.Write([]byte{4, 5})
+	_, err = buffer.Write([]byte{4, 5}, nil)
 	assert.Equal(ErrFull, err)
 	assert.Equal(8, buffer.Size())
 
 	// Cheeky write at exact size.
-	n, err = buffer.Write([]byte{6})
+	n, err = buffer.Write([]byte{6}, nil)
 	assert.NoError(err)
 	assert.Equal(1, n)
 	assert.Equal(11, buffer.Size())
 
 	// Read once
 	packet := make([]byte, 4)
-	n, err = buffer.Read(packet)
+	n, _, err = buffer.Read(packet, nil)
 	assert.NoError(err)
 	assert.Equal(2, n)
 	assert.Equal([]byte{0, 1}, packet[:n])
 	assert.Equal(7, buffer.Size())
 
 	// Write once
-	n, err = buffer.Write([]byte{7, 8})
+	n, err = buffer.Write([]byte{7, 8}, nil)
 	assert.NoError(err)
 	assert.Equal(2, n)
 	assert.Equal(11, buffer.Size())
 
 	// Over capacity
-	_, err = buffer.Write([]byte{9, 10})
+	_, err = buffer.Write([]byte{9, 10}, nil)
 	assert.Equal(ErrFull, err)
 	assert.Equal(11, buffer.Size())
 
 	// Read everything
-	n, err = buffer.Read(packet)
+	n, _, err = buffer.Read(packet, nil)
 	assert.NoError(err)
 	assert.Equal(2, n)
 	assert.Equal([]byte{2, 3}, packet[:n])
 	assert.Equal(7, buffer.Size())
 
-	n, err = buffer.Read(packet)
+	n, _, err = buffer.Read(packet, nil)
 	assert.NoError(err)
 	assert.Equal(1, n)
 	assert.Equal([]byte{6}, packet[:n])
 	assert.Equal(4, buffer.Size())
 
-	n, err = buffer.Read(packet)
+	n, _, err = buffer.Read(packet, nil)
 	assert.NoError(err)
 	assert.Equal(2, n)
 	assert.Equal([]byte{7, 8}, packet[:n])
@@ -326,183 +134,33 @@ func TestBufferLimitSize(t *testing.T) {
 	assert.NoError(err)
 }
 
-func TestBufferLimitSizes(t *testing.T) {
-	if sizeHardLimit {
-		t.Skip("skipping since packetioSizeHardLimit is enabled")
-	}
-	sizes := []int{
-		128 * 1024,
-		1024 * 1024,
-		8 * 1024 * 1024,
-		0, // default
-	}
-	const headerSize = 2
-	const packetSize = 0x8000
-
-	for _, size := range sizes {
-		name := "default"
-		if size > 0 {
-			name = fmt.Sprintf("%dkBytes", size/1024)
-		}
-
-		t.Run(name, func(t *testing.T) {
-			assert := assert.New(t)
-
+func TestBufferAlloc(t *testing.T) {
+	for _, entries := range []int{0, 1, 4} {
+		t.Run(fmt.Sprint(entries), func(t *testing.T) {
 			buffer := NewBuffer()
-			if size == 0 {
-				size = maxSize
-			} else {
-				buffer.SetLimitSize(size + headerSize)
+			packet := make([]byte, 1024)
+			var attributes Attributes
+			for i := range entries {
+				attributes = append(attributes, Attribute{Key: i, Value: time.Unix(42, 0)})
 			}
-			now := time.Now()
-			assert.NoError(buffer.SetReadDeadline(now.Add(5 * time.Second))) // Set deadline to avoid test deadlock
+			var received Attributes
+			// AllocsPerRun warms up both queue and receive storage.
+			allocs := testing.AllocsPerRun(100, func() {
+				if _, err := buffer.Write(packet, attributes); err != nil {
+					assert.NoError(t, err)
 
-			nPackets := size / (packetSize + headerSize)
-
-			for range nPackets {
-				_, err := buffer.Write(make([]byte, packetSize))
-				assert.NoError(err)
-			}
-
-			// Next write is expected to be errored.
-			_, err := buffer.Write(make([]byte, packetSize))
-			assert.Error(err, ErrFull)
-
-			packet := make([]byte, size)
-			for range nPackets {
-				n, err := buffer.Read(packet)
-				assert.NoError(err)
-				assert.Equal(packetSize, n)
-				if err != nil {
-					assert.FailNow("Read failed", err)
+					return
 				}
-			}
+				var err error
+				_, received, err = buffer.Read(packet, received)
+				if err != nil {
+					assert.NoError(t, err)
+				}
+			})
+			assert.Zero(t, allocs)
+			assert.Equal(t, attributes, received)
 		})
 	}
-}
-
-func TestBufferMisc(t *testing.T) {
-	assert := assert.New(t)
-
-	buffer := NewBuffer()
-
-	// Write once
-	n, err := buffer.Write([]byte{0, 1, 2, 3})
-	assert.NoError(err)
-	assert.Equal(4, n)
-
-	// Try to read with a short buffer
-	packet := make([]byte, 3)
-	_, err = buffer.Read(packet)
-	assert.Equal(io.ErrShortBuffer, err)
-
-	// Close
-	err = buffer.Close()
-	assert.NoError(err)
-
-	// Make sure you can Close twice
-	err = buffer.Close()
-	assert.NoError(err)
-}
-
-var errTooManyCallOfGetBuffer = errors.New("too many call of getBuffer")
-
-func TestBufferAlloc(t *testing.T) {
-	packet := make([]byte, 1024)
-
-	const countTolerance = 1
-
-	test := func(fn func(func() (*Buffer, error), int, *error) func(), count int, maxVal float64) func(t *testing.T) {
-		return func(t *testing.T) {
-			t.Helper()
-
-			const nRuns = 100
-
-			// Create buffers in advance to avoid measuring allocs in NewBuffer()
-			// +1 buffer for warm-up run
-			buffers := make([]*Buffer, 0, nRuns+1)
-			for range nRuns + 1 {
-				buffers = append(buffers, NewBuffer())
-			}
-			var iBuffer int
-			getBuffer := func() (*Buffer, error) {
-				if iBuffer >= len(buffers) {
-					return nil, errTooManyCallOfGetBuffer
-				}
-				ret := buffers[iBuffer]
-				iBuffer++
-
-				return ret, nil
-			}
-
-			var err error
-			// AllocsPerRun calls the func once as a warm-up and then call it specified times
-			allocs := testing.AllocsPerRun(nRuns, fn(getBuffer, count, &err))
-			assert.NoError(t, err)
-			assert.LessOrEqualf(t, allocs, maxVal+countTolerance,
-				"count=%d, max=%f+%d, got %f", count, maxVal, countTolerance, allocs)
-		}
-	}
-
-	// Write (1024+2)*count bytes
-	writer := func(getBuffer func() (*Buffer, error), count int, errOut *error) func() {
-		return func() {
-			// Call only buffer.Write() on the non-error paths to avoid wrong count of allocs
-			buffer, err := getBuffer() // getBuffer doesn't alloc
-			if err != nil {
-				*errOut = err
-
-				return
-			}
-			for range count {
-				if _, err := buffer.Write(packet); err != nil {
-					*errOut = fmt.Errorf("write: %w", err)
-
-					return
-				}
-			}
-		}
-	}
-
-	// Buffer size will be grown as
-	// 2048 -> 4096 -> 8192 -> 16384 -> 32768 -> 65536 -> 131072 -> 163840 -> 204800
-	//   -> 256000 -> 320000 -> 400000 -> 500000 -> 625000 -> 781250 -> 976562 -> 1220702
-	// based on the logic in Buffer.grow()
-	t.Run("10 writes", test(writer, 10, 4))      // 10260 bytes
-	t.Run("100 writes", test(writer, 100, 7))    // 102600 bytes
-	t.Run("200 writes", test(writer, 200, 10))   // 205200 bytes
-	t.Run("400 writes", test(writer, 400, 13))   // 410400 bytes
-	t.Run("1000 writes", test(writer, 1000, 17)) // 1026000 bytes
-
-	// Read and write same times, so the buffer size should never grow
-	wr := func(getBuffer func() (*Buffer, error), count int, errOut *error) func() {
-		return func() {
-			// Call only buffer.Write() on the non-error paths to avoid wrong count of allocs
-			buffer, err := getBuffer() // getBuffer doesn't alloc
-			if err != nil {
-				*errOut = err
-
-				return
-			}
-			for range count {
-				if _, err := buffer.Write(packet); err != nil {
-					*errOut = fmt.Errorf("write: %w", err)
-
-					return
-				}
-				if _, err := buffer.Read(packet); err != nil {
-					*errOut = fmt.Errorf("read: %w", err)
-
-					return
-				}
-			}
-		}
-	}
-
-	t.Run("10 writes and reads", test(wr, 10, 1))
-	t.Run("100 writes and reads", test(wr, 100, 1))
-	t.Run("1000 writes and reads", test(wr, 1000, 1))
-	t.Run("10000 writes and reads", test(wr, 10000, 1))
 }
 
 func benchmarkBufferWR(b *testing.B, size int64, write bool, grow int) { // nolint:unparam
@@ -513,20 +171,20 @@ func benchmarkBufferWR(b *testing.B, size int64, write bool, grow int) { // noli
 	// Grow the buffer first
 	pad := make([]byte, 1022)
 	for buffer.Size() < grow {
-		_, err := buffer.Write(pad)
+		_, err := buffer.Write(pad, nil)
 		if err != nil {
 			b.Fatalf("Write: %v", err)
 		}
 	}
 	for buffer.Size() > 0 {
-		_, err := buffer.Read(pad)
+		_, _, err := buffer.Read(pad, nil)
 		if err != nil {
 			b.Fatalf("Write: %v", err)
 		}
 	}
 
 	if write {
-		_, err := buffer.Write(packet)
+		_, err := buffer.Write(packet, nil)
 		if err != nil {
 			b.Fatalf("Write: %v", err)
 		}
@@ -536,11 +194,11 @@ func benchmarkBufferWR(b *testing.B, size int64, write bool, grow int) { // noli
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_, err := buffer.Write(packet)
+		_, err := buffer.Write(packet, nil)
 		if err != nil {
 			b.Fatalf("Write: %v", err)
 		}
-		_, err = buffer.Read(packet)
+		_, _, err = buffer.Read(packet, nil)
 		if err != nil {
 			b.Fatalf("Read: %v", err)
 		}
@@ -585,7 +243,7 @@ func benchmarkBuffer(b *testing.B, size int64) {
 		packet := make([]byte, size)
 
 		for {
-			_, err := buffer.Read(packet)
+			_, _, err := buffer.Read(packet, nil)
 			if errors.Is(err, io.EOF) {
 				break
 			} else if err != nil {
@@ -605,7 +263,7 @@ func benchmarkBuffer(b *testing.B, size int64) {
 	for i := 0; i < b.N; i++ {
 		var err error
 		for {
-			_, err = buffer.Write(packet)
+			_, err = buffer.Write(packet, nil)
 			if !errors.Is(err, ErrFull) {
 				break
 			}
@@ -637,82 +295,257 @@ func BenchmarkBuffer1400(b *testing.B) {
 }
 
 func TestBufferConcurrentRead(t *testing.T) {
-	assert := assert.New(t)
-
 	buffer := NewBuffer()
-	packet := make([]byte, 4)
-
-	// Write twice
-	n, err := buffer.Write([]byte{2, 3, 4})
-	assert.NoError(err)
-	assert.Equal(3, n)
-
-	n, err = buffer.Write([]byte{5, 6, 7})
-	assert.NoError(err)
-	assert.Equal(3, n)
-
-	// Read twice
-	n, err = buffer.Read(packet)
-	assert.NoError(err)
-	assert.Equal(3, n)
-	assert.Equal([]byte{2, 3, 4}, packet[:n])
-
-	n, err = buffer.Read(packet)
-	assert.NoError(err)
-	assert.Equal(3, n)
-	assert.Equal([]byte{5, 6, 7}, packet[:n])
-
-	errCh := make(chan error, 2)
-	readIntoErr := func() {
-		packet := make([]byte, 4)
-		_, readErr := buffer.Read(packet)
-		errCh <- readErr
+	assert.NoError(t, buffer.SetReadDeadline(time.Now().Add(5*time.Second)))
+	errors := make(chan error, 2)
+	for range cap(errors) {
+		go func() {
+			_, _, err := buffer.Read(make([]byte, 4), nil)
+			errors <- err
+		}()
 	}
-	go readIntoErr()
-	go readIntoErr()
-
-	// Close
-	err = buffer.Close()
-	assert.NoError(err)
-
-	err = <-errCh
-	assert.Equal(io.EOF, err)
-	err = <-errCh
-	assert.Equal(io.EOF, err)
+	assert.NoError(t, buffer.Close())
+	for range cap(errors) {
+		assert.Equal(t, io.EOF, <-errors)
+	}
 }
 
-func TestBufferConcurrentReadWrite(t *testing.T) {
-	defer test.TimeOut(time.Second * 5).Stop()
+type testAttributeKey int
 
-	assert := assert.New(t)
+const testKey testAttributeKey = 0
 
+func TestBufferAttributes(t *testing.T) {
 	buffer := NewBuffer()
+	reference := &struct{ Source string }{"source"}
+	input := Attributes{{Key: testKey, Value: 42}, {Key: "reference", Value: reference}, {Key: "nil", Value: nil}}
+	payload := []byte("data")
+	for range 2 {
+		n, err := buffer.Write(payload, input)
+		assert.NoError(t, err)
+		assert.Equal(t, len(payload), n)
+	}
+	clear(input)
+	clear(payload)
+	_, err := buffer.Write([]byte("next"), nil)
+	assert.NoError(t, err)
+	assert.Equal(t, 12+3*2, buffer.Size())
 
-	numPkts := 1000
-	var numRead uint64
-	allRead := make(chan struct{})
-	readPkts := func(count int) {
-		packet := make([]byte, 4)
-		for range count {
-			_, readErr := buffer.Read(packet)
-			if readErr != nil {
-				return
-			}
-			if atomic.AddUint64(&numRead, 1) == uint64(numPkts) { //nolint:gosec
-				close(allRead)
+	n, attributes, err := buffer.Read(payload, nil)
+	assert.NoError(t, err)
+	assert.Equal(t, "data", string(payload[:n]))
+	assert.Equal(t, Attributes{
+		{Key: testKey, Value: 42}, {Key: "reference", Value: reference}, {Key: "nil", Value: nil},
+	}, attributes)
+	assert.Same(t, reference, attributes.Get("reference"))
+	attributes.Set(testKey, 99)
+	assert.Equal(t, make(Attributes, len(input)), input)
 
-				return
-			}
+	n, attributes, err = buffer.Read(payload, attributes)
+	assert.NoError(t, err)
+	assert.Equal(t, "data", string(payload[:n]))
+	assert.Equal(t, 42, attributes.Get(testKey))
+	assert.Equal(t, 6, buffer.Size())
+	n, attributes, err = buffer.Read(payload, attributes)
+	assert.NoError(t, err)
+	assert.Equal(t, "next", string(payload[:n]))
+	assert.Empty(t, attributes)
+	assert.Equal(t, make(Attributes, cap(attributes)), attributes[:cap(attributes)])
+	assert.Zero(t, buffer.Size())
+	for _, value := range buffer.attributes {
+		assert.Empty(t, value)
+		for _, entry := range value[:cap(value)] {
+			assert.Equal(t, Attribute{}, entry)
 		}
 	}
-	go readPkts(numPkts)
-	go readPkts(numPkts / 100)
+}
 
-	for range numPkts {
-		_, writeErr := buffer.Write([]byte{2, 3, 4})
-		assert.NoError(writeErr)
+func TestBufferAttributesDeadlineAndClose(t *testing.T) {
+	buffer := NewBuffer()
+	_, err := buffer.Write([]byte("data"), Attributes{{Key: testKey, Value: 42}})
+	assert.NoError(t, err)
+	assert.NoError(t, buffer.SetReadDeadline(time.Now().Add(-time.Second)))
+	payload := make([]byte, 4)
+	n, attributes, err := buffer.Read(payload, nil)
+	assert.ErrorIs(t, err, ErrTimeout)
+	var timeout net.Error
+	if assert.ErrorAs(t, err, &timeout) {
+		assert.True(t, timeout.Timeout())
 	}
-	<-allRead
+	assert.Zero(t, n)
+	assert.Empty(t, attributes)
+	assert.Equal(t, 1, buffer.Count())
+	assert.NoError(t, buffer.SetReadDeadline(time.Time{}))
+	assert.NoError(t, buffer.Close())
+	assert.NoError(t, buffer.Close())
+	_, err = buffer.Write(nil, Attributes{{Key: testKey, Value: "rejected"}})
+	assert.ErrorIs(t, err, io.ErrClosedPipe)
+	n, attributes, err = buffer.Read(payload, nil)
+	assert.NoError(t, err)
+	assert.Equal(t, "data", string(payload[:n]))
+	assert.Equal(t, 42, attributes.Get(testKey))
+	n, attributes, err = buffer.Read(payload, nil)
+	assert.ErrorIs(t, err, io.EOF)
+	assert.Zero(t, n)
+	assert.Empty(t, attributes)
+	assert.Zero(t, buffer.Count())
+}
 
-	assert.NoError(buffer.Close())
+func TestBufferTruncationPreservesAttributes(t *testing.T) {
+	for _, size := range []int{0, 3, 6} {
+		t.Run(fmt.Sprint(size), func(t *testing.T) {
+			buffer := NewBuffer()
+			_, err := buffer.Write([]byte("packet"), Attributes{{Key: testKey, Value: 42}})
+			assert.NoError(t, err)
+			_, err = buffer.Write(nil, nil)
+			assert.NoError(t, err)
+			payload := make([]byte, size)
+			n, attributes, err := buffer.Read(payload, nil)
+			if size < 6 {
+				assert.ErrorIs(t, err, io.ErrShortBuffer)
+			} else {
+				assert.NoError(t, err)
+			}
+			assert.Equal(t, "packet"[:size], string(payload[:n]))
+			assert.Equal(t, 42, attributes.Get(testKey))
+			assert.Equal(t, 1, buffer.Count())
+			assert.Equal(t, 2, buffer.Size())
+			n, attributes, err = buffer.Read(nil, nil)
+			assert.NoError(t, err)
+			assert.Zero(t, n)
+			assert.Empty(t, attributes)
+		})
+	}
+}
+
+func TestBufferAttributeLimits(t *testing.T) {
+	buffer := NewBuffer()
+	buffer.SetLimitSize(4)
+	buffer.SetLimitCount(1)
+	input := Attributes{{Key: testKey, Value: 42}}
+	_, err := buffer.Write(nil, input)
+	assert.NoError(t, err)
+	input.Set("extra", true)
+	assert.Equal(t, 2, buffer.Size()) // Attributes do not change logical byte accounting.
+	_, err = buffer.Write(nil, nil)
+	assert.ErrorIs(t, err, ErrFull)
+	assert.Equal(t, 1, buffer.Count())
+	buffer.SetLimitCount(0)
+	_, err = buffer.Write(nil, input)
+	assert.NoError(t, err)
+	assert.Equal(t, 4, buffer.Size())
+	_, err = buffer.Write(nil, nil)
+	assert.ErrorIs(t, err, ErrFull)
+	buffer.SetLimitSize(1)
+	for _, expected := range []Attributes{{{Key: testKey, Value: 42}}, input} {
+		_, attributes, readErr := buffer.Read(nil, nil)
+		assert.NoError(t, readErr)
+		assert.Equal(t, expected, attributes)
+	}
+	assert.Zero(t, buffer.Size())
+	buffer.SetLimitSize(math.MaxInt)
+	_, err = buffer.Write(make([]byte, minSize), nil)
+	assert.NoError(t, err)
+}
+
+func TestBufferAttributeStorageCap(t *testing.T) {
+	for _, limit := range []int{128 * 1024, 0, 2 * maxSize} {
+		t.Run(fmt.Sprint(limit), func(t *testing.T) {
+			buffer := NewBuffer()
+			buffer.SetLimitSize(limit)
+			capacity := limit
+			if limit == 0 || (sizeHardLimit && limit >= maxSize) {
+				capacity = maxSize - 1
+			}
+			payload := make([]byte, 0x8000)
+			attributes := Attributes{{Key: testKey, Value: 42}}
+			count := capacity / (len(payload) + 2)
+			for range count {
+				_, err := buffer.Write(payload, attributes)
+				assert.NoError(t, err)
+			}
+			_, err := buffer.Write(payload, attributes)
+			assert.ErrorIs(t, err, ErrFull)
+			assert.Equal(t, count, buffer.Count())
+			assert.NoError(t, buffer.Close())
+			for range count {
+				n, got, err := buffer.Read(payload, nil)
+				assert.NoError(t, err)
+				assert.Equal(t, len(payload), n)
+				assert.Equal(t, attributes, got)
+			}
+			assert.Zero(t, buffer.Size())
+		})
+	}
+}
+
+func TestBufferAttributesConcurrent(t *testing.T) {
+	buffer := NewBuffer()
+	t.Cleanup(func() { assert.NoError(t, buffer.Close()) })
+	assert.NoError(t, buffer.SetReadDeadline(time.Now().Add(5*time.Second)))
+	const workers, packets = 4, 100
+	results := make(chan [2]byte, workers*packets)
+	var group sync.WaitGroup
+	for writer := range byte(workers) {
+		group.Add(2)
+		go func() {
+			defer group.Done()
+			payload := []byte{writer, 0}
+			attributes := Attributes{}
+			for index := range byte(packets) {
+				payload[1] = index
+				attributes.Set(testKey, [2]byte{writer, index})
+				_, err := buffer.Write(payload, attributes)
+				assert.NoError(t, err)
+				clear(attributes)
+				attributes = attributes[:0]
+			}
+		}()
+		go func() {
+			defer group.Done()
+			payload := make([]byte, 2)
+			var attributes Attributes
+			for range packets {
+				n, received, err := buffer.Read(payload, attributes)
+				attributes = received
+				if !assert.NoError(t, err) || !assert.Equal(t, 2, n) {
+					return
+				}
+				value := [2]byte(payload)
+				assert.Equal(t, value, attributes.Get(testKey))
+				results <- value
+			}
+		}()
+	}
+	group.Wait()
+	close(results)
+	seen := make(map[[2]byte]bool)
+	for value := range results {
+		assert.False(t, seen[value])
+		seen[value] = true
+	}
+	assert.Len(t, seen, workers*packets)
+	assert.Zero(t, buffer.Count())
+}
+
+func BenchmarkBufferAttributes(b *testing.B) {
+	for _, attributes := range []Attributes{nil, {{Key: testKey, Value: time.Unix(42, 0)}}} {
+		b.Run(fmt.Sprintf("entries=%d", len(attributes)), func(b *testing.B) {
+			buffer := NewBuffer()
+			payload := make([]byte, 1400)
+			var received Attributes
+			b.ReportAllocs()
+			b.SetBytes(int64(len(payload)))
+			b.ResetTimer()
+			for range b.N {
+				if _, err := buffer.Write(payload, attributes); err != nil {
+					b.Fatal(err)
+				}
+				var err error
+				_, received, err = buffer.Read(payload, received)
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
 }

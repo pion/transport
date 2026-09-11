@@ -267,7 +267,7 @@ func (l *listener) dispatchMsg(addr net.Addr, buf []byte) {
 		return
 	}
 	if ok {
-		_, _ = conn.buffer.Write(buf)
+		_, _ = conn.buffer.Write(buf, nil)
 	}
 }
 
@@ -322,7 +322,9 @@ func (l *listener) newConn(rAddr net.Addr) *Conn {
 
 // Read reads from c into p.
 func (c *Conn) Read(p []byte) (int, error) {
-	return c.buffer.Read(p)
+	n, _, err := c.buffer.Read(p, nil)
+
+	return n, err
 }
 
 // Write writes len(p) bytes from p to the DTLS connection.
