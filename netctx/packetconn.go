@@ -5,6 +5,7 @@ package netctx
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net"
 	"sync"
@@ -32,18 +33,16 @@ type PacketConn interface {
 }
 
 type packetConn struct {
-	nextConn  net.PacketConn
-	closed    chan struct{}
-	closeOnce sync.Once
-	readMu    sync.Mutex
-	writeMu   sync.Mutex
+	nextConn net.PacketConn
+	closed   atomic.Bool
+	readMu   sync.Mutex
+	writeMu  sync.Mutex
 }
 
 // NewPacketConn creates a new PacketConn wrapping the given net.PacketConn.
 func NewPacketConn(pconn net.PacketConn) PacketConn {
 	p := &packetConn{
 		nextConn: pconn,
-		closed:   make(chan struct{}),
 	}
 
 	return p
@@ -58,116 +57,90 @@ func NewPacketConn(pconn net.PacketConn) PacketConn {
 // the n > 0 bytes returned before considering the error err.
 // Unlike net.PacketConn.ReadFrom(), the provided context is
 // used to control timeout.
-func (p *packetConn) ReadFromContext(ctx context.Context, b []byte) (int, net.Addr, error) { //nolint:cyclop
+func (p *packetConn) ReadFromContext(ctx context.Context, b []byte) (int, net.Addr, error) {
 	p.readMu.Lock()
 	defer p.readMu.Unlock()
 
-	select {
-	case <-p.closed:
+	if p.closed.Load() {
 		return 0, nil, net.ErrClosed
-	default:
+	}
+	if ctx.Err() != nil {
+		return 0, nil, ctx.Err()
 	}
 
-	done := make(chan struct{})
-	var wg sync.WaitGroup
-	var errSetDeadline atomic.Value
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		select {
-		case <-ctx.Done():
-			// context canceled
-			if err := p.nextConn.SetReadDeadline(veryOld); err != nil {
-				errSetDeadline.Store(err)
-
-				return
-			}
-			<-done
-			if err := p.nextConn.SetReadDeadline(time.Time{}); err != nil {
-				errSetDeadline.Store(err)
-			}
-		case <-done:
+	if deadline, ok := ctx.Deadline(); ok {
+		if err := p.nextConn.SetReadDeadline(deadline); err != nil {
+			return 0, nil, err
 		}
-	}()
+	}
+
+	detachDeadline := context.AfterFunc(ctx, func() {
+		if err := p.nextConn.SetReadDeadline(veryOld); err != nil {
+			_ = p.nextConn.Close()
+		}
+	})
 
 	n, raddr, err := p.nextConn.ReadFrom(b)
 
-	close(done)
-	wg.Wait()
-	if e := ctx.Err(); e != nil && n == 0 {
-		err = e
-	}
-	if err2, ok := errSetDeadline.Load().(error); ok && err == nil && err2 != nil {
-		err = err2
+	detachDeadline()
+
+	var setDeadlineErr error
+	if !p.closed.Load() {
+		setDeadlineErr = p.nextConn.SetReadDeadline(time.Time{})
 	}
 
-	return n, raddr, err
+	return n, raddr, errors.Join(err, ctx.Err(), setDeadlineErr)
 }
 
 // WriteToContext writes a packet with payload p to addr.
 // Unlike net.PacketConn.WriteTo(), the provided context
 // is used to control timeout.
 // On packet-oriented connections, write timeouts are rare.
-func (p *packetConn) WriteToContext(ctx context.Context, b []byte, raddr net.Addr) (int, error) { //nolint:cyclop
+func (p *packetConn) WriteToContext(ctx context.Context, b []byte, raddr net.Addr) (int, error) {
 	p.writeMu.Lock()
 	defer p.writeMu.Unlock()
 
-	select {
-	case <-p.closed:
+	if p.closed.Load() {
 		return 0, ErrClosing
-	default:
+	}
+	if ctx.Err() != nil {
+		return 0, ctx.Err()
 	}
 
-	done := make(chan struct{})
-	var wg sync.WaitGroup
-	var errSetDeadline atomic.Value
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		select {
-		case <-ctx.Done():
-			// context canceled
-			if err := p.nextConn.SetWriteDeadline(veryOld); err != nil {
-				errSetDeadline.Store(err)
-
-				return
-			}
-			<-done
-			if err := p.nextConn.SetWriteDeadline(time.Time{}); err != nil {
-				errSetDeadline.Store(err)
-			}
-		case <-done:
+	if deadline, ok := ctx.Deadline(); ok {
+		if err := p.nextConn.SetWriteDeadline(deadline); err != nil {
+			return 0, err
 		}
-	}()
+	}
+
+	detachDeadline := context.AfterFunc(ctx, func() {
+		if errors.Is(ctx.Err(), context.Canceled) {
+			if err := p.nextConn.SetWriteDeadline(veryOld); err != nil {
+				_ = p.nextConn.Close()
+			}
+		}
+	})
 
 	n, err := p.nextConn.WriteTo(b, raddr)
 
-	close(done)
-	wg.Wait()
-	if e := ctx.Err(); e != nil && n == 0 {
-		err = e
-	}
-	if err2, ok := errSetDeadline.Load().(error); ok && err == nil && err2 != nil {
-		err = err2
+	detachDeadline()
+	var setDeadlineErr error
+	if !p.closed.Load() {
+		setDeadlineErr = p.nextConn.SetWriteDeadline(time.Time{})
 	}
 
-	return n, err
+	return n, errors.Join(ctx.Err(), setDeadlineErr, err)
 }
 
 // Close closes the connection.
 // Any blocked ReadFromContext or WriteToContext operations will be unblocked
 // and return errors.
 func (p *packetConn) Close() error {
-	err := p.nextConn.Close()
-	p.closeOnce.Do(func() {
-		p.writeMu.Lock()
-		p.readMu.Lock()
-		close(p.closed)
-		p.readMu.Unlock()
-		p.writeMu.Unlock()
-	})
+	if !p.closed.Swap(true) {
+		return p.nextConn.Close()
+	}
 
-	return err
+	return nil
 }
 
 // LocalAddr returns the local network address, if known.
