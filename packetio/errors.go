@@ -13,6 +13,10 @@ type netError struct {
 	timeout, temporary bool
 }
 
+func (e *netError) Unwrap() error {
+	return e.error
+}
+
 func (e *netError) Timeout() bool {
 	return e.timeout
 }
