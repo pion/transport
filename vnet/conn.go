@@ -181,7 +181,7 @@ loop:
 				Op:   "read",
 				Net:  c.locAddr.Network(),
 				Addr: c.locAddr,
-				Err:  newTimeoutError("i/o timeout"),
+				Err:  errIOTimeout,
 			}
 		}
 	}
