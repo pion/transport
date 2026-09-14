@@ -129,7 +129,7 @@ func (d *slidingWindowDetector) checkSeq(seq uint64) bool {
 }
 
 func (d *slidingWindowDetector) acceptSeq(seq uint64) bool {
-	latest := seq == 0
+	latest := seq == 0 && d.latestSeq == 0 && d.mask.Bit(0) == 0
 	if seq > d.latestSeq {
 		// Update the head of the window.
 		d.mask.Lsh(uint(seq - d.latestSeq))
