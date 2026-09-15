@@ -7,7 +7,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/pion/transport/v4"
+	"github.com/pion/transport/v5"
 )
 
 // TCPListener implements transport.TCPListener.

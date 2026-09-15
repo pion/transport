@@ -12,8 +12,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/pion/transport/v4/deadline"
-	"github.com/pion/transport/v4/packetio"
+	"github.com/pion/transport/v5/deadline"
+	"github.com/pion/transport/v5/packetio"
 	"golang.org/x/net/ipv4"
 )
 

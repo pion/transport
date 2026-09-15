@@ -7,7 +7,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/pion/transport/v4"
+	"github.com/pion/transport/v5"
 	"github.com/stretchr/testify/assert"
 )
 

@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/pion/transport/v4"
+	"github.com/pion/transport/v5"
 	"github.com/wlynxg/anet"
 )
 
