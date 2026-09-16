@@ -5,6 +5,9 @@ package replaydetector
 
 import (
 	"fmt"
+	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func Example_fixedBigInt_SetBit() {
@@ -58,4 +61,20 @@ func Example_fixedBigInt_SetBit() {
 	// 0000000000000004000000000010000000000004020000000000000000000080
 	// 0000000004000000000000000000010000000000000000000000000000000000
 	// 00000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+}
+
+func TestFixedBigIntShiftAcrossWindow(t *testing.T) {
+	for _, width := range []uint{1, 63, 64, 65, 96, 127, 128} {
+		t.Run(fmt.Sprintf("width=%d", width), func(t *testing.T) {
+			value := newFixedBigInt(width)
+			value.SetBit(0)
+			for position := range width {
+				require.Equal(t, uint(1), value.Bit(position), "position %d", position)
+				value.Lsh(1)
+			}
+			for _, word := range value.bits {
+				require.Zero(t, word, "bits shifted beyond the window must be cleared")
+			}
+		})
+	}
 }

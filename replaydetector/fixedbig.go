@@ -25,7 +25,7 @@ func newFixedBigInt(n uint) *fixedBigInt {
 	return &fixedBigInt{
 		bits:    make([]uint64, chunkSize),
 		n:       n,
-		msbMask: (1 << (64 - n%64)) - 1,
+		msbMask: ^uint64(0) >> ((64 - n%64) % 64),
 	}
 }
 

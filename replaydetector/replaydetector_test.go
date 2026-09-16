@@ -4,6 +4,7 @@
 package replaydetector
 
 import (
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -29,6 +30,20 @@ var (
 )
 
 var commonCases = map[string]testCase{ //nolint:gochecknoglobals
+	"FullWidthJump": {
+		64, 0x0000FFFFFFFFFFFF,
+		[]uint64{10, 9, 1<<32 + 10, 1<<32 + 9, 1<<32 + 9},
+		[]bool{true, true, true, true, false},
+		[]bool{true, false, true, false, false},
+		[]uint64{10, 9, 1<<32 + 10, 1<<32 + 9},
+	},
+	"PartialWordWindow": {
+		127, 0x0000FFFFFFFFFFFF,
+		[]uint64{0, 64, 65, 0, 1, 1},
+		[]bool{true, true, true, false, true, false},
+		[]bool{true, true, true, false, false, false},
+		[]uint64{0, 64, 65, 1},
+	},
 	"ReorderedZero": {
 		16, 0x0000FFFFFFFFFFFF,
 		[]uint64{3, 0, 0, 4},
@@ -245,6 +260,17 @@ func TestReplayDetector(t *testing.T) {
 					runCase(t, New(tc.windowSize, tc.maxSeq), tc)
 				})
 			}
+			t.Run("FullWidthSequence", func(t *testing.T) {
+				runCase(t, New(64, math.MaxUint64), testCase{
+					input: []uint64{
+						math.MaxUint64, math.MaxUint64 - 1, math.MaxUint64 - 64,
+						math.MaxUint64 - 63, math.MaxUint64 - 1, math.MaxUint64,
+					},
+					valid:    []bool{true, true, false, true, false, false},
+					latest:   []bool{true, false, false, false, false, false},
+					expected: []uint64{math.MaxUint64, math.MaxUint64 - 1, math.MaxUint64 - 63},
+				})
+			})
 		})
 	}
 }

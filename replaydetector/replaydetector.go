@@ -116,7 +116,7 @@ func (d *slidingWindowDetector) checkSeq(seq uint64) bool {
 	}
 
 	if seq <= d.latestSeq {
-		if d.latestSeq >= uint64(d.windowSize)+seq {
+		if d.latestSeq-seq >= uint64(d.windowSize) {
 			return false
 		}
 		if d.mask.Bit(uint(d.latestSeq-seq)) != 0 {
@@ -132,7 +132,7 @@ func (d *slidingWindowDetector) acceptSeq(seq uint64) bool {
 	latest := seq == 0 && d.latestSeq == 0 && d.mask.Bit(0) == 0
 	if seq > d.latestSeq {
 		// Update the head of the window.
-		d.mask.Lsh(uint(seq - d.latestSeq))
+		d.mask.Lsh(uint(min(seq-d.latestSeq, uint64(d.windowSize))))
 		d.latestSeq = seq
 		latest = true
 	}
@@ -226,7 +226,7 @@ func (d *wrappedSlidingWindowDetector) checkSeq(seq uint64) (int64, bool) {
 func (d *wrappedSlidingWindowDetector) acceptDiff(seq uint64, diff int64) bool {
 	if diff < 0 {
 		// Update the head of the window.
-		d.mask.Lsh(uint(-diff))
+		d.mask.Lsh(uint(min(uint64(-diff), uint64(d.windowSize))))
 		d.latestSeq = seq
 		d.mask.SetBit(0)
 
