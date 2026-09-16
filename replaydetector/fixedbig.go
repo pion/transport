@@ -17,10 +17,7 @@ type fixedBigInt struct {
 
 // newFixedBigInt creates a new fix-sized multi-word int.
 func newFixedBigInt(n uint) *fixedBigInt {
-	chunkSize := (n + 63) / 64
-	if chunkSize == 0 {
-		chunkSize = 1
-	}
+	chunkSize := max((n+63)/64, 1)
 
 	return &fixedBigInt{
 		bits:    make([]uint64, chunkSize),
