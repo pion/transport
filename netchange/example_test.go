@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pion/transport/v5"
 	"github.com/pion/transport/v5/netchange"
 )
 
@@ -38,6 +39,10 @@ func ExampleDetector_Check() {
 
 		return
 	}
+	// Pass the detector directly; Check has refreshed its interfaces.
+	var network transport.Net = detector
+	_, _ = network.Interfaces()
+
 	for _, change := range changes {
 		fmt.Println(change.Interface, change.Type)
 	}

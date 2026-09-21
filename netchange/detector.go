@@ -16,13 +16,15 @@ import (
 	"os"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 
-	"github.com/wlynxg/anet"
+	"github.com/pion/transport/v5"
+	"github.com/pion/transport/v5/stdnet"
 )
 
-// used if OS detection is not supported.
-var pollTimerPool sync.Pool //nolint:gochecknoglobals
+// ErrBusy indicates that another Check is active.
+var ErrBusy = errors.New("network change detector is busy")
 
 type notificationSource interface {
 	drain() (bool, error)
@@ -30,13 +32,19 @@ type notificationSource interface {
 	close() error
 }
 
-// Detector checks system interfaces for changes.
+// Detector implements transport.Net using the latest system interfaces and addresses.
+// Check waits for changes and refreshes interfaces internally. Network methods
+// can be called concurrently with Check. A Detector must not be copied.
 type Detector struct {
+	mu        sync.Mutex
+	checking  bool
+	closed    bool
 	state     stateDetector
 	source    notificationSource
 	enumerate func() ([]interfaceState, error)
 	pending   bool
 	initial   []Change // nil after the initial result has been delivered.
+	network   atomic.Pointer[stdnet.Net]
 }
 
 // Option configures a Detector during construction.
@@ -59,7 +67,16 @@ type Change struct {
 
 // NewDetector opens the platform backend and captures the initial interfaces.
 func NewDetector(options ...Option) (*Detector, error) {
-	detector := &Detector{enumerate: enumerateInterfaces}
+	detector := &Detector{}
+	detector.enumerate = func() ([]interfaceState, error) {
+		network := &stdnet.Net{}
+		state, err := enumerateInterfaces(network)
+		if err == nil {
+			detector.network.Store(network)
+		}
+
+		return state, err
+	}
 	for _, option := range options {
 		if option != nil {
 			option(detector)
@@ -77,7 +94,8 @@ func NewDetector(options ...Option) (*Detector, error) {
 	return detector, nil
 }
 
-// WithInterfaceFilter includes only interfaces for which filter returns true.
+// WithInterfaceFilter reports changes only for interfaces for which filter returns
+// true. It does not filter the interfaces exposed through transport.Net.
 func WithInterfaceFilter(filter func(string) bool) Option {
 	return func(detector *Detector) {
 		detector.state.interfaceFilter = filter
@@ -98,14 +116,37 @@ func (d *Detector) start() error {
 	return nil
 }
 
-// Check waits until an included interface changes, the first call reports the initial
+// Check updates the internal network snapshot and waits until an included
+// interface changes. The first call reports the initial
 // matching interfaces as Added, returning immediately even if none match.
 // Subsequent successful calls contain at least one affected interface.
 // Cancellation returns context.Cause(ctx), including custom cancellation causes.
+// Check returns ErrBusy while another Check is active.
 func (d *Detector) Check(ctx context.Context) ([]Change, error) {
-	if d.state.last == nil {
+	d.mu.Lock()
+	if d.closed {
+		d.mu.Unlock()
+
 		return nil, os.ErrClosed
 	}
+	if d.checking {
+		d.mu.Unlock()
+
+		return nil, ErrBusy
+	}
+	if err := context.Cause(ctx); err != nil {
+		d.mu.Unlock()
+
+		return nil, err
+	}
+	d.checking = true
+	d.mu.Unlock()
+	defer func() {
+		d.mu.Lock()
+		d.checking = false
+		d.mu.Unlock()
+	}()
+
 	for {
 		if err := context.Cause(ctx); err != nil {
 			return nil, err
@@ -158,20 +199,8 @@ func (d *Detector) wait(ctx context.Context) error {
 
 		return d.source.wait(ctx)
 	}
-	timer, ok := pollTimerPool.Get().(*time.Timer)
-	if !ok {
-		timer = time.NewTimer(time.Second)
-	} else {
-		timer.Reset(time.Second)
-	}
-	defer func() {
-		timer.Stop()
-		select {
-		case <-timer.C:
-		default:
-		}
-		pollTimerPool.Put(timer)
-	}()
+	timer := time.NewTimer(time.Second)
+	defer timer.Stop()
 	select {
 	case <-ctx.Done():
 		return context.Cause(ctx)
@@ -181,10 +210,17 @@ func (d *Detector) wait(ctx context.Context) error {
 }
 
 // Close releases the platform backend.
+// It returns ErrBusy while Check is active.
 func (d *Detector) Close() error {
-	if d.state.last == nil {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.closed {
 		return os.ErrClosed
 	}
+	if d.checking {
+		return ErrBusy
+	}
+	d.closed = true
 	d.state.last = nil
 	if d.source != nil {
 		return d.source.close()
@@ -248,15 +284,22 @@ func normalize(interfaces []interfaceState, filter func(string) bool) []interfac
 	return state
 }
 
-func enumerateInterfaces() ([]interfaceState, error) {
-	interfaces, err := anet.Interfaces()
-	if err != nil {
+func enumerateInterfaces(network *stdnet.Net) ([]interfaceState, error) {
+	if err := network.UpdateInterfaces(); err != nil {
 		return nil, fmt.Errorf("enumerate interfaces: %w", err)
 	}
+	interfaces, _ := network.Interfaces()
+
+	return interfaceStates(interfaces)
+}
+
+func interfaceStates(interfaces []*transport.Interface) ([]interfaceState, error) {
 	state := make([]interfaceState, 0, len(interfaces))
 	for _, iface := range interfaces {
-		addresses, err := anet.InterfaceAddrsByInterface(&iface)
-		if err != nil {
+		addresses, err := iface.Addrs()
+		if errors.Is(err, transport.ErrNoAddressAssigned) {
+			addresses = nil
+		} else if err != nil {
 			return nil, fmt.Errorf("enumerate addresses for %s: %w", iface.Name, err)
 		}
 		next := interfaceState{

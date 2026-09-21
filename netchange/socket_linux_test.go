@@ -41,7 +41,10 @@ func TestWaitSocket(t *testing.T) {
 
 	// A canceled wait must not poison the next wait on the same descriptor.
 	state := []interfaceState{{Index: 1, Name: "before"}}
-	detector := &Detector{source: receiver, enumerate: func() ([]interfaceState, error) { return state, nil }}
+	detector := &Detector{
+		source:    receiver,
+		enumerate: func() ([]interfaceState, error) { return state, nil },
+	}
 	assert.NoError(t, detector.start())
 	_, err := detector.Check(context.Background())
 	assert.NoError(t, err)

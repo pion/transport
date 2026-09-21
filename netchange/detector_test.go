@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pion/transport/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -82,4 +83,38 @@ func TestCheckCancellationPreservesChange(t *testing.T) {
 	changes, err = detector.Check(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, []Change{{Interface: "after", Type: Changed}}, changes)
+}
+
+func TestCheckUpdatesNet(t *testing.T) {
+	detector, err := NewDetector(WithInterfaceFilter(func(string) bool { return false }))
+	require.NoError(t, err)
+	defer func() { _ = detector.Close() }()
+	before, err := detector.Interfaces()
+	require.NoError(t, err)
+	if len(before) == 0 {
+		t.Skip("no network interfaces available")
+	}
+	var network transport.Net = detector
+	_, err = detector.Check(context.Background())
+	require.NoError(t, err)
+	detector.pending = true
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	changes, err := detector.Check(ctx)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+	require.Empty(t, changes, "event filters must not filter the network snapshot")
+	interfaces, err := network.Interfaces()
+	require.NoError(t, err)
+	require.NotEmpty(t, interfaces)
+	require.NotSame(t, before[0], interfaces[0], "refresh must publish a new snapshot")
+	byIndex, err := network.InterfaceByIndex(interfaces[0].Index)
+	require.NoError(t, err)
+	require.Same(t, interfaces[0], byIndex)
+	byName, err := network.InterfaceByName(interfaces[0].Name)
+	require.NoError(t, err)
+	require.Same(t, interfaces[0], byName)
+	require.NoError(t, detector.Close())
+	afterClose, err := network.Interfaces()
+	require.NoError(t, err)
+	require.Same(t, interfaces[0], afterClose[0], "last interfaces remain available after close")
 }
