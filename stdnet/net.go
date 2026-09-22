@@ -9,6 +9,8 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"sync/atomic"
+	"time"
 
 	"github.com/pion/transport/v5"
 	"github.com/wlynxg/anet"
@@ -21,9 +23,14 @@ const (
 
 // Net is an implementation of the net.Net interface
 // based on functions of the standard net package.
+// A nil *Net uses a shared interface cache that expires after 5 seconds.
 type Net struct {
 	interfaces []*transport.Interface
 }
+
+var defaultNet = &Net{} //nolint:gochecknoglobals
+
+var cachedNet atomic.Pointer[Net] //nolint:gochecknoglobals
 
 // NewNet creates a new StdNet instance.
 func NewNet() (*Net, error) {
@@ -37,7 +44,12 @@ var _ transport.Net = &Net{}
 
 // UpdateInterfaces updates the internal list of network interfaces
 // and associated addresses.
+// For a nil receiver, it refreshes the shared interface cache.
 func (n *Net) UpdateInterfaces() error {
+	if n == nil {
+		n = defaultNet
+	}
+
 	ifs := []*transport.Interface{}
 
 	oifs, err := anet.Interfaces()
@@ -60,15 +72,49 @@ func (n *Net) UpdateInterfaces() error {
 		ifs = append(ifs, ifc)
 	}
 
-	n.interfaces = ifs
+	if n == defaultNet {
+		cache := &Net{interfaces: ifs}
+		cachedNet.Store(cache)
+		expireNet(cache)
+	} else {
+		n.interfaces = ifs
+	}
 
 	return nil
+}
+
+func expireNet(cache *Net) {
+	time.AfterFunc(5*time.Second, func() {
+		cachedNet.CompareAndSwap(cache, nil)
+	})
 }
 
 // Interfaces returns a slice of interfaces which are available on the
 // system.
 func (n *Net) Interfaces() ([]*transport.Interface, error) {
-	return n.interfaces, nil
+	if n == nil {
+		n = defaultNet
+	}
+	if n != defaultNet {
+		return n.interfaces, nil
+	}
+
+	for {
+		if cache := cachedNet.Load(); cache != nil {
+			return cache.interfaces, nil
+		}
+
+		cache, err := NewNet()
+		if err != nil {
+			return nil, err
+		}
+		if !cachedNet.CompareAndSwap(nil, cache) {
+			continue
+		}
+		expireNet(cache)
+
+		return cache.interfaces, nil
+	}
 }
 
 // InterfaceByIndex returns the interface specified by index.
@@ -77,7 +123,12 @@ func (n *Net) Interfaces() ([]*transport.Interface, error) {
 // sharing the logical data link; for more precision use
 // InterfaceByName.
 func (n *Net) InterfaceByIndex(index int) (*transport.Interface, error) {
-	for _, ifc := range n.interfaces {
+	interfaces, err := n.Interfaces()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, ifc := range interfaces {
 		if ifc.Index == index {
 			return ifc, nil
 		}
@@ -88,7 +139,12 @@ func (n *Net) InterfaceByIndex(index int) (*transport.Interface, error) {
 
 // InterfaceByName returns the interface specified by name.
 func (n *Net) InterfaceByName(name string) (*transport.Interface, error) {
-	for _, ifc := range n.interfaces {
+	interfaces, err := n.Interfaces()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, ifc := range interfaces {
 		if ifc.Name == name {
 			return ifc, nil
 		}

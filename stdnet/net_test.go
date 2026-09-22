@@ -8,11 +8,58 @@ package stdnet
 import (
 	"context"
 	"net"
+	"sync"
 	"testing"
 
 	"github.com/pion/logging"
+	"github.com/pion/transport/v5"
 	"github.com/stretchr/testify/assert"
 )
+
+func TestNilNetInterfaces(t *testing.T) {
+	var n *Net
+	var network transport.Net = n
+
+	interfaces, err := network.Interfaces()
+	assert.NoError(t, err)
+	assert.NotEmpty(t, interfaces)
+	shared, err := defaultNet.Interfaces()
+	assert.NoError(t, err)
+	assert.Same(t, interfaces[0], shared[0])
+	for _, ifc := range interfaces {
+		byIndex, indexErr := network.InterfaceByIndex(ifc.Index)
+		assert.NoError(t, indexErr)
+		assert.Same(t, ifc, byIndex)
+		byName, nameErr := network.InterfaceByName(ifc.Name)
+		assert.NoError(t, nameErr)
+		assert.Same(t, ifc, byName)
+	}
+	_, err = network.InterfaceByIndex(-1)
+	assert.ErrorIs(t, err, transport.ErrInterfaceNotFound)
+	_, err = network.InterfaceByName("nonexistent-interface")
+	assert.ErrorIs(t, err, transport.ErrInterfaceNotFound)
+}
+
+func TestNetConcurrentRefresh(t *testing.T) {
+	for name, network := range map[string]*Net{"nil": nil, "default": defaultNet} {
+		t.Run(name, func(t *testing.T) {
+			var workers sync.WaitGroup
+			for range 10 {
+				workers.Add(1)
+				go func() {
+					defer workers.Done()
+					for range 10 {
+						assert.NoError(t, network.UpdateInterfaces())
+						interfaces, err := network.Interfaces()
+						assert.NoError(t, err)
+						assert.NotEmpty(t, interfaces)
+					}
+				}()
+			}
+			workers.Wait()
+		})
+	}
+}
 
 func TestStdNet(t *testing.T) { //nolint:cyclop,maintidx
 	log := logging.NewDefaultLoggerFactory().NewLogger("test")
