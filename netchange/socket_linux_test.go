@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/sys/unix"
 )
 
@@ -55,7 +56,7 @@ func TestWaitSocket(t *testing.T) {
 	notified, err := receiver.drain()
 	assert.NoError(t, err)
 	assert.False(t, notified, "waiting consumes the notification")
-	state[0].Name = "after"
+	state[0].Name = "after" //nolint:goconst
 	changes, err := detector.Check(ctx)
 	assert.NoError(t, err)
 	assert.Equal(t, []Change{{Interface: "after", Type: Changed}}, changes)
@@ -83,6 +84,45 @@ func TestDetectorSystemBackend(t *testing.T) {
 	_, err = detector.Check(context.Background())
 	assert.ErrorIs(t, err, os.ErrClosed)
 	assert.ErrorIs(t, detector.Close(), os.ErrClosed)
+}
+
+func TestPlatformTimeout(t *testing.T) {
+	sender, receiver := newSocketPair(t)
+	name := "before"
+	refreshes := 0
+	detector := &Detector{
+		source: receiver,
+		enumerate: func() ([]interfaceState, error) {
+			refreshes++
+			if refreshes == 3 {
+				name = "after"
+			}
+
+			return []interfaceState{{Index: 1, Name: name}}, nil
+		},
+	}
+	WithPlatformTimeout(5 * time.Millisecond)(detector)
+	require.NoError(t, detector.start())
+	_, err := detector.Check(context.Background())
+	require.NoError(t, err)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	changes, err := detector.Check(ctx)
+	require.NoError(t, err)
+	require.Equal(t, []Change{{Interface: "after", Type: Changed}}, changes)
+	require.Equal(t, 3, refreshes, "unchanged timeout refreshes must keep waiting")
+
+	name = "notified"
+	require.NoError(t, unix.Send(sender, []byte{1}, 0))
+	changes, err = detector.Check(ctx)
+	require.NoError(t, err)
+	require.Equal(t, []Change{{Interface: "notified", Type: Changed}}, changes)
+
+	ctx, cancelCause := context.WithTimeoutCause(context.Background(), 20*time.Millisecond, io.ErrNoProgress)
+	defer cancelCause()
+	changes, err = detector.Check(ctx)
+	require.ErrorIs(t, err, io.ErrNoProgress, "parent cancellation must not be swallowed")
+	require.Empty(t, changes)
 }
 
 func newSocketPair(t *testing.T) (int, *socket) {

@@ -26,6 +26,13 @@ import (
 // ErrBusy indicates that another Check is active.
 var ErrBusy = errors.New("network change detector is busy")
 
+var (
+	errInvalidPlatformTimeout = errors.New("platform timeout must not be negative")
+	errInvalidPollInterval    = errors.New("poll interval must be positive")
+)
+
+const defaultPollInterval = time.Second
+
 type notificationSource interface {
 	drain() (bool, error)
 	wait(context.Context) error
@@ -36,15 +43,17 @@ type notificationSource interface {
 // Check waits for changes and refreshes interfaces internally. Network methods
 // can be called concurrently with Check. A Detector must not be copied.
 type Detector struct {
-	mu        sync.Mutex
-	checking  bool
-	closed    bool
-	state     stateDetector
-	source    notificationSource
-	enumerate func() ([]interfaceState, error)
-	pending   bool
-	initial   []Change // nil after the initial result has been delivered.
-	network   atomic.Pointer[stdnet.Net]
+	mu              sync.Mutex
+	checking        bool
+	closed          bool
+	state           stateDetector
+	source          notificationSource
+	enumerate       func() ([]interfaceState, error)
+	pending         bool
+	initial         []Change // nil after the initial result has been delivered.
+	network         atomic.Pointer[stdnet.Net]
+	platformTimeout time.Duration
+	pollInterval    time.Duration
 }
 
 // Option configures a Detector during construction.
@@ -67,7 +76,7 @@ type Change struct {
 
 // NewDetector opens the platform backend and captures the initial interfaces.
 func NewDetector(options ...Option) (*Detector, error) {
-	detector := &Detector{}
+	detector := &Detector{pollInterval: defaultPollInterval}
 	detector.enumerate = func() ([]interfaceState, error) {
 		network := &stdnet.Net{}
 		state, err := enumerateInterfaces(network)
@@ -81,6 +90,12 @@ func NewDetector(options ...Option) (*Detector, error) {
 		if option != nil {
 			option(detector)
 		}
+	}
+	if detector.platformTimeout < 0 {
+		return nil, errInvalidPlatformTimeout
+	}
+	if detector.pollInterval <= 0 {
+		return nil, errInvalidPollInterval
 	}
 	var err error
 	detector.source, err = openSocket()
@@ -102,7 +117,27 @@ func WithInterfaceFilter(filter func(string) bool) Option {
 	}
 }
 
+// WithPlatformTimeout limits how long Check waits for a native notification before
+// refreshing interfaces anyway. If nothing changed, Check continues waiting.
+// Zero (the default) disables the timeout.
+func WithPlatformTimeout(timeout time.Duration) Option {
+	return func(detector *Detector) {
+		detector.platformTimeout = timeout
+	}
+}
+
+// WithPollInterval sets the interval between polls when native notifications are
+// unavailable. It defaults to one second and must be positive.
+func WithPollInterval(interval time.Duration) Option {
+	return func(detector *Detector) {
+		detector.pollInterval = interval
+	}
+}
+
 func (d *Detector) start() error {
+	if d.pollInterval == 0 {
+		d.pollInterval = defaultPollInterval
+	}
 	interfaces, err := d.enumerate()
 	if err != nil {
 		if d.source != nil {
@@ -194,19 +229,31 @@ func (d *Detector) refresh(ctx context.Context) ([]Change, error) {
 }
 
 func (d *Detector) wait(ctx context.Context) error {
-	if d.source != nil {
-		d.pending = true
-
+	if d.source == nil {
+		timer := time.NewTimer(d.pollInterval)
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
+			return context.Cause(ctx)
+		case <-timer.C:
+			return nil
+		}
+	}
+	d.pending = true
+	if d.platformTimeout <= 0 {
 		return d.source.wait(ctx)
 	}
-	timer := time.NewTimer(time.Second)
-	defer timer.Stop()
-	select {
-	case <-ctx.Done():
-		return context.Cause(ctx)
-	case <-timer.C:
+	waitCtx, cancel := context.WithTimeout(ctx, d.platformTimeout)
+	defer cancel()
+	err := d.source.wait(waitCtx)
+	if cause := context.Cause(ctx); cause != nil {
+		return cause
+	}
+	if errors.Is(err, context.DeadlineExceeded) && waitCtx.Err() != nil {
 		return nil
 	}
+
+	return err
 }
 
 // Close releases the platform backend.

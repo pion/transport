@@ -15,7 +15,10 @@ import (
 )
 
 func ExampleDetector_Check() {
-	detector, err := netchange.NewDetector()
+	detector, err := netchange.NewDetector(
+		netchange.WithPlatformTimeout(10*time.Second),
+		netchange.WithPollInterval(2*time.Second),
+	)
 	if err != nil {
 		fmt.Println(err)
 

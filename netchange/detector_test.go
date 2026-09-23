@@ -71,7 +71,7 @@ func TestCheckCancellationPreservesChange(t *testing.T) {
 	cause := errors.New("parent stopped") //nolint:err113 // Unique cancellation cause for this test.
 	ctx, cancel := context.WithCancelCause(context.Background())
 	defer cancel(nil)
-	state[0].Name = "after"
+	state[0].Name = "after" //nolint:goconst
 	detector.enumerate = func() ([]interfaceState, error) {
 		cancel(cause)
 
@@ -86,7 +86,10 @@ func TestCheckCancellationPreservesChange(t *testing.T) {
 }
 
 func TestCheckUpdatesNet(t *testing.T) {
-	detector, err := NewDetector(WithInterfaceFilter(func(string) bool { return false }))
+	detector, err := NewDetector(
+		WithInterfaceFilter(func(string) bool { return false }),
+		WithPlatformTimeout(5*time.Millisecond),
+	)
 	require.NoError(t, err)
 	defer func() { _ = detector.Close() }()
 	before, err := detector.Interfaces()
@@ -97,7 +100,6 @@ func TestCheckUpdatesNet(t *testing.T) {
 	var network transport.Net = detector
 	_, err = detector.Check(context.Background())
 	require.NoError(t, err)
-	detector.pending = true
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
 	changes, err := detector.Check(ctx)
