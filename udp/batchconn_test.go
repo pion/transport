@@ -16,6 +16,7 @@ import (
 
 	"github.com/pion/transport/v5/test"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestBatchConn_WriteBatchInterval(t *testing.T) {
@@ -268,4 +269,64 @@ func TestBatchConn_WriteBatchSize(t *testing.T) { //nolint:cyclop
 
 	_ = listener.Close()
 	serverConnWg.Wait()
+}
+
+func TestPingPongFlushWakesAllWaiters(t *testing.T) {
+	const waiters = 8
+	pingPong := &pingPong{flushCycleDone: make(chan struct{}), flushPending: true}
+	flushDone := pingPong.flushCycleDone
+	stop := make(chan struct{})
+	woke := make(chan struct{}, waiters)
+	var wg sync.WaitGroup
+	defer func() {
+		close(stop)
+		wg.Wait()
+	}()
+
+	for range waiters {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			select {
+			case <-flushDone:
+				woke <- struct{}{}
+			case <-stop:
+			}
+		}()
+	}
+
+	pingPong.updateReadBatch()
+	for range waiters {
+		select {
+		case <-woke:
+		case <-time.After(time.Second):
+			require.FailNow(t, "flush did not wake every waiter")
+		}
+	}
+}
+
+func TestPingPongCloseWakesWaitingWriters(t *testing.T) {
+	const writers = 8
+	pingPong := &pingPong{
+		writeReady:     make(chan struct{}),
+		flushCycleDone: make(chan struct{}),
+		closedCh:       make(chan struct{}),
+		flusherDone:    make(chan struct{}),
+		flushPending:   true,
+	}
+	close(pingPong.flusherDone)
+	results := make(chan int, writers)
+	for range writers {
+		go func() { results <- pingPong.EnqueueMessage([]byte("x"), nil) }()
+	}
+	pingPong.Close()
+	for range writers {
+		select {
+		case n := <-results:
+			assert.Zero(t, n)
+		case <-time.After(time.Second):
+			require.FailNow(t, "close did not wake every writer")
+		}
+	}
+	pingPong.Close()
 }
