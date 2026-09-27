@@ -25,9 +25,10 @@ const (
 
 // Typed errors.
 var (
-	ErrClosedListener      = errors.New("udp: listener closed")
-	ErrListenQueueExceeded = errors.New("udp: listen queue exceeded")
-	ErrInvalidBatchConfig  = errors.New("udp: invalid batch config")
+	ErrClosedListener       = errors.New("udp: listener closed")
+	ErrListenQueueExceeded  = errors.New("udp: listen queue exceeded")
+	ErrInvalidBatchConfig   = errors.New("udp: invalid batch config")
+	errUnexpectedPacketConn = errors.New("udp: listen packet did not return a UDP connection")
 )
 
 // listener augments a connection-oriented Listener over a UDP PacketConn.
@@ -132,6 +133,8 @@ type BatchIOConfig struct {
 
 // ListenConfig stores options for listening to an address.
 type ListenConfig struct {
+	NetListenConfig net.ListenConfig
+
 	// Backlog defines the maximum length of the queue of pending
 	// connections. It is equivalent of the backlog argument of
 	// POSIX listen function.
@@ -145,7 +148,8 @@ type ListenConfig struct {
 	AcceptFilter func([]byte) bool
 
 	// ReadBufferSize sets the size of the operating system's
-	// receive buffer associated with the listener.
+	// receive buffer associated with the listener. The operating system may
+	// cap the effective size below the requested size.
 	ReadBufferSize int
 
 	// WriteBufferSize sets the size of the operating system's
@@ -165,16 +169,31 @@ func (lc *ListenConfig) Listen(network string, laddr *net.UDPAddr) (net.Listener
 		return nil, ErrInvalidBatchConfig
 	}
 
-	conn, err := net.ListenUDP(network, laddr)
+	address := ":0"
+	if laddr != nil {
+		address = laddr.String()
+	}
+	packetConn, err := lc.NetListenConfig.ListenPacket(context.Background(), network, address)
 	if err != nil {
 		return nil, err
 	}
+	conn, ok := packetConn.(*net.UDPConn)
+	if !ok {
+		_ = packetConn.Close()
+		return nil, errUnexpectedPacketConn
+	}
 
 	if lc.ReadBufferSize > 0 {
-		_ = conn.SetReadBuffer(lc.ReadBufferSize)
+		if err = conn.SetReadBuffer(lc.ReadBufferSize); err != nil {
+			_ = conn.Close()
+			return nil, err
+		}
 	}
 	if lc.WriteBufferSize > 0 {
-		_ = conn.SetWriteBuffer(lc.WriteBufferSize)
+		if err = conn.SetWriteBuffer(lc.WriteBufferSize); err != nil {
+			_ = conn.Close()
+			return nil, err
+		}
 	}
 
 	listnerer := &listener{

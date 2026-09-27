@@ -13,6 +13,7 @@ import (
 	"os"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -21,6 +22,35 @@ import (
 )
 
 var errHandshakeFailed = errors.New("handshake failed")
+
+func TestListenConfigSocketControl(t *testing.T) {
+	called := false
+	lc := ListenConfig{
+		Batch: BatchIOConfig{Enable: true, ReadBatchSize: 2, WriteBatchSize: 2, WriteBatchInterval: time.Millisecond},
+		NetListenConfig: net.ListenConfig{Control: func(network, address string, _ syscall.RawConn) error {
+			called = true
+			assert.Contains(t, network, "udp")
+			assert.Contains(t, address, "127.0.0.1")
+			return nil
+		}},
+	}
+	listener, err := lc.Listen("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1")})
+	assert.NoError(t, err)
+	if listener != nil {
+		assert.NoError(t, listener.Close())
+	}
+	assert.True(t, called)
+}
+
+func TestListenConfigSocketControlError(t *testing.T) {
+	want := errors.New("socket setup failed")
+	lc := ListenConfig{NetListenConfig: net.ListenConfig{Control: func(string, string, syscall.RawConn) error {
+		return want
+	}}}
+	listener, err := lc.Listen("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1")})
+	assert.Nil(t, listener)
+	assert.ErrorIs(t, err, want)
+}
 
 // Note: doesn't work since closing isn't propagated to the other side
 // func TestNetTest(t *testing.T) {
