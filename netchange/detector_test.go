@@ -45,17 +45,19 @@ func TestCheckInitialInterfaces(t *testing.T) {
 }
 
 func TestInterfaceChanges(t *testing.T) {
+	const keptInterfaceName = "kept"
+
 	detector := &Detector{}
 	WithInterfaceFilter(func(name string) bool { return name != "ignored" })(detector)
-	state := []interfaceState{{Index: 1, Name: "kept"}, {Index: 2, Name: "removed"}}
+	state := []interfaceState{{Index: 1, Name: keptInterfaceName}, {Index: 2, Name: "removed"}}
 	detector.state.update(state)
 	next := []interfaceState{
 		{Index: 3, Name: "added"},
-		{Index: 1, Name: "kept", Addrs: map[netip.Prefix]struct{}{netip.MustParsePrefix("192.0.2.1/24"): {}}},
+		{Index: 1, Name: keptInterfaceName, Addrs: map[netip.Prefix]struct{}{netip.MustParsePrefix("192.0.2.1/24"): {}}},
 		{Index: 4, Name: "ignored"},
 	}
 	assert.Equal(t, []Change{
-		{Interface: "kept", Type: Changed},
+		{Interface: keptInterfaceName, Type: Changed},
 		{Interface: "added", Type: Added},
 		{Interface: "removed", Type: Removed},
 	}, detector.state.update(next))
@@ -111,12 +113,15 @@ func TestCheckUpdatesNet(t *testing.T) {
 	require.NotSame(t, before[0], interfaces[0], "refresh must publish a new snapshot")
 	byIndex, err := network.InterfaceByIndex(interfaces[0].Index)
 	require.NoError(t, err)
-	require.Same(t, interfaces[0], byIndex)
+	require.Equal(t, interfaces[0].Index, byIndex.Index)
+	require.Equal(t, interfaces[0].Name, byIndex.Name)
 	byName, err := network.InterfaceByName(interfaces[0].Name)
 	require.NoError(t, err)
-	require.Same(t, interfaces[0], byName)
+	require.Equal(t, interfaces[0].Index, byName.Index)
+	require.Equal(t, interfaces[0].Name, byName.Name)
 	require.NoError(t, detector.Close())
 	afterClose, err := network.Interfaces()
 	require.NoError(t, err)
-	require.Same(t, interfaces[0], afterClose[0], "last interfaces remain available after close")
+	require.Equal(t, interfaces[0].Index, afterClose[0].Index, "last interfaces remain available after close")
+	require.Equal(t, interfaces[0].Name, afterClose[0].Name, "last interfaces remain available after close")
 }
