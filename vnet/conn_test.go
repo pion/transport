@@ -288,3 +288,84 @@ func TestUDPConn(t *testing.T) { //nolint:cyclop,maintidx
 		}
 	})
 }
+
+func newDeadlineTestConn(t *testing.T) *UDPConn {
+	t.Helper()
+
+	obs := &dummyObserver{
+		onOnClosed: func(net.Addr) {},
+	}
+	conn, err := newUDPConn(&net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 1234}, nil, obs)
+	assert.NoError(t, err)
+
+	return conn
+}
+
+func readFromWithin(t *testing.T, conn *UDPConn) error {
+	t.Helper()
+
+	const wait = time.Second
+
+	errCh := make(chan error, 1)
+	go func() {
+		_, _, err := conn.ReadFrom(make([]byte, 1500))
+		errCh <- err
+	}()
+
+	select {
+	case err := <-errCh:
+		return err
+	case <-time.After(wait):
+		assert.FailNow(t, "ReadFrom did not return")
+
+		return nil
+	}
+}
+
+func assertTimeout(t *testing.T, err error) {
+	t.Helper()
+
+	var netErr net.Error
+	if assert.ErrorAs(t, err, &netErr) {
+		assert.True(t, netErr.Timeout(), "should be a timeout")
+	}
+}
+
+func TestUDPConnReadDeadlineStaysExpired(t *testing.T) {
+	conn := newDeadlineTestConn(t)
+	assert.NoError(t, conn.SetReadDeadline(time.Now().Add(20*time.Millisecond)))
+
+	for range 3 {
+		err := readFromWithin(t, conn)
+		assertTimeout(t, err)
+	}
+}
+
+func TestUDPConnReadDeadlineInPast(t *testing.T) {
+	conn := newDeadlineTestConn(t)
+	assert.NoError(t, conn.SetReadDeadline(time.Now().Add(-time.Second)))
+
+	for range 2 {
+		err := readFromWithin(t, conn)
+		assertTimeout(t, err)
+	}
+}
+
+func TestUDPConnReadDeadlineCleared(t *testing.T) {
+	conn := newDeadlineTestConn(t)
+	assert.NoError(t, conn.SetReadDeadline(time.Now().Add(20*time.Millisecond)))
+	err := readFromWithin(t, conn)
+	assertTimeout(t, err)
+
+	assert.NoError(t, conn.SetReadDeadline(time.Time{}))
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		conn.onInboundChunk(newChunkUDP(
+			&net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 5678},
+			&net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 1234},
+		))
+	}()
+
+	err = readFromWithin(t, conn)
+	assert.NoError(t, err)
+}

@@ -7,12 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"net"
 	"sync"
 	"time"
 
 	"github.com/pion/transport/v5"
+	"github.com/pion/transport/v5/deadline"
 )
 
 const (
@@ -38,13 +38,13 @@ type connObserver interface {
 // UDPConn is the implementation of the Conn and PacketConn interfaces for UDP network connections.
 // compatible with net.PacketConn and net.Conn.
 type UDPConn struct {
-	locAddr   *net.UDPAddr // read-only
-	remAddr   *net.UDPAddr // read-only
-	obs       connObserver // read-only
-	readCh    chan Chunk   // thread-safe
-	closed    bool         // requires mutex
-	mu        sync.Mutex   // to mutex closed flag
-	readTimer *time.Timer  // thread-safe
+	locAddr      *net.UDPAddr       // read-only
+	remAddr      *net.UDPAddr       // read-only
+	obs          connObserver       // read-only
+	readCh       chan Chunk         // thread-safe
+	closed       bool               // requires mutex
+	mu           sync.Mutex         // to mutex closed flag
+	readDeadline *deadline.Deadline // thread-safe
 }
 
 var _ transport.UDPConn = &UDPConn{}
@@ -55,11 +55,11 @@ func newUDPConn(locAddr, remAddr *net.UDPAddr, obs connObserver) (*UDPConn, erro
 	}
 
 	return &UDPConn{
-		locAddr:   locAddr,
-		remAddr:   remAddr,
-		obs:       obs,
-		readCh:    make(chan Chunk, maxReadQueueSize),
-		readTimer: time.NewTimer(time.Duration(math.MaxInt64)),
+		locAddr:      locAddr,
+		remAddr:      remAddr,
+		obs:          obs,
+		readCh:       make(chan Chunk, maxReadQueueSize),
+		readDeadline: deadline.New(),
 	}, nil
 }
 
@@ -113,13 +113,7 @@ func (c *UDPConn) SetDeadline(t time.Time) error {
 // and any currently-blocked ReadFrom call.
 // A zero value for t means ReadFrom will not time out.
 func (c *UDPConn) SetReadDeadline(t time.Time) error {
-	var d time.Duration
-	if t.IsZero() {
-		d = time.Duration(math.MaxInt64)
-	} else {
-		d = time.Until(t)
-	}
-	c.readTimer.Reset(d)
+	c.readDeadline.Set(t)
 
 	return nil
 }
@@ -176,7 +170,7 @@ loop:
 
 			return n, addr, err
 
-		case <-c.readTimer.C:
+		case <-c.readDeadline.Done():
 			return 0, nil, &net.OpError{
 				Op:   "read",
 				Net:  c.locAddr.Network(),
