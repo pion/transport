@@ -8,9 +8,11 @@ package stdnet
 import (
 	"context"
 	"net"
+	"sync"
 	"testing"
 
 	"github.com/pion/logging"
+	"github.com/pion/transport/v5"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -282,4 +284,134 @@ func TestStdNet(t *testing.T) { //nolint:cyclop,maintidx
 		_, err = nw.InterfaceByName("foo0")
 		assert.Error(t, err, "should fail")
 	})
+}
+
+func TestConcurrentInterfaceAccess(t *testing.T) {
+	nw, err := NewNet()
+	if !assert.NoError(t, err) {
+		return
+	}
+
+	const iterations = 100
+	var wg sync.WaitGroup
+	errs := make(chan error, 1)
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		repeatInterfaceUpdates(nw, iterations, errs)
+	}()
+
+	for range 4 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			repeatInterfaceReads(nw, iterations)
+		}()
+	}
+
+	wg.Wait()
+	select {
+	case err := <-errs:
+		assert.NoError(t, err)
+	default:
+	}
+}
+
+func repeatInterfaceUpdates(nw *Net, iterations int, errs chan<- error) {
+	for range iterations {
+		if err := nw.UpdateInterfaces(); err != nil {
+			select {
+			case errs <- err:
+			default:
+			}
+
+			return
+		}
+	}
+}
+
+func repeatInterfaceReads(nw *Net, iterations int) {
+	for range iterations {
+		interfaces, err := nw.Interfaces()
+		if err != nil {
+			continue
+		}
+
+		for _, ifc := range interfaces {
+			_, _ = ifc.Addrs()
+		}
+		_, _ = nw.InterfaceByIndex(-1)
+		_, _ = nw.InterfaceByName("")
+	}
+}
+
+func TestConcurrentAddressAccess(t *testing.T) {
+	ifc := transport.NewInterface(net.Interface{})
+
+	const iterations = 1000
+	var wg sync.WaitGroup
+	for range 4 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for range iterations {
+				ifc.AddAddress(&net.IPAddr{IP: net.IPv4(127, 0, 0, 1)})
+				_, _ = ifc.Addrs()
+				_ = ifc.RemoveAddress(net.IPv4(127, 0, 0, 1))
+			}
+		}()
+	}
+
+	wg.Wait()
+}
+
+func TestInterfaceSnapshots(t *testing.T) {
+	ifc := transport.NewInterface(net.Interface{Index: 1, Name: "test"})
+	addr := &net.IPAddr{IP: net.IPv4(127, 0, 0, 1)}
+	ifc.AddAddress(addr)
+
+	addrs, err := ifc.Addrs()
+	if !assert.NoError(t, err) {
+		return
+	}
+	addrs[0] = &net.IPAddr{IP: net.IPv4(127, 0, 0, 2)}
+	addrs, err = ifc.Addrs()
+	if !assert.NoError(t, err) {
+		return
+	}
+	assert.Same(t, addr, addrs[0])
+
+	nw := &Net{interfaces: []*transport.Interface{ifc}}
+	interfaces, err := nw.Interfaces()
+	if !assert.NoError(t, err) {
+		return
+	}
+	interfaces[0] = nil
+	interfaces, err = nw.Interfaces()
+	if !assert.NoError(t, err) {
+		return
+	}
+	assert.NotSame(t, ifc, interfaces[0])
+
+	interfaces[0].AddAddress(&net.IPAddr{IP: net.IPv4(127, 0, 0, 2)})
+	originalAddrs, err := ifc.Addrs()
+	if !assert.NoError(t, err) {
+		return
+	}
+	assert.Len(t, originalAddrs, 1)
+
+	byIndex, err := nw.InterfaceByIndex(1)
+	if !assert.NoError(t, err) {
+		return
+	}
+	assert.NotSame(t, ifc, byIndex)
+	assert.NotSame(t, interfaces[0], byIndex)
+
+	byName, err := nw.InterfaceByName("test")
+	if !assert.NoError(t, err) {
+		return
+	}
+	assert.NotSame(t, ifc, byName)
+	assert.NotSame(t, interfaces[0], byName)
 }
