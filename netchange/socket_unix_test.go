@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 The Pion community <https://pion.ly>
 // SPDX-License-Identifier: MIT
 
-//go:build linux
+//go:build linux || (darwin && !ios)
 
 package netchange
 
@@ -19,7 +19,7 @@ import (
 
 func TestDrainDatagrams(t *testing.T) {
 	sender, receiver := newSocketPair(t)
-	for _, size := range []int{0, 1, 64, 64 * 1024} {
+	for _, size := range []int{0, 1, 64, 1024} {
 		assert.NoError(t, unix.Send(sender, make([]byte, size), 0))
 	}
 	notified, err := receiver.drain()
@@ -127,9 +127,13 @@ func TestPlatformTimeout(t *testing.T) {
 
 func newSocketPair(t *testing.T) (int, *socket) {
 	t.Helper()
-	fds, err := unix.Socketpair(unix.AF_UNIX, unix.SOCK_DGRAM|unix.SOCK_NONBLOCK|unix.SOCK_CLOEXEC, 0)
-	assert.NoError(t, err)
-	receiver := &socket{file: os.NewFile(uintptr(fds[1]), "netlink-test")}
+	fds, err := unix.Socketpair(unix.AF_UNIX, unix.SOCK_DGRAM, 0)
+	require.NoError(t, err)
+	for _, fd := range fds {
+		unix.CloseOnExec(fd)
+		require.NoError(t, unix.SetNonblock(fd, true))
+	}
+	receiver := &socket{file: os.NewFile(uintptr(fds[1]), "notification-test")}
 	t.Cleanup(func() {
 		assert.NoError(t, unix.Close(fds[0]))
 		assert.NoError(t, receiver.close())
