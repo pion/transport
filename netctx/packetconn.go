@@ -32,17 +32,26 @@ type PacketConn interface {
 	Conn() net.PacketConn
 }
 
+type NonBlockWritePacketConn interface {
+	WriteToNonBlock(b []byte, addr net.Addr) (int, bool, error)
+}
+
 type packetConn struct {
-	nextConn net.PacketConn
-	closed   atomic.Bool
-	readMu   sync.Mutex
-	writeMu  sync.Mutex
+	nextConn         net.PacketConn
+	nextConnNonBlock NonBlockWritePacketConn
+	closed           atomic.Bool
+	readMu           sync.Mutex
+	writeMu          sync.Mutex
 }
 
 // NewPacketConn creates a new PacketConn wrapping the given net.PacketConn.
 func NewPacketConn(pconn net.PacketConn) PacketConn {
 	p := &packetConn{
 		nextConn: pconn,
+	}
+
+	if v, ok := pconn.(NonBlockWritePacketConn); ok {
+		p.nextConnNonBlock = v
 	}
 
 	return p
@@ -101,7 +110,7 @@ func (p *packetConn) ReadFromContext(ctx context.Context, b []byte) (int, net.Ad
 // Unlike net.PacketConn.WriteTo(), the provided context
 // is used to control timeout.
 // On packet-oriented connections, write timeouts are rare.
-func (p *packetConn) WriteToContext(ctx context.Context, b []byte, raddr net.Addr) (int, error) {
+func (p *packetConn) WriteToContext(ctx context.Context, b []byte, raddr net.Addr) (int, error) { //nolint:cyclop
 	p.writeMu.Lock()
 	defer p.writeMu.Unlock()
 
@@ -110,6 +119,12 @@ func (p *packetConn) WriteToContext(ctx context.Context, b []byte, raddr net.Add
 	}
 	if ctx.Err() != nil {
 		return 0, ctx.Err()
+	}
+
+	if p.nextConnNonBlock != nil {
+		if n, ok, err := p.nextConnNonBlock.WriteToNonBlock(b, raddr); ok {
+			return n, err
+		}
 	}
 
 	if deadline, ok := ctx.Deadline(); ok {
