@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"runtime"
 	"testing"
 	"time"
 
@@ -333,4 +334,38 @@ func BenchmarkRead(b *testing.B) {
 	if count != b.N {
 		b.Errorf("Expected %v, got %v", b.N, count)
 	}
+}
+
+type goroutineCountConn struct {
+	net.Conn
+	during int
+}
+
+func (c *goroutineCountConn) Read(b []byte) (int, error) {
+	c.during = runtime.NumGoroutine()
+
+	return c.Conn.Read(b)
+}
+
+func TestReadContextStartsNoGoroutine(t *testing.T) {
+	ca, cb := net.Pipe()
+	defer func() {
+		_ = cb.Close()
+	}()
+	counted := &goroutineCountConn{Conn: ca}
+	c := NewConn(counted)
+	defer func() {
+		_ = c.Close()
+	}()
+
+	go func() {
+		_, _ = cb.Write([]byte{1})
+	}()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	time.Sleep(10 * time.Millisecond)
+	before := runtime.NumGoroutine()
+	_, err := c.ReadContext(ctx, make([]byte, 1))
+	assert.NoError(t, err)
+	assert.Equal(t, before, counted.during)
 }

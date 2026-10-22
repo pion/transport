@@ -10,7 +10,6 @@ import (
 	"io"
 	"net"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
@@ -53,6 +52,34 @@ type conn struct {
 
 var veryOld = time.Unix(0, 1) //nolint:gochecknoglobals
 
+var finishNothing = func() error { return nil } //nolint:gochecknoglobals
+
+// cancelOnDone makes a blocked call return by moving its deadline into the past
+// once ctx is done. Call the returned function after the call to undo that.
+func cancelOnDone(ctx context.Context, setDeadline func(time.Time) error) func() error {
+	if ctx.Done() == nil {
+		return finishNothing
+	}
+	var errSet error
+	canceled := make(chan struct{})
+	stop := context.AfterFunc(ctx, func() {
+		errSet = setDeadline(veryOld)
+		close(canceled)
+	})
+
+	return func() error {
+		if stop() {
+			return nil
+		}
+		<-canceled
+		if errSet != nil {
+			return errSet
+		}
+
+		return setDeadline(time.Time{})
+	}
+}
+
 // NewConn creates a new Conn wrapping given net.Conn.
 func NewConn(netConn net.Conn) Conn {
 	c := &conn{
@@ -75,37 +102,14 @@ func (c *conn) ReadContext(ctx context.Context, b []byte) (int, error) { //nolin
 	default:
 	}
 
-	done := make(chan struct{})
-	var wg sync.WaitGroup
-	var errSetDeadline atomic.Value
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		select {
-		case <-ctx.Done():
-			// context canceled
-			if err := c.nextConn.SetReadDeadline(veryOld); err != nil {
-				errSetDeadline.Store(err)
-
-				return
-			}
-			<-done
-			if err := c.nextConn.SetReadDeadline(time.Time{}); err != nil {
-				errSetDeadline.Store(err)
-			}
-		case <-done:
-		}
-	}()
-
+	finish := cancelOnDone(ctx, c.nextConn.SetReadDeadline)
 	n, err := c.nextConn.Read(b)
-
-	close(done)
-	wg.Wait()
+	errSetDeadline := finish()
 	if e := ctx.Err(); e != nil && n == 0 {
 		err = e
 	}
-	if err2, ok := errSetDeadline.Load().(error); ok && err == nil && err2 != nil {
-		err = err2
+	if err == nil && errSetDeadline != nil {
+		err = errSetDeadline
 	}
 
 	return n, err
@@ -123,37 +127,14 @@ func (c *conn) WriteContext(ctx context.Context, b []byte) (int, error) { //noli
 	default:
 	}
 
-	done := make(chan struct{})
-	var wg sync.WaitGroup
-	var errSetDeadline atomic.Value
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		select {
-		case <-ctx.Done():
-			// context canceled
-			if err := c.nextConn.SetWriteDeadline(veryOld); err != nil {
-				errSetDeadline.Store(err)
-
-				return
-			}
-			<-done
-			if err := c.nextConn.SetWriteDeadline(time.Time{}); err != nil {
-				errSetDeadline.Store(err)
-			}
-		case <-done:
-		}
-	}()
-
+	finish := cancelOnDone(ctx, c.nextConn.SetWriteDeadline)
 	n, err := c.nextConn.Write(b)
-
-	close(done)
-	wg.Wait()
+	errSetDeadline := finish()
 	if e := ctx.Err(); e != nil && n == 0 {
 		err = e
 	}
-	if err2, ok := errSetDeadline.Load().(error); ok && err == nil && err2 != nil {
-		err = err2
+	if err == nil && errSetDeadline != nil {
+		err = errSetDeadline
 	}
 
 	return n, err

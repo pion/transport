@@ -8,8 +8,6 @@ import (
 	"io"
 	"net"
 	"sync"
-	"sync/atomic"
-	"time"
 )
 
 // ReaderFrom is an interface for context controlled packet reader.
@@ -68,37 +66,14 @@ func (p *packetConn) ReadFromContext(ctx context.Context, b []byte) (int, net.Ad
 	default:
 	}
 
-	done := make(chan struct{})
-	var wg sync.WaitGroup
-	var errSetDeadline atomic.Value
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		select {
-		case <-ctx.Done():
-			// context canceled
-			if err := p.nextConn.SetReadDeadline(veryOld); err != nil {
-				errSetDeadline.Store(err)
-
-				return
-			}
-			<-done
-			if err := p.nextConn.SetReadDeadline(time.Time{}); err != nil {
-				errSetDeadline.Store(err)
-			}
-		case <-done:
-		}
-	}()
-
+	finish := cancelOnDone(ctx, p.nextConn.SetReadDeadline)
 	n, raddr, err := p.nextConn.ReadFrom(b)
-
-	close(done)
-	wg.Wait()
+	errSetDeadline := finish()
 	if e := ctx.Err(); e != nil && n == 0 {
 		err = e
 	}
-	if err2, ok := errSetDeadline.Load().(error); ok && err == nil && err2 != nil {
-		err = err2
+	if err == nil && errSetDeadline != nil {
+		err = errSetDeadline
 	}
 
 	return n, raddr, err
@@ -118,37 +93,14 @@ func (p *packetConn) WriteToContext(ctx context.Context, b []byte, raddr net.Add
 	default:
 	}
 
-	done := make(chan struct{})
-	var wg sync.WaitGroup
-	var errSetDeadline atomic.Value
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		select {
-		case <-ctx.Done():
-			// context canceled
-			if err := p.nextConn.SetWriteDeadline(veryOld); err != nil {
-				errSetDeadline.Store(err)
-
-				return
-			}
-			<-done
-			if err := p.nextConn.SetWriteDeadline(time.Time{}); err != nil {
-				errSetDeadline.Store(err)
-			}
-		case <-done:
-		}
-	}()
-
+	finish := cancelOnDone(ctx, p.nextConn.SetWriteDeadline)
 	n, err := p.nextConn.WriteTo(b, raddr)
-
-	close(done)
-	wg.Wait()
+	errSetDeadline := finish()
 	if e := ctx.Err(); e != nil && n == 0 {
 		err = e
 	}
-	if err2, ok := errSetDeadline.Load().(error); ok && err == nil && err2 != nil {
-		err = err2
+	if err == nil && errSetDeadline != nil {
+		err = errSetDeadline
 	}
 
 	return n, err
