@@ -139,18 +139,16 @@ func newPingPong(size int, interval time.Duration, batchConn BatchPacketConn) *p
 	return p
 }
 
-func (p *pingPong) Close() {
+func (p *pingPong) startClose() {
 	atomic.StoreInt32(&p.closed, 1)
 
 	select {
 	case p.writeReady <- struct{}{}:
 	default:
 	}
-
-	<-p.flusherDone
 }
 
-func (p *pingPong) EnqueueMessage(buf []byte, raddr net.Addr) int {
+func (p *pingPong) EnqueueMessage(buf []byte, raddr net.Addr) (int, error) {
 	p.mu.Lock()
 	var (
 		writeBatch *messageBatch
@@ -158,6 +156,11 @@ func (p *pingPong) EnqueueMessage(buf []byte, raddr net.Addr) int {
 		isFull     bool
 	)
 	for {
+		if atomic.LoadInt32(&p.closed) == 1 {
+			p.mu.Unlock()
+
+			return 0, net.ErrClosed
+		}
 		if writeBatch = p.getWriteBatch(); writeBatch != nil {
 			n, isFull = writeBatch.EnqueueMessage(buf, raddr)
 			if n == len(buf) {
@@ -169,10 +172,6 @@ func (p *pingPong) EnqueueMessage(buf []byte, raddr net.Addr) int {
 		select {
 		case <-p.flushCycleDone:
 		case <-time.After(100 * time.Microsecond):
-		}
-
-		if atomic.LoadInt32(&p.closed) == 1 {
-			return 0
 		}
 
 		p.mu.Lock()
@@ -187,7 +186,7 @@ func (p *pingPong) EnqueueMessage(buf []byte, raddr net.Addr) int {
 		}
 	}
 
-	return n
+	return n, nil
 }
 
 func (p *pingPong) getWriteBatch() *messageBatch {
@@ -293,14 +292,22 @@ func NewBatchConn(conn net.PacketConn, batchWriteSize int, batchWriteInterval ti
 // Close batchConn and the underlying PacketConn.
 func (c *BatchConn) Close() error {
 	if c.batchPingPong != nil {
-		c.batchPingPong.Close()
+		c.batchPingPong.startClose()
 	}
 
+	var err error
 	if c.batchConn != nil {
-		return c.batchConn.Close()
+		err = c.batchConn.Close()
+	} else {
+		err = c.PacketConn.Close()
 	}
 
-	return c.PacketConn.Close()
+	// Closing the socket unblocks an in-flight batch write before waiting.
+	if c.batchPingPong != nil {
+		<-c.batchPingPong.flusherDone
+	}
+
+	return err
 }
 
 // WriteTo write message to an UDPAddr, addr should be nil if it is a connected socket.
@@ -309,7 +316,7 @@ func (c *BatchConn) WriteTo(b []byte, addr net.Addr) (int, error) {
 		return c.PacketConn.WriteTo(b, addr)
 	}
 
-	return c.batchPingPong.EnqueueMessage(b, addr), nil
+	return c.batchPingPong.EnqueueMessage(b, addr)
 }
 
 // ReadBatch reads messages in batch, return length of message readed and error.
