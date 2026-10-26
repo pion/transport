@@ -119,6 +119,7 @@ type pingPong struct {
 
 	writeReady     chan struct{}
 	flushCycleDone chan struct{}
+	closedCh       chan struct{}
 	flusherDone    chan struct{}
 
 	closed int32
@@ -128,6 +129,7 @@ func newPingPong(size int, interval time.Duration, batchConn BatchPacketConn) *p
 	p := &pingPong{
 		writeReady:     make(chan struct{}),
 		flushCycleDone: make(chan struct{}),
+		closedCh:       make(chan struct{}),
 		flusherDone:    make(chan struct{}),
 	}
 	for i := range len(p.batches) {
@@ -140,7 +142,12 @@ func newPingPong(size int, interval time.Duration, batchConn BatchPacketConn) *p
 }
 
 func (p *pingPong) Close() {
-	atomic.StoreInt32(&p.closed, 1)
+	if !atomic.CompareAndSwapInt32(&p.closed, 0, 1) {
+		<-p.flusherDone
+
+		return
+	}
+	close(p.closedCh)
 
 	select {
 	case p.writeReady <- struct{}{}:
@@ -165,10 +172,11 @@ func (p *pingPong) EnqueueMessage(buf []byte, raddr net.Addr) int {
 			}
 		}
 
+		flushDone := p.flushCycleDone
 		p.mu.Unlock()
 		select {
-		case <-p.flushCycleDone:
-		case <-time.After(100 * time.Microsecond):
+		case <-flushDone:
+		case <-p.closedCh:
 		}
 
 		if atomic.LoadInt32(&p.closed) == 1 {
@@ -223,10 +231,8 @@ func (p *pingPong) updateReadBatch() {
 	p.readBatchIdx ^= 1
 	p.flushPending = false
 
-	select {
-	case p.flushCycleDone <- struct{}{}:
-	default:
-	}
+	close(p.flushCycleDone)
+	p.flushCycleDone = make(chan struct{})
 }
 
 func (p *pingPong) flusher(interval time.Duration) {
