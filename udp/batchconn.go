@@ -126,7 +126,8 @@ type pingPong struct {
 
 func newPingPong(size int, interval time.Duration, batchConn BatchPacketConn) *pingPong {
 	p := &pingPong{
-		writeReady:     make(chan struct{}),
+		// buffered, so a batch that fills while the flusher is busy still gets its flush
+		writeReady:     make(chan struct{}, 1),
 		flushCycleDone: make(chan struct{}),
 		flusherDone:    make(chan struct{}),
 	}
