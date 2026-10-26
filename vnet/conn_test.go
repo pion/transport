@@ -288,3 +288,16 @@ func TestUDPConn(t *testing.T) { //nolint:cyclop,maintidx
 		}
 	})
 }
+
+func TestUDPConnRemoteAddr(t *testing.T) {
+	t.Run("unconnected", func(t *testing.T) {
+		conn := &UDPConn{}
+		assert.True(t, conn.RemoteAddr() == nil, "unconnected UDP socket must return a nil interface")
+	})
+
+	t.Run("connected", func(t *testing.T) {
+		remote := &net.UDPAddr{IP: net.ParseIP("192.0.2.1"), Port: 3478}
+		conn := &UDPConn{remAddr: remote}
+		assert.Equal(t, net.Addr(remote), conn.RemoteAddr())
+	})
+}

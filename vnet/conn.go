@@ -87,6 +87,10 @@ func (c *UDPConn) LocalAddr() net.Addr {
 
 // RemoteAddr returns the remote network address.
 func (c *UDPConn) RemoteAddr() net.Addr {
+	if c.remAddr == nil {
+		return nil
+	}
+
 	return c.remAddr
 }
 
