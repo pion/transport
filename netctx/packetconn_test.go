@@ -14,6 +14,11 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const (
+	readOperation  = "read"
+	writeOperation = "write"
+)
+
 var _ net.PacketConn = wrapConn{}
 
 type wrapConn struct {
@@ -332,6 +337,122 @@ func TestPacketConnLocalAddrAndRemoteAddr(t *testing.T) {
 	al := c.LocalAddr()
 
 	assert.Equal(t, "local_addr", al.String())
+}
+
+type errorPacketConn struct {
+	net.PacketConn
+	ioErr       error
+	resetErr    error
+	deadlines   []time.Time
+	cancel      context.CancelFunc
+	deadlineSet chan struct{}
+	n           int
+}
+
+func (c *errorPacketConn) ReadFrom([]byte) (int, net.Addr, error) {
+	if c.cancel != nil {
+		c.cancel()
+		<-c.deadlineSet
+	}
+
+	return c.n, nil, c.ioErr
+}
+
+func (c *errorPacketConn) WriteTo([]byte, net.Addr) (int, error) {
+	if c.cancel != nil {
+		c.cancel()
+		<-c.deadlineSet
+	}
+
+	return c.n, c.ioErr
+}
+
+func (c *errorPacketConn) SetReadDeadline(deadline time.Time) error {
+	c.deadlines = append(c.deadlines, deadline)
+	if deadline.IsZero() {
+		return c.resetErr
+	}
+	if c.deadlineSet != nil {
+		close(c.deadlineSet)
+	}
+
+	return nil
+}
+
+func (c *errorPacketConn) SetWriteDeadline(deadline time.Time) error {
+	return c.SetReadDeadline(deadline)
+}
+
+func TestPacketConnPreservesIOError(t *testing.T) {
+	for _, operation := range []string{readOperation, writeOperation} {
+		t.Run(operation, func(t *testing.T) {
+			for _, ioErr := range []error{io.EOF, &net.OpError{Op: operation, Net: "udp", Err: context.DeadlineExceeded}} {
+				t.Run(ioErr.Error(), func(t *testing.T) {
+					c := NewPacketConn(&errorPacketConn{ioErr: ioErr})
+					var err error
+					if operation == readOperation {
+						_, _, err = c.ReadFromContext(context.Background(), make([]byte, 1))
+					} else {
+						_, err = c.WriteToContext(context.Background(), []byte{1}, nil)
+					}
+					assert.True(t, err == ioErr, "underlying error identity must be preserved") //nolint:err113,errorlint // Test exact identity, not unwrapping.
+					if _, ok := ioErr.(net.Error); ok {                                         //nolint:errorlint // Test direct interface compatibility.
+						netErr, ok := err.(net.Error) //nolint:errorlint // Test direct interface compatibility.
+						if assert.True(t, ok, "error must implement net.Error directly") {
+							assert.True(t, netErr.Timeout())
+						}
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestPacketConnDeadlineCleanup(t *testing.T) { //nolint:cyclop
+	const background = "background"
+	for _, operation := range []string{readOperation, writeOperation} {
+		for _, mode := range []string{background, "cancelable", "deadline", "canceled during IO"} {
+			t.Run(operation+"/"+mode, func(t *testing.T) {
+				ctx := context.Background()
+				cancel := context.CancelFunc(func() {})
+				deadline := time.Now().Add(time.Hour)
+				if mode == "deadline" {
+					ctx, cancel = context.WithDeadline(ctx, deadline)
+				} else if mode != background {
+					ctx, cancel = context.WithCancel(ctx)
+				}
+				defer cancel()
+				underlying := &errorPacketConn{n: 1}
+				if mode == "canceled during IO" {
+					underlying.cancel = cancel
+					underlying.deadlineSet = make(chan struct{})
+				}
+				if mode == background || mode == "cancelable" {
+					// Model an existing deadline and a connection rejecting resets.
+					underlying.deadlines = []time.Time{deadline}
+					underlying.resetErr = errSetDeadline
+				}
+				c := NewPacketConn(underlying)
+				var n int
+				var err error
+				if operation == readOperation {
+					n, _, err = c.ReadFromContext(ctx, make([]byte, 1))
+				} else {
+					n, err = c.WriteToContext(ctx, []byte{1}, nil)
+				}
+				assert.Equal(t, 1, n)
+				assert.NoError(t, err)
+				switch mode {
+				case background, "cancelable":
+					assert.Equal(t, []time.Time{deadline}, underlying.deadlines)
+				case "deadline":
+					assert.Empty(t, underlying.deadlines)
+				default:
+					assert.Equal(t, []time.Time{veryOld, {}}, underlying.deadlines)
+				}
+			})
+		}
+	}
 }
 
 func BenchmarkPacketConnBase(b *testing.B) {

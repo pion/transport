@@ -77,14 +77,9 @@ func (p *packetConn) ReadFromContext(ctx context.Context, b []byte) (int, net.Ad
 		return 0, nil, ctx.Err()
 	}
 
-	if deadline, ok := ctx.Deadline(); ok {
-		if err := p.nextConn.SetReadDeadline(deadline); err != nil {
-			return 0, nil, err
-		}
-	}
-
 	wg := sync.WaitGroup{}
 	wg.Add(1)
+	// Preserve existing deadlines until the context actually cancels the operation.
 	detachDeadline := context.AfterFunc(ctx, func() {
 		defer wg.Done()
 		if err := p.nextConn.SetReadDeadline(veryOld); err != nil {
@@ -94,16 +89,24 @@ func (p *packetConn) ReadFromContext(ctx context.Context, b []byte) (int, net.Ad
 
 	n, raddr, err := p.nextConn.ReadFrom(b)
 
+	var setDeadlineErr error
 	if !detachDeadline() {
 		wg.Wait()
+		if !p.closed.Load() {
+			setDeadlineErr = p.nextConn.SetReadDeadline(time.Time{})
+		}
 	}
 
-	var setDeadlineErr error
-	if !p.closed.Load() {
-		setDeadlineErr = p.nextConn.SetReadDeadline(time.Time{})
+	// Preserve I/O that has already made progress.
+	if ctxErr := ctx.Err(); n == 0 && ctxErr != nil {
+		err = ctxErr
 	}
 
-	return n, raddr, errors.Join(err, ctx.Err(), setDeadlineErr)
+	if setDeadlineErr != nil {
+		err = errors.Join(err, setDeadlineErr)
+	}
+
+	return n, raddr, err
 }
 
 // WriteToContext writes a packet with payload p to addr.
@@ -127,34 +130,36 @@ func (p *packetConn) WriteToContext(ctx context.Context, b []byte, raddr net.Add
 		}
 	}
 
-	if deadline, ok := ctx.Deadline(); ok {
-		if err := p.nextConn.SetWriteDeadline(deadline); err != nil {
-			return 0, err
-		}
-	}
-
 	wg := sync.WaitGroup{}
 	wg.Add(1)
+	// Preserve existing deadlines until the context actually cancels the operation.
 	detachDeadline := context.AfterFunc(ctx, func() {
 		defer wg.Done()
-		if errors.Is(ctx.Err(), context.Canceled) {
-			if err := p.nextConn.SetWriteDeadline(veryOld); err != nil {
-				_ = p.nextConn.Close()
-			}
+		if err := p.nextConn.SetWriteDeadline(veryOld); err != nil {
+			_ = p.nextConn.Close()
 		}
 	})
 
 	n, err := p.nextConn.WriteTo(b, raddr)
 
+	var setDeadlineErr error
 	if !detachDeadline() {
 		wg.Wait()
-	}
-	var setDeadlineErr error
-	if !p.closed.Load() {
-		setDeadlineErr = p.nextConn.SetWriteDeadline(time.Time{})
+		if !p.closed.Load() {
+			setDeadlineErr = p.nextConn.SetWriteDeadline(time.Time{})
+		}
 	}
 
-	return n, errors.Join(ctx.Err(), setDeadlineErr, err)
+	// Preserve I/O that has already made progress.
+	if ctxErr := ctx.Err(); n == 0 && ctxErr != nil {
+		err = ctxErr
+	}
+
+	if setDeadlineErr != nil {
+		err = errors.Join(err, setDeadlineErr)
+	}
+
+	return n, err
 }
 
 // Close closes the connection.
