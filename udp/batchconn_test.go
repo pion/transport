@@ -16,6 +16,7 @@ import (
 
 	"github.com/pion/transport/v4/test"
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/net/ipv4"
 )
 
 func TestBatchConn_WriteBatchInterval(t *testing.T) {
@@ -268,4 +269,63 @@ func TestBatchConn_WriteBatchSize(t *testing.T) { //nolint:cyclop
 
 	_ = listener.Close()
 	serverConnWg.Wait()
+}
+
+// gatedBatchConn holds the first WriteBatch until released, so a test can fill the
+// other batch while the flusher is busy.
+type gatedBatchConn struct {
+	entered chan struct{}
+	release chan struct{}
+	writes  chan int
+	first   sync.Once
+}
+
+func (c *gatedBatchConn) WriteBatch(ms []ipv4.Message, _ int) (int, error) {
+	c.first.Do(func() {
+		close(c.entered)
+		<-c.release
+	})
+	c.writes <- len(ms)
+
+	return len(ms), nil
+}
+
+func (c *gatedBatchConn) ReadBatch([]ipv4.Message, int) (int, error) { return 0, nil }
+
+func (c *gatedBatchConn) Close() error { return nil }
+
+func TestPingPong_FlushesBatchFilledDuringFlush(t *testing.T) {
+	report := test.CheckRoutines(t)
+	defer report()
+
+	const size = 4
+	conn := &gatedBatchConn{
+		entered: make(chan struct{}),
+		release: make(chan struct{}),
+		writes:  make(chan int, 2),
+	}
+	// with a long interval, only the batch-full signal can flush the second batch in time
+	pp := newPingPong(size, time.Minute, conn)
+	raddr := &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 5000}
+
+	for range size {
+		assert.Equal(t, 1, pp.EnqueueMessage([]byte{1}, raddr))
+	}
+	<-conn.entered
+
+	// fill the other batch while the flusher is inside WriteBatch
+	for range size {
+		assert.Equal(t, 1, pp.EnqueueMessage([]byte{2}, raddr))
+	}
+	close(conn.release)
+
+	assert.Equal(t, size, <-conn.writes)
+	select {
+	case n := <-conn.writes:
+		assert.Equal(t, size, n)
+	case <-time.After(time.Second):
+		assert.Fail(t, "batch filled during a flush waited for the flush interval")
+	}
+
+	pp.Close()
 }
