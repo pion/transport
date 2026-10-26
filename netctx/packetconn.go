@@ -40,6 +40,8 @@ type packetConn struct {
 	nextConn         net.PacketConn
 	nextConnNonBlock NonBlockWritePacketConn
 	closed           atomic.Bool
+	closeOnce        sync.Once
+	closeErr         error
 	readMu           sync.Mutex
 	writeMu          sync.Mutex
 }
@@ -83,7 +85,7 @@ func (p *packetConn) ReadFromContext(ctx context.Context, b []byte) (int, net.Ad
 	detachDeadline := context.AfterFunc(ctx, func() {
 		defer wg.Done()
 		if err := p.nextConn.SetReadDeadline(veryOld); err != nil {
-			_ = p.nextConn.Close()
+			_ = p.Close()
 		}
 	})
 
@@ -136,7 +138,7 @@ func (p *packetConn) WriteToContext(ctx context.Context, b []byte, raddr net.Add
 	detachDeadline := context.AfterFunc(ctx, func() {
 		defer wg.Done()
 		if err := p.nextConn.SetWriteDeadline(veryOld); err != nil {
-			_ = p.nextConn.Close()
+			_ = p.Close()
 		}
 	})
 
@@ -166,11 +168,12 @@ func (p *packetConn) WriteToContext(ctx context.Context, b []byte, raddr net.Add
 // Any blocked ReadFromContext or WriteToContext operations will be unblocked
 // and return errors.
 func (p *packetConn) Close() error {
-	if !p.closed.Swap(true) {
-		return p.nextConn.Close()
-	}
+	p.closeOnce.Do(func() {
+		p.closed.Store(true)
+		p.closeErr = p.nextConn.Close()
+	})
 
-	return nil
+	return p.closeErr
 }
 
 // LocalAddr returns the local network address, if known.
