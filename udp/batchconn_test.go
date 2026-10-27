@@ -329,3 +329,110 @@ func TestPingPong_FlushesBatchFilledDuringFlush(t *testing.T) {
 
 	pp.Close()
 }
+
+// stepBatchConn holds every WriteBatch until the test releases it.
+type stepBatchConn struct {
+	entered chan int
+	release chan struct{}
+}
+
+func (c *stepBatchConn) WriteBatch(ms []ipv4.Message, _ int) (int, error) {
+	c.entered <- len(ms)
+	<-c.release
+
+	return len(ms), nil
+}
+
+func (c *stepBatchConn) ReadBatch([]ipv4.Message, int) (int, error) { return 0, nil }
+
+func (c *stepBatchConn) Close() error { return nil }
+
+func TestPingPong_SwapWakesAllWaitingWriters(t *testing.T) {
+	report := test.CheckRoutines(t)
+	defer report()
+
+	const size = 4
+	conn := &stepBatchConn{entered: make(chan int), release: make(chan struct{})}
+	pp := newPingPong(size, time.Minute, conn)
+	raddr := &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 5000}
+
+	// first batch goes to the socket and stays there, second batch fills up
+	for range size {
+		assert.Equal(t, 1, pp.EnqueueMessage([]byte{1}, raddr))
+	}
+	assert.Equal(t, size, <-conn.entered)
+	for range size {
+		assert.Equal(t, 1, pp.EnqueueMessage([]byte{2}, raddr))
+	}
+
+	// both batches are busy, so these writers wait
+	var done sync.WaitGroup
+	for range size {
+		done.Add(1)
+		go func() {
+			defer done.Done()
+			assert.Equal(t, 1, pp.EnqueueMessage([]byte{3}, raddr))
+		}()
+	}
+
+	// finishing the first flush swaps in the empty batch, then the flusher holds
+	// in the second flush, so the writers can only get in through that one swap
+	conn.release <- struct{}{}
+	assert.Equal(t, size, <-conn.entered)
+
+	writersDone := make(chan struct{})
+	go func() {
+		done.Wait()
+		close(writersDone)
+	}()
+	select {
+	case <-writersDone:
+	case <-time.After(time.Second):
+		assert.Fail(t, "writers were not woken by the batch swap")
+	}
+
+	close(conn.release)
+	go func() {
+		for range conn.entered {
+		}
+	}()
+	pp.Close()
+	close(conn.entered)
+}
+
+func TestPingPong_CloseReleasesWaitingWriters(t *testing.T) {
+	report := test.CheckRoutines(t)
+	defer report()
+
+	conn := &stepBatchConn{entered: make(chan int), release: make(chan struct{})}
+	pp := newPingPong(1, time.Minute, conn)
+	raddr := &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 5000}
+
+	assert.Equal(t, 1, pp.EnqueueMessage([]byte{1}, raddr))
+	assert.Equal(t, 1, <-conn.entered)
+	assert.Equal(t, 1, pp.EnqueueMessage([]byte{2}, raddr))
+
+	written := make(chan int)
+	go func() {
+		written <- pp.EnqueueMessage([]byte{3}, raddr)
+	}()
+
+	closed := make(chan struct{})
+	go func() {
+		pp.Close()
+		close(closed)
+	}()
+	// let the flush finish only once Close has marked the pingPong closed
+	for atomic.LoadInt32(&pp.closed) == 0 {
+		time.Sleep(time.Millisecond)
+	}
+	close(conn.release)
+
+	select {
+	case n := <-written:
+		assert.Equal(t, 0, n)
+	case <-time.After(time.Second):
+		assert.Fail(t, "writer waiting for a batch was not released by Close")
+	}
+	<-closed
+}

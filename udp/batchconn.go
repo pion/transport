@@ -117,9 +117,10 @@ type pingPong struct {
 	readBatchIdx  int
 	flushPending  bool
 
-	writeReady     chan struct{}
-	flushCycleDone chan struct{}
-	flusherDone    chan struct{}
+	writeReady chan struct{}
+	// closed and replaced each time the flusher swaps batches, so every waiting writer wakes at once
+	writeBatchSwapped chan struct{}
+	flusherDone       chan struct{}
 
 	closed int32
 }
@@ -127,9 +128,9 @@ type pingPong struct {
 func newPingPong(size int, interval time.Duration, batchConn BatchPacketConn) *pingPong {
 	p := &pingPong{
 		// buffered, so a batch that fills while the flusher is busy still gets its flush
-		writeReady:     make(chan struct{}, 1),
-		flushCycleDone: make(chan struct{}),
-		flusherDone:    make(chan struct{}),
+		writeReady:        make(chan struct{}, 1),
+		writeBatchSwapped: make(chan struct{}),
+		flusherDone:       make(chan struct{}),
 	}
 	for i := range len(p.batches) {
 		p.batches[i] = newMessageBatch(size, batchConn)
@@ -166,11 +167,9 @@ func (p *pingPong) EnqueueMessage(buf []byte, raddr net.Addr) int {
 			}
 		}
 
+		swapped := p.writeBatchSwapped
 		p.mu.Unlock()
-		select {
-		case <-p.flushCycleDone:
-		case <-time.After(100 * time.Microsecond):
-		}
+		<-swapped
 
 		if atomic.LoadInt32(&p.closed) == 1 {
 			return 0
@@ -210,6 +209,9 @@ func (p *pingPong) updateWriteBatchAndGetReadBatch() *messageBatch {
 	p.writeBatchIdx ^= 1
 	p.flushPending = true
 
+	close(p.writeBatchSwapped)
+	p.writeBatchSwapped = make(chan struct{})
+
 	return p.batches[p.readBatchIdx]
 }
 
@@ -223,15 +225,17 @@ func (p *pingPong) updateReadBatch() {
 
 	p.readBatchIdx ^= 1
 	p.flushPending = false
-
-	select {
-	case p.flushCycleDone <- struct{}{}:
-	default:
-	}
 }
 
 func (p *pingPong) flusher(interval time.Duration) {
-	defer close(p.flusherDone)
+	defer func() {
+		// release writers waiting for a batch, they see closed and return
+		p.mu.Lock()
+		close(p.writeBatchSwapped)
+		p.mu.Unlock()
+
+		close(p.flusherDone)
+	}()
 
 	writeTicker := time.NewTicker(interval / 2)
 	defer writeTicker.Stop()
