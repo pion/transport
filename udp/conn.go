@@ -28,6 +28,7 @@ var (
 	ErrClosedListener      = errors.New("udp: listener closed")
 	ErrListenQueueExceeded = errors.New("udp: listen queue exceeded")
 	ErrInvalidBatchConfig  = errors.New("udp: invalid batch config")
+	ErrReadBufferCapped    = errors.New("udp: receive buffer capped by the operating system")
 )
 
 // listener augments a connection-oriented Listener over a UDP PacketConn.
@@ -155,6 +156,26 @@ type ListenConfig struct {
 	Batch BatchIOConfig
 }
 
+// setSocketBuffers applies ReadBufferSize and WriteBufferSize to conn and
+// fails if the operating system rejects or silently caps them.
+func (lc *ListenConfig) setSocketBuffers(conn *net.UDPConn) error {
+	if lc.ReadBufferSize > 0 {
+		if err := conn.SetReadBuffer(lc.ReadBufferSize); err != nil {
+			return err
+		}
+		if err := checkReadBufferSize(conn, lc.ReadBufferSize); err != nil {
+			return err
+		}
+	}
+	if lc.WriteBufferSize > 0 {
+		if err := conn.SetWriteBuffer(lc.WriteBufferSize); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // Listen creates a new listener based on the ListenConfig.
 func (lc *ListenConfig) Listen(network string, laddr *net.UDPAddr) (net.Listener, error) {
 	if lc.Backlog == 0 {
@@ -170,11 +191,10 @@ func (lc *ListenConfig) Listen(network string, laddr *net.UDPAddr) (net.Listener
 		return nil, err
 	}
 
-	if lc.ReadBufferSize > 0 {
-		_ = conn.SetReadBuffer(lc.ReadBufferSize)
-	}
-	if lc.WriteBufferSize > 0 {
-		_ = conn.SetWriteBuffer(lc.WriteBufferSize)
+	if err = lc.setSocketBuffers(conn); err != nil {
+		_ = conn.Close()
+
+		return nil, err
 	}
 
 	listnerer := &listener{
