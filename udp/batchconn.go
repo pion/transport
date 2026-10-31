@@ -64,13 +64,17 @@ func (m *messageBatch) isFull() bool {
 	return m.writePos == m.size
 }
 
-func (m *messageBatch) EnqueueMessage(buf []byte, raddr net.Addr) (int, bool) {
+// EnqueueMessage copies buf into the batch. It returns the bytes taken (0 when
+// the batch is full or buf empty), whether the batch is full afterwards and
+// whether this message is the first in a batch that was empty.
+func (m *messageBatch) EnqueueMessage(buf []byte, raddr net.Addr) (int, bool, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	if len(buf) == 0 || m.isFull() {
-		return 0, m.isFull()
+		return 0, m.isFull(), false
 	}
+	wasEmpty := m.writePos == 0
 
 	msg := &m.messages[m.writePos]
 	// reset buffers
@@ -89,7 +93,7 @@ func (m *messageBatch) EnqueueMessage(buf []byte, raddr net.Addr) (int, bool) {
 	}
 	m.writePos++
 
-	return len(buf), m.isFull()
+	return len(buf), m.isFull(), wasEmpty
 }
 
 func (m *messageBatch) Flush() {
@@ -118,27 +122,35 @@ type pingPong struct {
 	flushPending  bool
 
 	writeReady chan struct{}
+	// a message went into an empty write batch: the flusher arms its timer.
+	// Buffered, so the signal is never lost; one slot is enough because every
+	// later message of that batch is covered by the same timer.
+	wake chan struct{}
 	// closed and replaced each time the flusher swaps batches, so every waiting writer wakes at once
 	writeBatchSwapped chan struct{}
 	flusherDone       chan struct{}
 
-	closed int32
+	// wakeups counts the flusher's wake-ups (timer, full batch, first message)
+	// for tests: an idle connection must not wake it.
+	wakeups int32
+	closed  int32
 }
 
 func newPingPong(size int, interval time.Duration, batchConn BatchPacketConn) *pingPong {
-	p := &pingPong{
+	pong := &pingPong{
 		// buffered, so a batch that fills while the flusher is busy still gets its flush
 		writeReady:        make(chan struct{}, 1),
+		wake:              make(chan struct{}, 1),
 		writeBatchSwapped: make(chan struct{}),
 		flusherDone:       make(chan struct{}),
 	}
-	for i := range len(p.batches) {
-		p.batches[i] = newMessageBatch(size, batchConn)
+	for i := range len(pong.batches) {
+		pong.batches[i] = newMessageBatch(size, batchConn)
 	}
 
-	go p.flusher(interval)
+	go pong.flusher(interval)
 
-	return p
+	return pong
 }
 
 func (p *pingPong) Close() {
@@ -158,10 +170,11 @@ func (p *pingPong) EnqueueMessage(buf []byte, raddr net.Addr) int {
 		writeBatch *messageBatch
 		n          int
 		isFull     bool
+		wasEmpty   bool
 	)
 	for {
 		if writeBatch = p.getWriteBatch(); writeBatch != nil {
-			n, isFull = writeBatch.EnqueueMessage(buf, raddr)
+			n, isFull, wasEmpty = writeBatch.EnqueueMessage(buf, raddr)
 			if n == len(buf) {
 				break
 			}
@@ -179,15 +192,26 @@ func (p *pingPong) EnqueueMessage(buf []byte, raddr net.Addr) int {
 	}
 	p.mu.Unlock()
 
+	// the first message of an empty write batch arms the flusher's timer
+	if wasEmpty {
+		signal(p.wake)
+	}
+
 	// enqueuing given message fills up the write batch, queue up a flush
 	if isFull {
-		select {
-		case p.writeReady <- struct{}{}:
-		default:
-		}
+		signal(p.writeReady)
 	}
 
 	return n
+}
+
+// signal sends on a buffered signal channel without blocking: a signal
+// already pending covers this one.
+func signal(ch chan struct{}) {
+	select {
+	case ch <- struct{}{}:
+	default:
+	}
 }
 
 func (p *pingPong) getWriteBatch() *messageBatch {
@@ -227,6 +251,13 @@ func (p *pingPong) updateReadBatch() {
 	p.flushPending = false
 }
 
+// flusher writes the write batch out when it fills (writeReady) or when its
+// first message has waited interval (the timer). The timer is armed only by
+// the first message of an empty write batch (wake) and stays unarmed after it
+// fired, so a connection with nothing to send never wakes this goroutine. A
+// message still leaves within interval of its enqueue: its own timer, an older
+// one still running (which flushes whatever the write batch holds when it
+// fires), or a full batch, which goes at once.
 func (p *pingPong) flusher(interval time.Duration) {
 	defer func() {
 		// release writers waiting for a batch, they see closed and return
@@ -237,17 +268,32 @@ func (p *pingPong) flusher(interval time.Duration) {
 		close(p.flusherDone)
 	}()
 
-	writeTicker := time.NewTicker(interval / 2)
-	defer writeTicker.Stop()
+	timer := time.NewTimer(interval)
+	defer timer.Stop()
+	if !timer.Stop() {
+		<-timer.C
+	}
+	armed := false
 
-	lastFlushAt := time.Now().Add(-interval)
 	for atomic.LoadInt32(&p.closed) != 1 {
+		var due <-chan time.Time
+		if armed {
+			due = timer.C
+		}
 		select {
-		case <-writeTicker.C:
-			if time.Since(lastFlushAt) < interval {
-				continue
+		case <-p.wake:
+			atomic.AddInt32(&p.wakeups, 1)
+			if !armed {
+				timer.Reset(interval)
+				armed = true
 			}
+
+			continue
+		case <-due:
+			atomic.AddInt32(&p.wakeups, 1)
+			armed = false
 		case <-p.writeReady:
+			atomic.AddInt32(&p.wakeups, 1)
 		}
 
 		readBatch := p.updateWriteBatchAndGetReadBatch()
@@ -257,8 +303,6 @@ func (p *pingPong) flusher(interval time.Duration) {
 
 		readBatch.Flush()
 		p.updateReadBatch()
-
-		lastFlushAt = time.Now()
 	}
 }
 
