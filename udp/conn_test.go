@@ -172,6 +172,51 @@ func TestListenerCloseKeepsDequeuedConn(t *testing.T) {
 	<-ln.readDoneCh
 }
 
+func TestListenerAcceptAfterClose(t *testing.T) {
+	lim := test.TimeOut(time.Second * 20)
+	defer lim.Stop()
+
+	report := test.CheckRoutines(t)
+	defer report()
+
+	network, addr := getConfig()
+	nl, err := (&ListenConfig{}).Listen(network, addr)
+	assert.NoError(t, err)
+	ln, ok := nl.(*listener)
+	assert.True(t, ok)
+
+	laddr, ok := ln.Addr().(*net.UDPAddr)
+	assert.True(t, ok)
+	client, err := net.DialUDP(network, nil, laddr)
+	assert.NoError(t, err)
+	_, err = client.Write([]byte{1})
+	assert.NoError(t, err)
+	assert.NoError(t, client.Close())
+
+	// Hold the conn back from Close's drain, then requeue it so Accept races doneCh against it.
+	var conn *Conn
+	select {
+	case conn = <-ln.acceptCh:
+	case <-time.After(5 * time.Second):
+		assert.FailNow(t, "no conn queued")
+	}
+	assert.NoError(t, ln.Close())
+	ln.acceptCh <- conn
+
+	for len(ln.acceptCh) > 0 {
+		c, aErr := ln.Accept()
+		assert.Nil(t, c)
+		assert.ErrorIs(t, aErr, ErrClosedListener)
+	}
+
+	select {
+	case <-conn.doneCh:
+	default:
+		assert.Fail(t, "conn dequeued after Close was not closed")
+	}
+	<-ln.readDoneCh
+}
+
 func TestListenerAcceptFilter(t *testing.T) { //nolint:cyclop
 	// Limit runtime in case of deadlocks
 	lim := test.TimeOut(time.Second * 20)
