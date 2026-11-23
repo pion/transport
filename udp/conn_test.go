@@ -131,6 +131,47 @@ func TestListenerCloseUnaccepted(t *testing.T) {
 	assert.NoError(t, listener.Close())
 }
 
+// A conn dequeued before Close must keep the socket open until it is closed.
+func TestListenerCloseKeepsDequeuedConn(t *testing.T) {
+	lim := test.TimeOut(time.Second * 20)
+	defer lim.Stop()
+
+	report := test.CheckRoutines(t)
+	defer report()
+
+	network, addr := getConfig()
+	nl, err := (&ListenConfig{}).Listen(network, addr)
+	assert.NoError(t, err)
+	ln, ok := nl.(*listener)
+	assert.True(t, ok)
+
+	laddr, ok := ln.Addr().(*net.UDPAddr)
+	assert.True(t, ok)
+	client, err := net.DialUDP(network, nil, laddr)
+	assert.NoError(t, err)
+	_, err = client.Write([]byte{1})
+	assert.NoError(t, err)
+	assert.NoError(t, client.Close())
+
+	// Take the conn the way Accept does, then close the listener before handing it out.
+	var conn *Conn
+	select {
+	case conn = <-ln.acceptCh:
+	case <-time.After(5 * time.Second):
+		assert.FailNow(t, "no conn queued")
+	}
+	assert.NoError(t, ln.Close())
+
+	select {
+	case <-ln.readDoneCh:
+		assert.FailNow(t, "socket closed while a dequeued conn was still open")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	assert.NoError(t, conn.Close())
+	<-ln.readDoneCh
+}
+
 func TestListenerAcceptFilter(t *testing.T) { //nolint:cyclop
 	// Limit runtime in case of deadlocks
 	lim := test.TimeOut(time.Second * 20)

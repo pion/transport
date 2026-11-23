@@ -57,7 +57,14 @@ type listener struct {
 func (l *listener) Accept() (net.Conn, error) {
 	select {
 	case c := <-l.acceptCh:
-		l.connWG.Add(1)
+		select {
+		case <-l.doneCh:
+			// select may pick acceptCh over doneCh; don't hand out conns after Close.
+			_ = c.Close()
+
+			return nil, ErrClosedListener
+		default:
+		}
 
 		return c, nil
 
@@ -85,7 +92,10 @@ func (l *listener) Close() error {
 		for {
 			select {
 			case c := <-l.acceptCh:
-				close(c.doneCh)
+				c.doneOnce.Do(func() {
+					close(c.doneCh)
+					l.connWG.Done()
+				})
 				delete(l.conns, c.rAddr.String())
 
 			default:
@@ -285,10 +295,14 @@ func (l *listener) getConn(raddr net.Addr, buf []byte) (*Conn, bool, error) {
 			}
 		}
 		conn = l.newConn(raddr)
+		// Counted before Accept can see it, so connWG never rises after Close releases it.
+		l.connWG.Add(1)
 		select {
 		case l.acceptCh <- conn:
 			l.conns[raddr.String()] = conn
 		default:
+			l.connWG.Done()
+
 			return nil, false, ErrListenQueueExceeded
 		}
 	}
