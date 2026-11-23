@@ -57,8 +57,6 @@ type listener struct {
 func (l *listener) Accept() (net.Conn, error) {
 	select {
 	case c := <-l.acceptCh:
-		l.connWG.Add(1)
-
 		return c, nil
 
 	case <-l.readDoneCh:
@@ -87,6 +85,7 @@ func (l *listener) Close() error {
 			case c := <-l.acceptCh:
 				close(c.doneCh)
 				delete(l.conns, c.rAddr.String())
+				l.connWG.Done()
 
 			default:
 				break lclose
@@ -285,10 +284,13 @@ func (l *listener) getConn(raddr net.Addr, buf []byte) (*Conn, bool, error) {
 			}
 		}
 		conn = l.newConn(raddr)
+		l.connWG.Add(1)
 		select {
 		case l.acceptCh <- conn:
 			l.conns[raddr.String()] = conn
 		default:
+			l.connWG.Done()
+
 			return nil, false, ErrListenQueueExceeded
 		}
 	}
