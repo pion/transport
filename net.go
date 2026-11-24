@@ -10,6 +10,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"sync"
 	"time"
 )
 
@@ -403,6 +404,7 @@ type TCPListener interface {
 // Interface wraps a standard net.Interfaces and its assigned addresses.
 type Interface struct {
 	net.Interface
+	mutex sync.RWMutex
 	addrs []net.Addr
 }
 
@@ -416,11 +418,17 @@ func NewInterface(ifc net.Interface) *Interface {
 
 // AddAddress adds a new address to the interface.
 func (ifc *Interface) AddAddress(addr net.Addr) {
+	ifc.mutex.Lock()
+	defer ifc.mutex.Unlock()
+
 	ifc.addrs = append(ifc.addrs, addr)
 }
 
 // RemoveAddress removes an address from the interface.
 func (ifc *Interface) RemoveAddress(ip net.IP) bool {
+	ifc.mutex.Lock()
+	defer ifc.mutex.Unlock()
+
 	for i, addr := range ifc.addrs {
 		var addrIP net.IP
 		switch a := addr.(type) {
@@ -443,9 +451,15 @@ func (ifc *Interface) RemoveAddress(ip net.IP) bool {
 
 // Addrs returns a slice of configured addresses on the interface.
 func (ifc *Interface) Addrs() ([]net.Addr, error) {
+	ifc.mutex.RLock()
+	defer ifc.mutex.RUnlock()
+
 	if len(ifc.addrs) == 0 {
 		return nil, ErrNoAddressAssigned
 	}
 
-	return ifc.addrs, nil
+	addrs := make([]net.Addr, len(ifc.addrs))
+	copy(addrs, ifc.addrs)
+
+	return addrs, nil
 }

@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"sync"
 
 	"github.com/pion/transport/v5"
 	"github.com/wlynxg/anet"
@@ -22,6 +23,7 @@ const (
 // Net is an implementation of the net.Net interface
 // based on functions of the standard net package.
 type Net struct {
+	mutex      sync.RWMutex
 	interfaces []*transport.Interface
 }
 
@@ -60,7 +62,9 @@ func (n *Net) UpdateInterfaces() error {
 		ifs = append(ifs, ifc)
 	}
 
+	n.mutex.Lock()
 	n.interfaces = ifs
+	n.mutex.Unlock()
 
 	return nil
 }
@@ -68,7 +72,15 @@ func (n *Net) UpdateInterfaces() error {
 // Interfaces returns a slice of interfaces which are available on the
 // system.
 func (n *Net) Interfaces() ([]*transport.Interface, error) {
-	return n.interfaces, nil
+	n.mutex.RLock()
+	defer n.mutex.RUnlock()
+
+	interfaces := make([]*transport.Interface, len(n.interfaces))
+	for i, ifc := range n.interfaces {
+		interfaces[i] = copyInterface(ifc)
+	}
+
+	return interfaces, nil
 }
 
 // InterfaceByIndex returns the interface specified by index.
@@ -77,9 +89,12 @@ func (n *Net) Interfaces() ([]*transport.Interface, error) {
 // sharing the logical data link; for more precision use
 // InterfaceByName.
 func (n *Net) InterfaceByIndex(index int) (*transport.Interface, error) {
+	n.mutex.RLock()
+	defer n.mutex.RUnlock()
+
 	for _, ifc := range n.interfaces {
 		if ifc.Index == index {
-			return ifc, nil
+			return copyInterface(ifc), nil
 		}
 	}
 
@@ -88,13 +103,35 @@ func (n *Net) InterfaceByIndex(index int) (*transport.Interface, error) {
 
 // InterfaceByName returns the interface specified by name.
 func (n *Net) InterfaceByName(name string) (*transport.Interface, error) {
+	n.mutex.RLock()
+	defer n.mutex.RUnlock()
+
 	for _, ifc := range n.interfaces {
 		if ifc.Name == name {
-			return ifc, nil
+			return copyInterface(ifc), nil
 		}
 	}
 
 	return nil, fmt.Errorf("%w: %s", transport.ErrInterfaceNotFound, name)
+}
+
+func copyInterface(ifc *transport.Interface) *transport.Interface {
+	stdInterface := ifc.Interface
+	if stdInterface.HardwareAddr != nil {
+		stdInterface.HardwareAddr = append(net.HardwareAddr(nil), stdInterface.HardwareAddr...)
+	}
+
+	clone := transport.NewInterface(stdInterface)
+	addrs, err := ifc.Addrs()
+	if err != nil {
+		return clone
+	}
+
+	for _, addr := range addrs {
+		clone.AddAddress(addr)
+	}
+
+	return clone
 }
 
 // ListenPacket announces on the local network address.
